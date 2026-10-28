@@ -68,7 +68,7 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
             <button
               type="button"
               onClick={this.handleReload}
-              className="liquid-glass-button-dark rounded-full py-2.5 px-6 font-mono text-xs uppercase tracking-wider cursor-pointer shadow-md"
+              className="liquid-glass-button rounded-full py-2.5 px-6 font-mono text-xs uppercase tracking-wider cursor-pointer shadow-md"
             >
               Reload Page
             </button>

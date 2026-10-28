@@ -21,7 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
       {backupToast && (
         <div className="fixed top-18 md:top-6 left-4 sm:left-auto right-4 sm:right-8 z-50 flex items-center gap-3 rounded-[20px] liquid-glass-island px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm">
-          <div className="size-7 rounded-full bg-stone-900 text-white flex items-center justify-center shrink-0 shadow-xs">
+          <div className="size-7 rounded-full liquid-glass-pill bg-white/90 text-stone-900 flex items-center justify-center shrink-0 shadow-xs border border-white">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
               <polyline points="17 21 17 13 7 13 7 21" />
@@ -35,7 +35,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <button
             type="button"
             onClick={exportBackup}
-            className="liquid-glass-button-dark rounded-full px-3.5 py-1 text-xs font-sans font-semibold shrink-0 cursor-pointer shadow-sm"
+            className="liquid-glass-button rounded-full px-3.5 py-1 text-xs font-sans font-semibold shrink-0 cursor-pointer shadow-sm"
           >
             Export
           </button>
@@ -82,7 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <button
                 type="button"
                 onClick={exportBackup}
-                className="liquid-glass-button-dark rounded-full px-3.5 py-1 font-sans text-xs font-semibold cursor-pointer shadow-xs"
+                className="liquid-glass-button rounded-full px-3.5 py-1 font-sans text-xs font-semibold cursor-pointer shadow-xs"
               >
                 Export JSON
               </button>

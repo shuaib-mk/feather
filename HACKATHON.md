@@ -8,7 +8,7 @@
 ---
 
 ## 1. Demo Video Opening Statement
-> *"Feather is a private, voice-first menstrual cycle companion that turns fuzzy recollections like 'two days before Diwali' into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database."*
+> *"Feather is a private, voice-first menstrual cycle companion that turns fuzzy recollections like 'two days before New Year's' into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database."*
 
 ---
 
@@ -23,7 +23,7 @@
 
 Most menstrual trackers assume women remember calendar dates (*"my cycle started on October 14th"*). In reality, human episodic memory anchors experiences to **real-world landmarks**:
 - *"My period started two days before New Year's."*
-- *"I had heavy flow the Monday before Diwali."*
+- *"I had heavy flow the Monday before summer vacation."*
 - *"I have a marathon on Oct 15 and a flight on Oct 28 — will my period overlap?"*
 
 **Feather** is an indie developer submission built to solve this exact problem using Meta's foundational audio and reasoning models:
@@ -52,7 +52,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - Powered by **Meta Muse Spark** (`muse-spark-1.3`) and swappable open-weight **Muse Spark Open 1026** on Baseten.
 - Structured tool calls:
   - `log_entry`: Extracts flow, 14 standard symptoms, mood, energy, and notes.
-  - `milestone_lookup`: Database of 2026–2027 universal and cultural milestones (New Year's Day, Valentine's Day, International Women's Day, Spring Equinox, Earth Day, Summer Solstice, Global Marathon Season, Winter Holidays, Diwali, Onam, Vishu, Holi, Eid, Christmas).
+  - `milestone_lookup`: Database of 2026–2027 universal milestones (New Year's Day, Valentine's Day, International Women's Day, Spring Equinox, Earth Day, Summer Solstice, Global Marathon Season, Autumn Equinox, Winter Holidays, New Year's Eve).
   - `update_entry`: Conversational multi-turn slip corrections (*"no, make it the 3rd"*, *"change flow to light"*).
   - `check_overlap`: Evaluates event dates against the user's cycle pattern.
 

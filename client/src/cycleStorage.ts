@@ -462,7 +462,7 @@ export function loadSyntheticDemoData(): { periods: Period[]; logs: DayLog[] } {
       id: 102,
       startDate: "2026-08-25",
       endDate: "2026-08-29",
-      landmarkName: "Onam Holiday",
+      landmarkName: "Late August Bank Holiday",
     },
     {
       id: 103,

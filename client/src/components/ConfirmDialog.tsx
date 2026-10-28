@@ -72,7 +72,7 @@ export function ConfirmDialog({
             className={`rounded-full px-4 py-2 font-sans text-xs font-semibold transition-all shadow-sm cursor-pointer ${
               isDestructive
                 ? "bg-rose-600 text-white hover:bg-rose-700"
-                : "liquid-glass-button-dark"
+                : "liquid-glass-button"
             }`}
           >
             {confirmLabel}

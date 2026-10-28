@@ -160,7 +160,7 @@ export function DiaryScannerPage() {
                 type="button"
                 onClick={handleAnalyze}
                 disabled={isAnalyzing}
-                className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer disabled:opacity-50 shadow-sm"
+                className="liquid-glass-button rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer disabled:opacity-50 shadow-sm"
               >
                 {isAnalyzing ? "Scanning Image..." : "Analyze with Muse Vision"}
               </button>
@@ -265,7 +265,7 @@ export function DiaryScannerPage() {
             <button
               type="button"
               onClick={handleConfirmImport}
-              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               Import {extractedPeriods.length} Periods to Vault
             </button>

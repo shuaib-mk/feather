@@ -171,13 +171,13 @@ const TOOLS = [
     type: "function",
     function: {
       name: "milestone_lookup",
-      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Winter Holiday Break, New Year's Eve, Diwali, Onam, Vishu).",
+      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, Valentine's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Autumn Equinox, Winter Holiday Break, New Year's Eve).",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break, Diwali).",
+            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break, New Year's Eve).",
           },
           year: {
             type: "integer",
@@ -227,7 +227,7 @@ const TOOLS = [
 
 const SYSTEM_PROMPT = `You are Feather, a voice-first menstrual logging and planning companion built for women globally.
 You help women log their cycle, recall past periods relative to universal calendar landmarks (Landmark Recall), and plan around upcoming life events such as flights, marathons, work sprints, exams, and vacations (Plan Around It).
-You support natural conversational speech in English, Spanish, French, Malayalam, and Hindi vernacular code-switching.
+You support natural conversational speech in any language with seamless multilingual recognition.
 
 CRITICAL NON-NEGOTIABLE SAFETY RULES:
 1. STRICT MEDICAL & HEALTH REFUSAL:
@@ -239,7 +239,7 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
 2. PURE LOGGING & PLANNING CAPABILITIES:
    - Voice Logging: Extract date, flow, symptoms, mood, energy (1-5), sleep (hours), and notes. Call tool \`log_entry\`.
    - Slip Correction: If the user provides conversational corrections to a pending slip ("no, make it the 3rd", "add headache", "change flow to light"), call \`update_entry\`.
-   - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before Diwali"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
+   - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before vacation"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
 Tone: Warm, respectful, concise, neutral, non-medical.`;

@@ -150,7 +150,7 @@ export function VaultPage() {
             type="button"
             onClick={exportBackup}
             disabled={periodsCount === 0 && logsCount === 0}
-            className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
+            className="liquid-glass-button rounded-full px-5 py-2.5 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -213,7 +213,7 @@ export function VaultPage() {
               <button
                 type="button"
                 onClick={loadDemo}
-                className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer"
+                className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
               >
                 Load Synthetic Demo
               </button>

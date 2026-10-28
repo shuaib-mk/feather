@@ -1,6 +1,6 @@
 # Feather — Voice-First Menstrual Cycle Companion
 
-> **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before Diwali"* into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database.
+> **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database.
 
 ---
 
@@ -14,10 +14,10 @@
 ## Try It in 30 Seconds (Judge Quickstart)
 
 1. **One-Tap Synthetic History:** Tap the **"✨ Try Judge Demo"** button on the home screen. This instantly loads 4 realistic past cycles and 5 symptom logs into your local device vault, immediately activating the Plan Around It forecast and 12-Month Foresight matrix with zero typing or speech needed. *(You can clear it anytime with one click).*
-2. **One-Tap Multilingual Speech Pipeline:** Click any of the 3 judge tap-to-run presets under the voice console:
-   - **English:** *"Period started 2 days before Diwali, medium flow with cramps"*
-   - **മലയാളം (Malayalam):** *"Onam kazhinju 2 divasam aayappol period thudangi, light flow"*
-   - **हिन्दी / Hinglish:** *"Women's Day se 3 din pehle period shuru hua, heavy flow headache"*
+2. **One-Tap Multilingual Speech Pipeline:** Click or speak natural phrases under the voice console:
+   - **English:** *"Period started 2 days before New Year's, medium flow with cramps"*
+   - **Español (Spanish):** *"El periodo empezó dos días antes de vacaciones, flujo moderado"*
+   - **Universal Landmark:** *"Flow started the Monday before the marathon, light flow"*
 3. **Accession Slip Preview & Multi-Turn Corrections:** Watch the Accession Slip resolve the calendar date and symptoms. Test conversational corrections: speak or type *"no, make it the 3rd"* or click **"+ Add Headache"** to see multi-turn slip editing in action.
 4. **Inspect Under the Hood:** Click **"UNDER THE HOOD — Meta AI Tool Trace"** to inspect live tool calls (`milestone_lookup`, `log_entry`, `update_entry`, `check_overlap`), arguments, returned results, and millisecond latencies.
 5. **Explore Overlap Forecasts:** Check the **Plan Around It** section and **Plate 02 12-Month Foresight Matrix** to see honest, non-medical cycle scheduling forecasts against major life events.

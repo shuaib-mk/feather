@@ -84,7 +84,7 @@ export function ChroniclePage() {
           <div className="flex items-center gap-2">
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               + Log New Entry
             </Link>
@@ -106,7 +106,7 @@ export function ChroniclePage() {
               onClick={() => setFilterType(tab.id as any)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
                 filterType === tab.id
-                  ? "bg-stone-900 text-white shadow-xs font-semibold"
+                  ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
                   : "text-stone-600 hover:text-stone-950"
               }`}
             >
@@ -135,7 +135,7 @@ export function ChroniclePage() {
           action={
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer"
+              className="liquid-glass-button rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               Log Entry Now
             </Link>

@@ -159,7 +159,7 @@ export function Sidebar() {
               to="/voice"
               className={`flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer ${
                 isHovered
-                  ? "liquid-glass-button-dark justify-start"
+                  ? "liquid-glass-button justify-start font-semibold text-stone-900"
                   : "justify-center text-stone-800 hover:bg-black/[0.04]"
               }`}
             >
@@ -231,7 +231,7 @@ export function Sidebar() {
           MOBILE TOP BAR (Safe-Area Aware)
           ======================================================== */}
       <header
-        className="fixed left-3 right-3 z-40 flex items-center justify-between rounded-[22px] liquid-glass-lens px-4 py-2.5 md:hidden shadow-md border border-white/90 max-w-lg mx-auto"
+        className="fixed left-3 right-3 z-40 flex items-center justify-between rounded-[22px] liquid-glass-topbar px-4 py-2.5 md:hidden max-w-lg mx-auto"
         style={{
           top: "max(0.6rem, env(safe-area-inset-top, 0.6rem))",
         }}
@@ -281,7 +281,7 @@ export function Sidebar() {
           ======================================================== */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed left-3 right-3 z-40 flex items-center justify-around rounded-[26px] liquid-glass-lens px-2 py-1.5 md:hidden shadow-xl backdrop-blur-2xl border border-white/95 max-w-lg mx-auto"
+        className="fixed left-3 right-3 z-40 flex items-center justify-around rounded-[26px] liquid-glass-dock px-2 py-1.5 md:hidden max-w-lg mx-auto"
         style={{
           bottom: "max(0.6rem, env(safe-area-inset-bottom, 0.6rem))",
         }}

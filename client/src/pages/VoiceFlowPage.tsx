@@ -217,8 +217,8 @@ export function VoiceFlowPage() {
     <div className="space-y-6">
       <PageHeader
         title="Voice Capture"
-        subtitle="Speak or type naturally in English, Malayalam, or Hindi. Natural calendar landmarks are resolved instantly."
-        badge="Multilingual AI"
+        subtitle="Speak or type naturally in any language. Natural calendar landmarks are resolved instantly."
+        badge="Universal Voice AI"
       />
 
       {/* Offline Mode Banner */}
@@ -259,15 +259,17 @@ export function VoiceFlowPage() {
 
       {/* Recording & Input Console */}
       <div className="liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative">
-        {/* Language Selection Row */}
+        {/* Universal Language Selection Row */}
         <div className="flex items-center justify-center gap-2 flex-wrap text-xs">
           <span className="text-stone-500 font-sans text-xs font-medium">Language:</span>
           <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
             {[
-              { id: "auto", label: "Auto Detect" },
+              { id: "auto", label: "Auto Detect (All Languages)" },
               { id: "en", label: "English" },
-              { id: "ml", label: "മലയാളം" },
-              { id: "hi", label: "हिन्दी" },
+              { id: "es", label: "Español" },
+              { id: "fr", label: "Français" },
+              { id: "de", label: "Deutsch" },
+              { id: "ja", label: "日本語" },
             ].map((lang) => (
               <button
                 key={lang.id}
@@ -275,7 +277,7 @@ export function VoiceFlowPage() {
                 onClick={() => setSelectedLanguage(lang.id)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
                   selectedLanguage === lang.id
-                    ? "bg-stone-900 text-white shadow-xs font-semibold"
+                    ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
                     : "text-stone-600 hover:text-stone-950"
                 }`}
               >
@@ -285,7 +287,7 @@ export function VoiceFlowPage() {
           </div>
         </div>
 
-        {/* Center Microphone Orb */}
+        {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
         <div className="flex flex-col items-center justify-center space-y-3 py-2">
           <button
             type="button"
@@ -294,8 +296,8 @@ export function VoiceFlowPage() {
             aria-label={isRecording ? "Stop recording voice note" : "Start recording voice note"}
             className={`relative size-20 sm:size-24 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-md ${
               isRecording
-                ? "bg-rose-600 text-white scale-105 shadow-rose-200 ring-8 ring-rose-100"
-                : "liquid-glass-button-dark hover:scale-102 hover:shadow-lg"
+                ? "bg-rose-500/85 text-white scale-105 shadow-rose-300 ring-8 ring-rose-200/60 backdrop-blur-md animate-pulse"
+                : "liquid-glass-orb hover:scale-105 text-stone-900"
             }`}
           >
             {isRecording ? (
@@ -346,14 +348,14 @@ export function VoiceFlowPage() {
               type="text"
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
-              placeholder="Or type naturally (e.g., 'Period started 2 days before Diwali, medium flow')..."
+              placeholder="Or type naturally (e.g., 'Period started 2 days before New Year\'s, medium flow')..."
               disabled={isProcessing || isRecording}
               className="w-full liquid-glass-input rounded-full py-3 pl-5 pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
             />
             <button
               type="submit"
               disabled={isProcessing || !manualText.trim()}
-              className="absolute right-1.5 liquid-glass-button-dark rounded-full px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs"
+              className="absolute right-1.5 liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs"
             >
               Resolve →
             </button>
@@ -462,7 +464,7 @@ export function VoiceFlowPage() {
                     onClick={() => setConfirmEntry({ ...confirmEntry, flow: f.key })}
                     className={`px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all cursor-pointer ${
                       confirmEntry.flow === f.key
-                        ? "liquid-glass-button-dark font-semibold"
+                        ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
                         : "liquid-glass-pill text-stone-700"
                     }`}
                   >
@@ -488,7 +490,7 @@ export function VoiceFlowPage() {
                     onClick={() => toggleSymptom(sym.key)}
                     className={`px-2.5 py-1 rounded-full text-xs transition-all cursor-pointer ${
                       isSelected
-                        ? "bg-violet-600 text-white font-medium shadow-xs"
+                        ? "liquid-glass-button text-violet-950 font-bold shadow-xs border-violet-200"
                         : "liquid-glass-pill text-stone-600 hover:text-stone-900"
                     }`}
                   >
@@ -515,7 +517,7 @@ export function VoiceFlowPage() {
               <button
                 type="submit"
                 disabled={!slipCorrectionText.trim() || isProcessing}
-                className="liquid-glass-pill px-3 py-2 font-sans text-xs font-semibold text-stone-900 hover:bg-stone-900 hover:text-white cursor-pointer shadow-2xs"
+                className="liquid-glass-button rounded-xl px-3.5 py-2 font-sans text-xs font-semibold text-stone-900 cursor-pointer shadow-xs disabled:opacity-40"
               >
                 Apply
               </button>
@@ -534,7 +536,7 @@ export function VoiceFlowPage() {
             <button
               type="button"
               onClick={handleSaveConfirmed}
-              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               Confirm &amp; Save Entry
             </button>

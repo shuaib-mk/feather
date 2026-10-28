@@ -49,7 +49,7 @@ export function SettingsPage() {
               Default: Meta Muse Voice Transcribe 1.0 (Cloud API)
             </span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
-              Transcribes audio clips over HTTPS in memory with multilingual support for English, Malayalam, and Hindi. Audio is immediately discarded post-transcription.
+              Transcribes audio clips over HTTPS in memory with universal multilingual support for all languages. Audio is immediately discarded post-transcription.
             </p>
           </div>
 
@@ -194,7 +194,7 @@ export function SettingsPage() {
                 onClick={() => setActiveDocTab(tab.id as any)}
                 className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all ${
                   activeDocTab === tab.id
-                    ? "bg-stone-900 text-white shadow-2xs"
+                    ? "liquid-glass-button text-stone-900 shadow-xs font-bold"
                     : "text-stone-600 hover:text-stone-950"
                 }`}
               >
@@ -233,7 +233,7 @@ export function SettingsPage() {
             <div className="space-y-2">
               <h4 className="font-bold text-stone-900">Deterministic Landmark Arithmetic:</h4>
               <p className="text-[11px] leading-relaxed">
-                Universal (New Year's, Valentine's Day, Women's Day, Summer Solstice, Earth Day) and cultural landmarks (Diwali, Onam, Vishu, Eid, Holi) are resolved with exact date arithmetic across 2025-2027. Supports offsets ("2 days before New Year's", "the Monday before Diwali", "Onam kazhinju 2 days after").
+                Universal calendar milestones (New Year's, Valentine's Day, International Women's Day, Summer Solstice, Earth Day, Global Marathon Season, Winter Holidays) are resolved with exact date arithmetic across 2025-2027. Supports natural relative offsets ("2 days before New Year's", "the Monday before Summer Solstice", "3 days after vacation").
               </p>
             </div>
           )}

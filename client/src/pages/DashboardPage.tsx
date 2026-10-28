@@ -47,7 +47,7 @@ export function DashboardPage() {
             )}
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
@@ -68,17 +68,17 @@ export function DashboardPage() {
               Voice &amp; Landmark Accession
             </span>
             <h2 className="font-serif text-xl sm:text-2xl font-semibold text-stone-900 leading-snug">
-              "Period started 2 days before Diwali..."
+              "Period started 2 days before New Year's..."
             </h2>
             <p className="font-sans text-xs text-stone-600 leading-relaxed">
-              Feather accurately maps calendar landmarks like Diwali, Onam, New Year's, and flights to precise dates in English, Malayalam, and Hindi.
+              Feather accurately maps calendar landmarks like New Year's, vacations, flights, and marathons to precise dates across any language.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-5 py-2.5 font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
               <span>Start Recording</span>
@@ -109,7 +109,7 @@ export function DashboardPage() {
             <div className="flex items-center gap-2.5 flex-wrap justify-center">
               <Link
                 to="/voice"
-                className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+                className="liquid-glass-button rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
               >
                 Record First Entry
               </Link>
@@ -315,7 +315,7 @@ export function DashboardPage() {
 
             <Link
               to="/insights"
-              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-semibold text-stone-900 hover:bg-stone-900 hover:text-white transition-all shrink-0 text-center cursor-pointer shadow-2xs"
+              className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold text-stone-900 transition-all shrink-0 text-center cursor-pointer shadow-xs"
             >
               Open Foresight Matrix →
             </Link>

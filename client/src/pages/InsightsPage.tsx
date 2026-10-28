@@ -36,7 +36,7 @@ export function InsightsPage() {
             type="button"
             onClick={runSynthesis}
             disabled={isSynthesizing}
-            className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+            className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
           >
             {isSynthesizing ? (
               <>
@@ -81,7 +81,7 @@ export function InsightsPage() {
           </div>
           <Link
             to="/voice"
-            className="liquid-glass-button-dark rounded-full px-3.5 py-1.5 font-sans text-xs font-semibold shrink-0 self-start sm:self-auto cursor-pointer text-center"
+            className="liquid-glass-button rounded-full px-3.5 py-1.5 font-sans text-xs font-semibold shrink-0 self-start sm:self-auto cursor-pointer text-center shadow-xs"
           >
             Record Entry
           </Link>
@@ -181,7 +181,7 @@ export function InsightsPage() {
               onClick={() => setForesightFilter(tab.id as any)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
                 foresightFilter === tab.id
-                  ? "bg-stone-900 text-white shadow-xs font-semibold"
+                  ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
                   : "text-stone-600 hover:text-stone-950"
               }`}
             >
