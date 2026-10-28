@@ -112,7 +112,12 @@ function getTodayString() {
 function extractClientIp(req) {
   if (!req) return "127.0.0.1";
   const headers = req.headers || {};
-  const xForwardedFor = headers["x-forwarded-for"] || headers["x-real-ip"] || headers["client-ip"];
+  const vercelRealIp = headers["x-real-ip"] || headers["x-vercel-forwarded-for"];
+  if (vercelRealIp) {
+    const ip = typeof vercelRealIp === "string" ? vercelRealIp.split(",")[0].trim() : String(vercelRealIp);
+    if (ip) return ip;
+  }
+  const xForwardedFor = headers["x-forwarded-for"] || headers["client-ip"];
   if (xForwardedFor) {
     const ip = typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0].trim() : String(xForwardedFor);
     if (ip) return ip;

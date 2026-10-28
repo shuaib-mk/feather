@@ -464,7 +464,7 @@ export function App() {
       />
 
       {/* Main Spacious Canvas */}
-      <div className="min-h-screen md:pl-28 lg:pl-32 xl:pl-36 md:pr-10 py-2 sm:py-6 px-3 sm:px-6 max-w-[1600px] mx-auto space-y-6">
+      <main id="main-content" className="min-h-screen md:pl-28 lg:pl-32 xl:pl-36 md:pr-10 py-2 sm:py-6 px-3 sm:px-6 max-w-[1600px] mx-auto space-y-6">
         
         {/* Gentle 14-Day Export Overdue Reminder Banner */}
         {showOverdueBanner && (
@@ -669,12 +669,12 @@ export function App() {
                   )}
 
                   {isOfflineFallback && (
-                    <div className="rounded-[14px] bg-blue-50/70 border border-blue-200 px-3.5 py-1.5 text-[11px] text-blue-900 font-mono flex items-center justify-between">
+                    <div className="rounded-[14px] bg-amber-50/90 border border-amber-300 px-3.5 py-2 text-xs text-amber-900 font-mono flex items-center justify-between shadow-xs">
                       <div className="flex items-center gap-2">
-                        <span className="size-2 rounded-full bg-blue-500" />
-                        <span>Zero-Cloud Fallback Engine Active (Deterministic Offline Rules)</span>
+                        <span className="size-2 rounded-full bg-amber-600 animate-pulse" />
+                        <span className="font-bold">Offline mode: rules engine, not Muse</span>
                       </div>
-                      <span className="text-[10px] text-blue-600">0ms</span>
+                      <span className="text-[10px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full font-sans">Local Fallback</span>
                     </div>
                   )}
                 </div>
@@ -922,7 +922,7 @@ export function App() {
                     <div className="mt-3 liquid-glass-card rounded-[20px] p-4 text-xs font-mono space-y-3">
                       <div className="flex items-center justify-between text-[10px] text-stone-500 border-b border-stone-200/50 pb-2">
                         <span>Pipeline Stage: {pipelineStage}</span>
-                        <span>{isOfflineFallback ? "Zero-Cloud Fallback Engine" : "Meta Muse AI Service"}</span>
+                        <span>{isOfflineFallback ? "Offline mode: rules engine, not Muse" : "Meta Muse AI Service"}</span>
                       </div>
 
                       {toolCalls.length === 0 ? (
@@ -1443,8 +1443,7 @@ export function App() {
             Meta Global AI Dev Hackathon (Indie Developer Track) · Powered by Meta Model API (Muse Voice Transcribe 1.0 &amp; Muse Spark 1.3)
           </p>
         </footer>
-
-      </div>
+      </main>
     </div>
   );
 }

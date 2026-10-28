@@ -439,7 +439,7 @@ export function LiquidGlassSidebar({
               ? "text-stone-950 font-bold"
               : "text-stone-500 hover:text-stone-800"
           }`}
-          aria-label="Dashboard"
+          aria-label="Hero Log"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeSection === "dashboard" ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
             <rect width="7" height="9" x="3" y="3" rx="1" />
@@ -459,7 +459,7 @@ export function LiquidGlassSidebar({
               ? "text-stone-950 font-bold"
               : "text-stone-500 hover:text-stone-800"
           }`}
-          aria-label="Foresight Matrix"
+          aria-label="Foresight"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeSection === "plate-02" ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
             <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
@@ -508,7 +508,7 @@ export function LiquidGlassSidebar({
               ? "text-stone-950 font-bold"
               : "text-stone-500 hover:text-stone-800"
           }`}
-          aria-label="Chronicle Logs"
+          aria-label="Chronicle"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={activeSection === "chronicle" ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
             <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" />

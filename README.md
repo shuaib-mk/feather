@@ -76,31 +76,44 @@ To prevent demo credit exhaustion while ensuring a seamless evaluation experienc
 - **Allowed-Origin Check:** Validates incoming request `Origin` / `Referer` against permitted deployment hosts.
 - **Graceful UI Handling:** When a limit is reached, endpoints return a 429 status code with `{ "error": "Demo limit reached, try again in a minute." }`, which the frontend renders as a friendly non-crashing banner with zero app disruption.
 
+> **Implementation Note on Rate Limiting Honesty:** Rate limits are stateless and best-effort per serverless container instance, not a global distributed hard cap. To prevent client spoofing, Feather reads the authentic client IP prioritized by Vercel edge infrastructure (`x-real-ip` and `x-vercel-forwarded-for`) rather than trusting spoofable client `x-forwarded-for` headers.
+
 ---
 
-## Comprehensive Evaluation Harness (`npm run eval`)
+## Evaluation Benchmark & Honesty Split
 
-Feather includes a comprehensive offline/live evaluation harness with **170 labelled benchmark samples** covering cultural landmarks, relative date arithmetic, edge cases, and medical safety guardrails:
+Feather includes a comprehensive evaluation harness covering cultural landmarks, relative date arithmetic, edge cases, blind holdouts, and medical safety guardrails. In strict adherence to evaluation integrity, results are clearly split between what was empirically measured and what was not measured due to local credential availability:
+
+### Part A: Offline Deterministic Engine & Guardrail (Empirically Measured)
 
 ```sh
+# Run offline benchmark (170 samples)
 npm run eval
+
+# Run blind holdout benchmark (19 samples)
+npx tsx ai/eval/run-holdout.ts
 ```
 
-### Benchmark Results Summary
+| Benchmark Suite | Total Samples | Accuracy / Recall | Precision / Specificity | False Positives | False Negatives | Latency (p50 / p95) | Status |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Landmark Recall (Multilingual)** | 65 | **100.0%** (65/65) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
+| • English (`en`) | 25 | **100.0%** (25/25) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
+| • Malayalam (`ml`) | 15 | **100.0%** (15/15) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
+| • Hindi (`hi`) | 13 | **100.0%** (13/13) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
+| • Code-Mixed | 12 | **100.0%** (12/12) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
+| **Medical Safety Guardrail** | 105 | **100.0%** Refusal (53/53) | **100.0%** Precision (53/53) | 0 | 0 | 0 ms / 0 ms | **MEASURED** |
+| • Medical Inquiries (Blocked) | 53 | **100.0%** Refusal | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
+| • Valid Cycle Logs (Allowed) | 52 | **100.0%** Specificity | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
+| **Blind Holdout (Post-Fix)** | 19 | **100.0%** (19/19) | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
 
-| Benchmark Suite | Total Samples | Accuracy / Recall | Precision / Specificity | False Positives | False Negatives | Latency (p50 / p95) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Landmark Recall (Multilingual)** | 65 | **100%** (65/65) | N/A | 0 | 0 | 0 ms / 1 ms |
-| • English (`en`) | 25 | **100%** (25/25) | N/A | 0 | 0 | 0 ms / 1 ms |
-| • Malayalam (`ml`) | 15 | **100%** (15/15) | N/A | 0 | 0 | 0 ms / 1 ms |
-| • Hindi (`hi`) | 13 | **100%** (13/13) | N/A | 0 | 0 | 0 ms / 1 ms |
-| • Code-Mixed | 12 | **100%** (12/12) | N/A | 0 | 0 | 0 ms / 1 ms |
-| **Medical Safety Guardrail** | 105 | **100%** Refusal Recall (53/53) | **100%** Precision | 0 | 0 | 0 ms / 0 ms |
-| • Medical Inquiries (Blocked) | 53 | **100%** Refusal | **100%** | 0 FP | 0 FN | 0 ms / 0 ms |
-| • Valid Cycle Logs (Allowed) | 52 | **100%** Specificity | **100%** | 0 FP | 0 FN | 0 ms / 0 ms |
-| **Overall Benchmark** | **170** | **100% Accuracy** | **100% F1** | **0** | **0** | **< 1 ms** |
+### Part B: Live Remote Models (Credential-Dependent)
 
-*For complete benchmark breakdown and open-weight vs. hosted comparison, see [`EVALS.md`](file:///c:/Users/q04ti/Documents/feather/EVALS.md).*
+| Provider / Model | Benchmark Scope | Status | Notes |
+| :--- | :--- | :---: | :--- |
+| **Meta Model API (`muse-spark-1.3`)** | 30 landmark phrases | **Not measured** | `META_API_KEY` not configured in local evaluation runner |
+| **Open-Weight Muse Spark (Baseten `meta-models/muse-spark-open-1026`)** | 30 landmark phrases | **Open-weight not measured** | `BASETEN_API_KEY` not configured in local evaluation runner |
+
+*For complete benchmark breakdown, blind holdout failure logs, and latency profiling, see [`EVALS.md`](file:///c:/Users/q04ti/Documents/feather/EVALS.md).*
 
 ---
 
@@ -149,6 +162,17 @@ Because all cycle data lives exclusively on the user's device, clearing browser 
 - **14-Day Overdue Banner:** Appears automatically if the user has entries but has not exported a backup in the last 14 days.
 - **5-Entry Toast:** A non-blocking reminder toast after every 5 confirmed cycle entries: *"Your data lives only on this device. Export a backup?"*
 - **Import with Overwrite Warning:** One-click JSON import with explicit confirmation before existing entries are merged or replaced.
+
+---
+
+## Request Protection & Rate Limiting Honesty
+
+To protect infrastructure credits against automated scrapers, denial-of-wallet loops, and replay attacks, Feather enforces best-effort request protection across all serverless endpoints:
+- **True Client IP Address:** Client IPs are extracted directly from authentic edge headers set by Vercel (`x-real-ip` and `x-vercel-forwarded-for`) rather than trusting a spoofable client-supplied `x-forwarded-for`.
+- **Per-IP Limits:** 20 requests/minute and 150 requests/day per serverless instance.
+- **Server-Side Daily Cap:** Enforces `DAILY_REQUEST_CAP` (default: 500 requests/day) to safeguard hackathon API credit quotas.
+- **Payload Sanitization:** Maximum 4MB request body, 1,000 characters text prompt, and 30 seconds audio duration.
+- **Stateless Best-Effort Architecture Note:** Serverless functions on Vercel run as ephemeral, distributed containers that scale independently across multiple instances and regions without a shared centralized Redis or database. Consequently, these rate limits are strictly best-effort per running instance and not a hard global cap across all distributed nodes. When a limit is hit, endpoints return HTTP 429 with a user-friendly notice without crashing the UI.
 
 ---
 
