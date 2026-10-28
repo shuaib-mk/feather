@@ -26,6 +26,11 @@ export function CreditsModal({
   const [data, setData] = useState(() => loadCycleData());
   const stats = computeCycleStats(data.periods);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [useBaseten, setUseBaseten] = useState<boolean>(() => {
+    return typeof window !== "undefined" && window.localStorage
+      ? window.localStorage.getItem("feather_use_baseten") === "true"
+      : false;
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
@@ -33,6 +38,14 @@ export function CreditsModal({
   const showStatus = (msg: string) => {
     setStatusMessage(msg);
     setTimeout(() => setStatusMessage(null), 3500);
+  };
+
+  const handleToggleBaseten = (enabled: boolean) => {
+    setUseBaseten(enabled);
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem("feather_use_baseten", enabled ? "true" : "false");
+    }
+    showStatus(enabled ? "Switched to open-weight Muse Spark (Baseten)" : "Switched to hosted Meta Model API");
   };
 
   const handleExportJSON = () => {
@@ -218,12 +231,43 @@ export function CreditsModal({
                 checked={useBrowserSpeech}
                 onChange={(e) => onToggleBrowserSpeech && onToggleBrowserSpeech(e.target.checked)}
                 className="sr-only peer"
+                aria-label="Toggle Browser Speech API"
               />
               <div className="w-10 h-5 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-stone-900"></div>
             </label>
           </div>
           <span className="block font-mono text-[10px] text-stone-500 pt-0.5">
             Default Path: <strong>Meta Muse Voice Transcribe</strong> (16kHz mono WAV)
+          </span>
+        </div>
+
+        {/* Open-Weight Muse Spark (Baseten) Toggle */}
+        <div className="mt-4 rounded-[22px] liquid-glass-card p-4 space-y-2.5">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-stone-500 font-bold block">
+            AI Reasoning Model Provider
+          </span>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <span className="block font-sans text-xs font-semibold text-stone-900">
+                Use open-weight Muse Spark (Baseten)
+              </span>
+              <span className="block font-sans text-[11px] text-stone-500 leading-snug">
+                Switches the agent to self-hosted open-weight <code className="font-mono text-[10px] bg-stone-100 px-1 py-0.5 rounded">meta-models/muse-spark-open-1026</code> when a Baseten key is configured.
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useBaseten}
+                onChange={(e) => handleToggleBaseten(e.target.checked)}
+                className="sr-only peer"
+                aria-label="Use open-weight Muse Spark (Baseten)"
+              />
+              <div className="w-10 h-5 bg-stone-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-stone-900"></div>
+            </label>
+          </div>
+          <span className="block font-mono text-[10px] text-stone-500 pt-0.5">
+            Active Provider: <strong>{useBaseten ? "meta-models/muse-spark-open-1026 (Baseten Bridge)" : "muse-spark-1.3 (Hosted Meta API)"}</strong>
           </span>
         </div>
 

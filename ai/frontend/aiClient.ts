@@ -6,6 +6,55 @@ export interface TranscribeResponse {
   text: string;
   language?: string;
   error?: string;
+  rateLimited?: boolean;
+}
+
+export interface ClientAgentResult extends AgentResult {
+  isOfflineFallback?: boolean;
+  rateLimited?: boolean;
+  pipelineStage?: "recording" | "transcribing" | "resolving" | "previewing" | "confirming";
+}
+
+/**
+ * Robust fetch wrapper with 10-second timeout via AbortController and 1 automatic retry
+ * on transient network failures.
+ */
+async function fetchWithTimeoutAndRetry(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 10000,
+  retries = 1,
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      // Retry once on 502/503/504 server gateway errors
+      if (!response.ok && [502, 503, 504].includes(response.status) && attempt < retries) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+
+      return response;
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (attempt < retries && err.name !== "AbortError") {
+        attempt++;
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export async function transcribeAudioBlob(
@@ -25,7 +74,7 @@ export async function transcribeAudioBlob(
   const audioBase64 = await base64Promise;
 
   try {
-    const res = await fetch("/api/transcribe", {
+    const res = await fetchWithTimeoutAndRetry("/api/transcribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -40,11 +89,25 @@ export async function transcribeAudioBlob(
     }
 
     const errData = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      return {
+        text: "",
+        error: errData.error || "Demo limit reached, try again in a minute.",
+        rateLimited: true,
+      };
+    }
+
     if (errData && errData.error) {
       return { text: "", error: errData.error };
     }
-  } catch (err) {
-    console.warn("Backend /api/transcribe unavailable, running in client-only mode.");
+  } catch (err: any) {
+    console.warn("Backend /api/transcribe unavailable or timed out, running in client-only mode.");
+    if (err.name === "AbortError") {
+      return {
+        text: "Period started today, heavy flow with cramps and fatigue.",
+        error: "Transcription timed out. Fallback speech transcription applied.",
+      };
+    }
   }
 
   // Fallback for purely static hosting or offline demo
@@ -57,24 +120,55 @@ export async function sendAgentMessage(
   message: string,
   context: any = {},
   conversationHistory: any[] = [],
-): Promise<AgentResult> {
+): Promise<ClientAgentResult> {
+  const provider =
+    context.provider ||
+    (typeof window !== "undefined" && window.localStorage.getItem("feather_use_baseten") === "true"
+      ? "baseten"
+      : "meta");
+
   try {
-    const res = await fetch("/api/agent", {
+    const res = await fetchWithTimeoutAndRetry("/api/agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, context, conversationHistory }),
+      body: JSON.stringify({
+        message,
+        context: { ...context, provider },
+        conversationHistory,
+        provider,
+      }),
     });
 
     if (res.ok) {
-      return await res.json();
+      const data: AgentResult = await res.json();
+      return { ...data, isOfflineFallback: false };
     }
-  } catch (err) {
-    console.warn("Backend /api/agent unavailable, running client-side agent fallback.");
+
+    // Rate Limit / Credit Cap Handler (Friendly UI Notification)
+    if (res.status === 429) {
+      const errData = await res.json().catch(() => ({}));
+      const friendlyMsg = errData.error || "Demo limit reached, try again in a minute.";
+      return {
+        message: `⚠️ ${friendlyMsg}`,
+        needsClarification: false,
+        activityTrail: [
+          { step: "Demo Credit Protection", detail: friendlyMsg, status: "clarify" },
+        ],
+        rateLimited: true,
+        isOfflineFallback: true,
+      };
+    }
+  } catch (err: any) {
+    console.warn("Backend /api/agent unavailable or timed out, running on-device deterministic rules engine.");
   }
 
-  // Pure client-side parsing fallback for GitHub Pages
+  // Pure on-device deterministic rules fallback
   const today = context?.currentDate || new Date().toISOString().split("T")[0];
-  return parseLocally(message, today, context);
+  const localResult = parseLocally(message, today, { ...context, provider });
+  return {
+    ...localResult,
+    isOfflineFallback: true,
+  };
 }
 
 export async function analyzeDiaryPhoto(
@@ -91,7 +185,7 @@ export async function analyzeDiaryPhoto(
   });
 
   const imageBase64 = await base64Promise;
-  const res = await fetch("/api/vision", {
+  const res = await fetchWithTimeoutAndRetry("/api/vision", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -115,7 +209,7 @@ export async function fetchDeepCycleSynthesis(
   targetYear: number = 2026,
 ) {
   try {
-    const res = await fetch("/api/synthesis", {
+    const res = await fetchWithTimeoutAndRetry("/api/synthesis", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ periods, logs, cycleStats, targetYear }),
@@ -128,8 +222,7 @@ export async function fetchDeepCycleSynthesis(
     console.warn("Backend /api/synthesis unavailable, falling back to client synthesis.");
   }
 
-  // Client-side fallback for static host
+  // Client-side fallback for static host / offline resilience
   const { runDeepCycleSynthesis } = await import("../backend/synthesis");
   return runDeepCycleSynthesis(periods, logs, cycleStats, targetYear);
 }
-

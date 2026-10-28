@@ -5,7 +5,7 @@ import { PaperDiaryImportModal } from "../../ai/frontend/PaperDiaryImportModal";
 import { LiquidGlassSidebar } from "./LiquidGlassSidebar";
 import { DeveloperDocsModal } from "./DeveloperDocsModal";
 import { CreditsModal } from "./CreditsModal";
-import type { ActivityStep, StructuredEntry, ValidSymptom } from "../../ai/backend/agent";
+import type { ActivityStep, StructuredEntry, ValidSymptom, ToolCallRecord } from "../../ai/backend/agent";
 import { VALID_SYMPTOMS } from "../../ai/backend/agent";
 import type { DeepCycleSynthesis, FestivalForecast, PhaseCorrelation } from "../../ai/backend/synthesis";
 import { getBaselineSynthesis } from "../../ai/backend/synthesis";
@@ -27,6 +27,9 @@ import {
   recordExportTimestamp,
   exportCycleDataJSON,
   importCycleDataJSON,
+  loadSyntheticDemoData,
+  clearSyntheticDemoData,
+  isDemoDataLoaded,
 } from "./cycleStorage";
 import type { Period, DayLog, CycleStats } from "./cycleStorage";
 
@@ -104,6 +107,15 @@ export function App() {
   const [planOverlaps, setPlanOverlaps] = useState<any[] | null>(null);
   const [manualText, setManualText] = useState<string>("");
 
+  // Judge One-Tap Demo & Under The Hood State
+  const [isDemoActive, setIsDemoActive] = useState<boolean>(() => isDemoDataLoaded());
+  const [toolCalls, setToolCalls] = useState<ToolCallRecord[]>([]);
+  const [isUnderHoodOpen, setIsUnderHoodOpen] = useState<boolean>(false);
+  const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(false);
+  const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
+  const [pipelineStage, setPipelineStage] = useState<"idle" | "recording" | "transcribing" | "resolving" | "previewing" | "confirming">("idle");
+  const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
+
   // Multi-Turn Conversational Memory & Deep Chronobiology Synthesis State
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
   const [synthesisResult, setSynthesisResult] = useState<DeepCycleSynthesis>(() =>
@@ -112,6 +124,23 @@ export function App() {
   const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
   const [foresightFilter, setForesightFilter] = useState<"all" | "travel" | "energy" | "rest">("all");
   const [foresightView, setForesightView] = useState<"cards" | "table">("cards");
+
+  const handleLoadDemo = () => {
+    const demo = loadSyntheticDemoData();
+    setData(demo);
+    setIsDemoActive(true);
+    setSynthesisResult(getBaselineSynthesis(demo.periods, computeCycleStats(demo.periods), 2026));
+    setAgentMessage("Synthetic judge demo loaded (4 historical cycles & 5 symptom logs). Plan Around It forecast and Foresight matrix are now active.");
+  };
+
+  const handleClearDemo = () => {
+    clearSyntheticDemoData();
+    const fresh = loadCycleData();
+    setData(fresh);
+    setIsDemoActive(false);
+    setSynthesisResult(getBaselineSynthesis(fresh.periods, computeCycleStats(fresh.periods), 2026));
+    setAgentMessage("Synthetic demo data cleared. Your vault is fresh.");
+  };
 
   const handleRunSynthesis = async () => {
     setIsSynthesizing(true);
@@ -147,21 +176,28 @@ export function App() {
   }, [audioBlob, isRecording]);
 
   const handleAudioCaptured = async (blob: Blob) => {
+    const pending = confirmEntry;
     setIsProcessing(true);
+    setPipelineStage("transcribing");
     setActivityTrail([{ step: "Voice Recognition", detail: "Meta Muse Voice Transcribe", status: "pending" }]);
-    setConfirmEntry(null);
-    setPlanOverlaps(null);
+    if (!pending) {
+      setConfirmEntry(null);
+      setPlanOverlaps(null);
+    }
 
     try {
       const hint = selectedLanguage === "auto" ? undefined : selectedLanguage;
       const res = await transcribeAudioBlob(blob, hint);
+      if (res.rateLimited) {
+        setRateLimitNotice(res.error || "Demo limit reached, try again in a minute.");
+      }
       const text = (res.text && res.text.trim()) || "";
       if (text) {
         setTranscript(text);
-        await runAgentPipeline(text);
+        await runAgentPipeline(text, pending);
       } else {
-        setAgentMessage("No speech was detected in your recording. Please speak clearly into your mic or type below.");
-        setActivityTrail([{ step: "Voice Recognition", detail: "No speech detected in audio clip", status: "done" }]);
+        setAgentMessage(res.error || "No speech was detected in your recording. Please speak clearly into your mic or type below.");
+        setActivityTrail([{ step: "Voice Recognition", detail: res.error || "No speech detected in audio clip", status: "done" }]);
       }
     } catch (err: any) {
       console.error("Voice processing error:", err);
@@ -172,13 +208,21 @@ export function App() {
     }
   };
 
-  const runAgentPipeline = async (promptText: string) => {
+  const runAgentPipeline = async (promptText: string, activePendingEntry?: StructuredEntry | null) => {
     setIsProcessing(true);
     setTranscript(promptText);
-    setConfirmEntry(null);
-    setPlanOverlaps(null);
+    setRateLimitNotice(null);
+
+    const pending = activePendingEntry !== undefined ? activePendingEntry : confirmEntry;
+    setPipelineStage(pending ? "resolving" : "transcribing");
+
+    if (!pending) {
+      setConfirmEntry(null);
+      setPlanOverlaps(null);
+    }
 
     try {
+      setPipelineStage("resolving");
       const res = await sendAgentMessage(
         promptText,
         {
@@ -189,6 +233,7 @@ export function App() {
           },
           periods: data.periods,
           currentDate: todayStr(),
+          pendingEntry: pending,
         },
         conversationHistory,
       );
@@ -196,8 +241,18 @@ export function App() {
       setAgentMessage(res.message);
       setActivityTrail(res.activityTrail || []);
 
+      if (res.toolCalls && res.toolCalls.length > 0) {
+        setToolCalls(res.toolCalls);
+      }
+      setIsOfflineFallback(Boolean(res.isOfflineFallback));
+
+      if (res.rateLimited) {
+        setRateLimitNotice(res.message);
+      }
+
       if (res.entry) {
         setConfirmEntry(res.entry);
+        setPipelineStage("previewing");
       }
       if (res.planOverlaps && res.planOverlaps.length > 0) {
         setPlanOverlaps(res.planOverlaps);
@@ -211,9 +266,10 @@ export function App() {
           { role: "assistant", content: res.message },
         ]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Agent error:", err);
-      setAgentMessage("Could not process request.");
+      setAgentMessage(err.message || "Could not process request.");
+      setActivityTrail([{ step: "Error", detail: err.message || "Processing error", status: "clarify" }]);
     } finally {
       setIsProcessing(false);
     }
@@ -552,8 +608,8 @@ export function App() {
               
               <div id="process-console" className="liquid-glass-lens rounded-[28px] sm:rounded-[32px] p-4 sm:p-7 space-y-4 sm:space-y-6">
                 
-                {/* Console Header */}
-                <div className="flex items-baseline justify-between border-b border-stone-200/50 pb-3">
+                {/* Console Header & Judge One-Tap Demo */}
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between border-b border-stone-200/50 pb-3 gap-2">
                   <div>
                     <h3 className="editorial-serif text-2xl sm:text-3xl font-normal text-stone-900">
                       Hero Voice Flow
@@ -562,14 +618,65 @@ export function App() {
                       Fuzzy landmark date recall &amp; cycle logging
                     </span>
                   </div>
-                  <span className="liquid-glass-pill font-mono text-[10px] uppercase tracking-widest text-stone-600 px-3 py-1">
-                    Meta Muse
-                  </span>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {isDemoActive ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="liquid-glass-pill font-mono text-[10px] text-emerald-800 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1">
+                          ✨ Judge Demo Active
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleClearDemo}
+                          className="liquid-glass-pill font-mono text-[10px] uppercase text-stone-500 hover:text-stone-900 px-2.5 py-1 cursor-pointer"
+                          title="Reset to fresh storage"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleLoadDemo}
+                        className="liquid-glass-button-dark font-mono text-[10px] uppercase tracking-wider rounded-full px-3.5 py-1 cursor-pointer shadow-xs"
+                      >
+                        ✨ Try Judge Demo
+                      </button>
+                    )}
+                    <span className="liquid-glass-pill font-mono text-[10px] uppercase tracking-widest text-stone-600 px-3 py-1">
+                      Meta Muse
+                    </span>
+                  </div>
                 </div>
 
-                {/* Visible Medical Guardrail Notice */}
-                <div className="rounded-[16px] liquid-glass-pill px-3.5 py-2 text-center text-xs text-stone-700 font-mono">
-                  Feather helps with logging and planning only, not medical advice.
+                {/* Visible Medical Guardrail Notice & Failure / Status Banners */}
+                <div className="space-y-2">
+                  <div className="rounded-[16px] liquid-glass-pill px-3.5 py-2 text-center text-xs text-stone-700 font-mono">
+                    Feather helps with logging and planning only, not medical advice.
+                  </div>
+
+                  {rateLimitNotice && (
+                    <div className="rounded-[16px] bg-amber-50/90 border border-amber-300 px-3.5 py-2 text-xs text-amber-900 font-sans flex items-center justify-between gap-2 shadow-xs">
+                      <span>⚠️ {rateLimitNotice}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRateLimitNotice(null)}
+                        className="text-amber-700 hover:text-amber-950 font-bold text-xs cursor-pointer"
+                        aria-label="Dismiss limit warning"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {isOfflineFallback && (
+                    <div className="rounded-[14px] bg-blue-50/70 border border-blue-200 px-3.5 py-1.5 text-[11px] text-blue-900 font-mono flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="size-2 rounded-full bg-blue-500" />
+                        <span>Zero-Cloud Fallback Engine Active (Deterministic Offline Rules)</span>
+                      </div>
+                      <span className="text-[10px] text-blue-600">0ms</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Step 1: Speech Recognition Tongue */}
@@ -630,6 +737,13 @@ export function App() {
                         <button
                           type="button"
                           onClick={stopRecording}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              stopRecording();
+                            }
+                          }}
+                          tabIndex={0}
                           className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-mono text-xs uppercase tracking-wider cursor-pointer"
                         >
                           Stop &amp; Structure
@@ -645,8 +759,15 @@ export function App() {
                         <button
                           type="button"
                           onClick={startRecording}
-                          className="liquid-glass-lens group flex h-20 w-20 items-center justify-center rounded-full text-stone-900 transition-all hover:scale-105 active:scale-95 mx-auto cursor-pointer shadow-md"
-                          aria-label="Click to Speak Cycle Log"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              startRecording();
+                            }
+                          }}
+                          tabIndex={0}
+                          className="liquid-glass-lens group flex h-20 w-20 items-center justify-center rounded-full text-stone-900 transition-all hover:scale-105 active:scale-95 mx-auto cursor-pointer shadow-md focus:outline-none focus:ring-2 focus:ring-stone-400"
+                          aria-label="Click or press Enter to Speak Cycle Memory"
                         >
                           <svg className="h-7 w-7 text-stone-800 group-hover:text-black transition-colors" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -661,7 +782,7 @@ export function App() {
                             Click to Speak Cycle Memory
                           </span>
                           <span className="block font-sans text-xs text-stone-500">
-                            e.g., "Period started 2 days before New Year's, heavy flow"
+                            e.g., "Period started 2 days before Diwali, medium flow"
                           </span>
                         </div>
                       </div>
@@ -681,7 +802,7 @@ export function App() {
                       type="text"
                       value={manualText}
                       onChange={(e) => setManualText(e.target.value)}
-                      placeholder="Type: 'Period 2 days before New Year's' or 'Marathon on Nov 15'..."
+                      placeholder="Type: 'Period 2 days before Diwali' or 'Marathon on Nov 15'..."
                       className="liquid-glass-input flex-1 rounded-full px-5 py-2.5 text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-400"
                     />
                     <button
@@ -694,11 +815,46 @@ export function App() {
                   </form>
                 </div>
 
-                {/* Step 3: Suggestion Chips */}
+                {/* Judge Tap-to-Run: 3 Multilingual Pipeline Examples */}
                 <div className="liquid-glass-card rounded-[22px] p-3.5 space-y-2">
                   <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                    <span>3. Sample Fuzzy Queries</span>
-                    <span>Landmark Recall</span>
+                    <span>Judge Tap-to-Run (Real Meta AI Pipeline)</span>
+                    <span className="text-violet-700 font-bold">Multilingual</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => runAgentPipeline("Period started 2 days before Diwali, medium flow with cramps")}
+                      className="liquid-glass-pill p-2 text-left hover:bg-white/80 transition-all cursor-pointer"
+                    >
+                      <span className="block font-mono text-[9px] uppercase font-bold text-stone-900">English</span>
+                      <span className="text-[11px] text-stone-600 block line-clamp-2">"2 days before Diwali, medium flow with cramps"</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAgentPipeline("Onam kazhinju 2 divasam aayappol period thudangi, light flow")}
+                      className="liquid-glass-pill p-2 text-left hover:bg-white/80 transition-all cursor-pointer"
+                    >
+                      <span className="block font-mono text-[9px] uppercase font-bold text-stone-900">മലയാളം</span>
+                      <span className="text-[11px] text-stone-600 block line-clamp-2">"Onam kazhinju 2 divasam, light flow"</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAgentPipeline("Women's Day se 3 din pehle period shuru hua, heavy flow headache")}
+                      className="liquid-glass-pill p-2 text-left hover:bg-white/80 transition-all cursor-pointer"
+                    >
+                      <span className="block font-mono text-[9px] uppercase font-bold text-stone-900">हिन्दी / Code-Mixed</span>
+                      <span className="text-[11px] text-stone-600 block line-clamp-2">"Women's Day se 3 din pehle, heavy flow"</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 3: Additional Fuzzy Landmark Suggestions */}
+                <div className="liquid-glass-card rounded-[22px] p-3.5 space-y-2">
+                  <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-stone-500">
+                    <span>3. Additional Landmark Prompts</span>
+                    <span>Presets</span>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
@@ -742,6 +898,75 @@ export function App() {
                     <p className="leading-relaxed text-sm">{agentMessage}</p>
                   </div>
                 )}
+
+                {/* Under the Hood (Tool Trace & Latency) */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsUnderHoodOpen(!isUnderHoodOpen)}
+                    className="flex items-center justify-between w-full liquid-glass-pill px-3.5 py-2 text-xs font-mono font-medium text-stone-700 hover:text-stone-950 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-violet-600" />
+                      <span>UNDER THE HOOD — Meta AI Tool Trace</span>
+                      {toolCalls.length > 0 && (
+                        <span className="bg-stone-900 text-white rounded-full px-2 py-0.5 text-[9px]">
+                          {toolCalls.length} tool calls
+                        </span>
+                      )}
+                    </div>
+                    <span>{isUnderHoodOpen ? "▲ Hide" : "▼ Inspect Tool Calls"}</span>
+                  </button>
+
+                  {isUnderHoodOpen && (
+                    <div className="mt-3 liquid-glass-card rounded-[20px] p-4 text-xs font-mono space-y-3">
+                      <div className="flex items-center justify-between text-[10px] text-stone-500 border-b border-stone-200/50 pb-2">
+                        <span>Pipeline Stage: {pipelineStage}</span>
+                        <span>{isOfflineFallback ? "Zero-Cloud Fallback Engine" : "Meta Muse AI Service"}</span>
+                      </div>
+
+                      {toolCalls.length === 0 ? (
+                        <div className="text-stone-500 py-3 text-center text-xs">
+                          Run a voice or text command above to inspect live tool calls, arguments, and latency.
+                        </div>
+                      ) : (
+                        toolCalls.map((call, idx) => (
+                          <div key={idx} className="bg-white/80 rounded-[14px] p-3 border border-stone-200/70 space-y-1.5 shadow-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-stone-900 flex items-center gap-1.5">
+                                <span className="text-violet-600 font-bold">λ</span>
+                                {call.toolName}
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px]">
+                                <span className="bg-stone-100 text-stone-700 rounded-full px-2 py-0.5 font-bold">
+                                  {call.latencyMs} ms
+                                </span>
+                                <span className="liquid-glass-pill px-2 py-0.5 text-stone-600">
+                                  {call.model}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] space-y-1 pt-1">
+                              <div>
+                                <span className="text-stone-400 block text-[9px] uppercase tracking-wider">Arguments:</span>
+                                <pre className="bg-stone-50 p-2 rounded-lg text-stone-800 overflow-x-auto text-[10px] leading-tight">
+                                  {JSON.stringify(call.args, null, 2)}
+                                </pre>
+                              </div>
+                              <div>
+                                <span className="text-stone-400 block text-[9px] uppercase tracking-wider">Returned Result:</span>
+                                <pre className="bg-stone-50 p-2 rounded-lg text-stone-800 overflow-x-auto text-[10px] leading-tight">
+                                  {JSON.stringify(call.result, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Privacy Guarantee Explainer Banner */}
                 <div className="rounded-[18px] liquid-glass-pill p-3 text-[11px] text-stone-600 font-sans leading-relaxed text-center">
@@ -841,6 +1066,61 @@ export function App() {
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Voice & Text Multi-Turn Slip Corrections */}
+                <div className="mt-5 pt-4 border-t border-stone-200/50 space-y-2">
+                  <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-stone-500">
+                    <span>Conversational Corrections (Voice or Text)</span>
+                    <span className="text-violet-700 font-bold">Multi-Turn Agent</span>
+                  </div>
+
+                  <p className="text-[11px] font-sans text-stone-600">
+                    Say or type corrections like <em>"no, make it the 3rd"</em>, <em>"add headache"</em>, or <em>"change flow to light"</em>.
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      { label: "Make it the 3rd", prompt: "no, make it the 3rd" },
+                      { label: "+ Add Headache", prompt: "add headache" },
+                      { label: "Change to Light Flow", prompt: "change flow to light" },
+                      { label: "Change to Heavy Flow", prompt: "change flow to heavy" },
+                    ].map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => runAgentPipeline(item.prompt, confirmEntry)}
+                        className="liquid-glass-pill px-2.5 py-1 text-[11px] font-mono text-stone-700 hover:text-stone-950 transition-all cursor-pointer"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!slipCorrectionText.trim()) return;
+                      runAgentPipeline(slipCorrectionText.trim(), confirmEntry);
+                      setSlipCorrectionText("");
+                    }}
+                    className="flex gap-2 pt-1"
+                  >
+                    <input
+                      type="text"
+                      value={slipCorrectionText}
+                      onChange={(e) => setSlipCorrectionText(e.target.value)}
+                      placeholder="Type correction: 'make it the 3rd' or 'add headache'..."
+                      className="liquid-glass-input flex-1 rounded-full px-4 py-2 text-xs text-stone-900 placeholder-stone-400 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="liquid-glass-button-dark rounded-full px-4 py-2 font-mono text-[10px] uppercase tracking-wider cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </form>
                 </div>
 
                 {/* Actions */}
