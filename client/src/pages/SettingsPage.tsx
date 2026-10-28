@@ -33,19 +33,19 @@ export function SettingsPage() {
       />
 
       {/* Speech-to-Text Recognition Engine */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/90 shadow-sm">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 shadow-sm">
         <div className="border-b border-stone-200/50 pb-3">
-          <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+          <span className="font-sans text-xs font-semibold text-violet-700 block">
             Speech Recognition Engine
           </span>
-          <h3 className="font-serif text-lg font-bold text-stone-900">
+          <h3 className="font-serif text-lg font-semibold text-stone-900">
             Transcription Service Configuration
           </h3>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans">
           <div className="space-y-1 max-w-lg">
-            <span className="font-bold text-stone-900 block">
+            <span className="font-semibold text-stone-900 block">
               Default: Meta Muse Voice Transcribe 1.0 (Cloud API)
             </span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
@@ -60,31 +60,31 @@ export function SettingsPage() {
               onChange={(e) => setUseBrowserSpeech(e.target.checked)}
               className="size-4 rounded accent-violet-600 cursor-pointer"
             />
-            <span className="font-mono text-[11px] text-stone-700 font-medium">
+            <span className="font-sans text-xs text-stone-700 font-medium">
               Use Web Speech API (Client-Only)
             </span>
           </label>
         </div>
 
         {useBrowserSpeech && (
-          <div className="p-3 rounded-xl bg-violet-50 text-violet-900 text-[11px] border border-violet-200">
+          <div className="p-3 rounded-xl bg-violet-50 text-violet-900 text-[11px] border border-violet-200 font-sans">
             Web Speech API is active. Voice is transcribed entirely on-device by your browser's speech recognition engine without hitting <code>/api/transcribe</code>.
           </div>
         )}
       </div>
 
       {/* AI Model Provider Configuration */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/90 shadow-sm">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 shadow-sm">
         <div className="border-b border-stone-200/50 pb-3">
-          <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+          <span className="font-sans text-xs font-semibold text-violet-700 block">
             AI Model Routing
           </span>
-          <h3 className="font-serif text-lg font-bold text-stone-900">
+          <h3 className="font-serif text-lg font-semibold text-stone-900">
             Inference Providers &amp; Open-Weight Bridges
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
           {/* Hosted Meta Model API */}
           <div className={`p-4 rounded-[18px] border transition-all ${
             !useBaseten
@@ -92,16 +92,16 @@ export function SettingsPage() {
               : "bg-white/50 border-stone-200/70"
           }`}>
             <div className="flex items-center justify-between pb-1">
-              <span className="font-bold text-stone-900">Meta Model API (Hosted)</span>
-              {!useBaseten && <span className="font-mono text-[9px] uppercase font-bold bg-violet-100 text-violet-800 px-2 py-0.5 rounded-full">Active</span>}
+              <span className="font-semibold text-stone-900">Meta Model API (Hosted)</span>
+              {!useBaseten && <span className="font-sans text-[11px] font-semibold bg-violet-100 text-violet-800 px-2.5 py-0.5 rounded-full">Active</span>}
             </div>
             <p className="text-[11px] text-stone-600 leading-tight">
-              Model: <code className="font-mono font-bold">muse-spark-1.3</code> via <code>https://api.meta.ai/v1</code>. Serverless tool-calling with landmark recall &amp; slip correction.
+              Model: <code className="font-mono font-semibold">muse-spark-1.3</code> via <code>https://api.meta.ai/v1</code>. Serverless tool-calling with landmark recall &amp; slip correction.
             </p>
             <button
               type="button"
               onClick={() => handleToggleBaseten(false)}
-              className="mt-3 liquid-glass-pill px-3 py-1 font-mono text-[10px] uppercase font-bold text-stone-800 cursor-pointer"
+              className="mt-3 liquid-glass-pill px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
             >
               Select Hosted Meta API
             </button>
@@ -114,16 +114,16 @@ export function SettingsPage() {
               : "bg-white/50 border-stone-200/70"
           }`}>
             <div className="flex items-center justify-between pb-1">
-              <span className="font-bold text-stone-900">Baseten Open-Weight Bridge</span>
-              {useBaseten && <span className="font-mono text-[9px] uppercase font-bold bg-violet-100 text-violet-800 px-2 py-0.5 rounded-full">Active</span>}
+              <span className="font-semibold text-stone-900">Baseten Open-Weight Bridge</span>
+              {useBaseten && <span className="font-sans text-[11px] font-semibold bg-violet-100 text-violet-800 px-2.5 py-0.5 rounded-full">Active</span>}
             </div>
             <p className="text-[11px] text-stone-600 leading-tight">
-              Model: <code className="font-mono font-bold">meta-models/muse-spark-open-1026</code>. Alternative self-hosted GPU bridge endpoint.
+              Model: <code className="font-mono font-semibold">meta-models/muse-spark-open-1026</code>. Alternative self-hosted GPU bridge endpoint.
             </p>
             <button
               type="button"
               onClick={() => handleToggleBaseten(true)}
-              className="mt-3 liquid-glass-pill px-3 py-1 font-mono text-[10px] uppercase font-bold text-stone-800 cursor-pointer"
+              className="mt-3 liquid-glass-pill px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
             >
               Select Baseten Open-Weight
             </button>
@@ -132,51 +132,51 @@ export function SettingsPage() {
       </div>
 
       {/* Credit Quotas & Stateless Rate Limiting Note */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 border border-white/90">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-3">
         <div className="border-b border-stone-200/50 pb-2.5">
-          <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-semibold text-stone-600 block">
             API Protection &amp; Credit Quotas
           </span>
-          <h3 className="font-serif text-lg font-bold text-stone-900">
+          <h3 className="font-serif text-lg font-semibold text-stone-900">
             Stateless Best-Effort Protection
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1 font-sans">
           <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
-            <span className="font-mono text-[9px] text-stone-400 uppercase block">Per-IP Minute Rate</span>
-            <span className="font-serif text-lg font-bold text-stone-900">20 req/min</span>
-            <span className="text-[10px] text-stone-500 block">Prevents runaway voice loops</span>
+            <span className="font-sans text-[11px] text-stone-500 font-medium block">Per-IP Minute Rate</span>
+            <span className="font-serif text-lg font-semibold text-stone-900">20 req/min</span>
+            <span className="text-[11px] text-stone-500 block">Prevents runaway voice loops</span>
           </div>
           <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
-            <span className="font-mono text-[9px] text-stone-400 uppercase block">Per-IP Daily Quota</span>
-            <span className="font-serif text-lg font-bold text-stone-900">150 req/day</span>
-            <span className="text-[10px] text-stone-500 block">Per serverless edge instance</span>
+            <span className="font-sans text-[11px] text-stone-500 font-medium block">Per-IP Daily Quota</span>
+            <span className="font-serif text-lg font-semibold text-stone-900">150 req/day</span>
+            <span className="text-[11px] text-stone-500 block">Per serverless edge instance</span>
           </div>
           <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
-            <span className="font-mono text-[9px] text-stone-400 uppercase block">Global Server Cap</span>
-            <span className="font-serif text-lg font-bold text-stone-900">500 req/day</span>
-            <span className="text-[10px] text-stone-500 block">DAILY_REQUEST_CAP limit</span>
+            <span className="font-sans text-[11px] text-stone-500 font-medium block">Global Server Cap</span>
+            <span className="font-serif text-lg font-semibold text-stone-900">500 req/day</span>
+            <span className="text-[11px] text-stone-500 block">DAILY_REQUEST_CAP limit</span>
           </div>
         </div>
 
-        <p className="text-[11px] text-stone-600 leading-relaxed pt-1">
+        <p className="text-[11px] text-stone-600 leading-relaxed pt-1 font-sans">
           <strong>Authentic Client IP:</strong> Endpoints read client IPs from Vercel's authentic edge proxy headers (<code>x-real-ip</code> and <code>x-vercel-forwarded-for</code>) to prevent client-spoofed rate limit circumvention.
         </p>
 
-        <p className="text-[11px] text-stone-500 leading-relaxed italic border-t border-stone-200/40 pt-2">
+        <p className="text-[11px] text-stone-500 leading-relaxed italic border-t border-stone-200/40 pt-2 font-sans">
           "While using free hackathon API credits, content sent to the Meta Model API may be used by Meta for product improvement. Do not enter real personal health data in this demo."
         </p>
       </div>
 
       {/* Developer Architecture & System Docs (Tabs) */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/90">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-stone-200/50 pb-3 flex-wrap gap-2">
           <div>
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+            <span className="font-sans text-xs font-semibold text-violet-700 block">
               Technical Documentation
             </span>
-            <h3 className="font-serif text-lg font-bold text-stone-900">
+            <h3 className="font-serif text-lg font-semibold text-stone-900">
               System Architecture &amp; Guardrails
             </h3>
           </div>
@@ -192,9 +192,9 @@ export function SettingsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveDocTab(tab.id as any)}
-                className={`px-3 py-1 rounded-full text-xs font-mono uppercase font-bold cursor-pointer transition-all ${
+                className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all ${
                   activeDocTab === tab.id
-                    ? "bg-stone-900 text-white shadow-xs"
+                    ? "bg-stone-900 text-white shadow-2xs"
                     : "text-stone-600 hover:text-stone-950"
                 }`}
               >

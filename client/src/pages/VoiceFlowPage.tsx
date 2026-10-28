@@ -257,7 +257,7 @@ export function VoiceFlowPage() {
       <div className="liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative">
         {/* Language Selection Row */}
         <div className="flex items-center justify-center gap-2 flex-wrap text-xs">
-          <span className="text-stone-500 font-mono text-[10px] uppercase tracking-wider">Language:</span>
+          <span className="text-stone-500 font-sans text-xs font-medium">Language:</span>
           <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
             {[
               { id: "auto", label: "Auto Detect" },
@@ -269,9 +269,9 @@ export function VoiceFlowPage() {
                 key={lang.id}
                 type="button"
                 onClick={() => setSelectedLanguage(lang.id)}
-                className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
                   selectedLanguage === lang.id
-                    ? "bg-stone-900 text-white shadow-xs font-bold"
+                    ? "bg-stone-900 text-white shadow-xs font-semibold"
                     : "text-stone-600 hover:text-stone-950"
                 }`}
               >
@@ -307,7 +307,7 @@ export function VoiceFlowPage() {
 
           {/* Recording Timer & Status */}
           <div className="space-y-1">
-            <span className="font-mono text-xs font-bold text-stone-800 block">
+            <span className="font-sans text-xs font-semibold text-stone-800 block">
               {isRecording
                 ? `Recording 0:${durationSeconds < 10 ? `0${durationSeconds}` : durationSeconds} / 0:30`
                 : isProcessing
@@ -349,7 +349,7 @@ export function VoiceFlowPage() {
             <button
               type="submit"
               disabled={isProcessing || !manualText.trim()}
-              className="absolute right-1.5 liquid-glass-button-dark rounded-full px-4 py-1.5 font-mono text-[10px] uppercase font-bold disabled:opacity-40 cursor-pointer shadow-xs"
+              className="absolute right-1.5 liquid-glass-button-dark rounded-full px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs"
             >
               Resolve →
             </button>
@@ -360,7 +360,7 @@ export function VoiceFlowPage() {
       {/* Transcript & Refusal / Agent Output */}
       {transcript && (
         <div className="liquid-glass-card rounded-[20px] p-4 text-xs space-y-1.5 border border-white/80">
-          <span className="font-mono text-[9px] uppercase font-bold tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Transcript Received
           </span>
           <p className="font-sans text-stone-800 text-sm font-medium">"{transcript}"</p>
@@ -377,7 +377,7 @@ export function VoiceFlowPage() {
           <p className="font-sans text-xs text-amber-950 leading-relaxed">
             {agentMessage}
           </p>
-          <span className="font-mono text-[10px] text-amber-700 block pt-1">
+          <span className="font-sans text-[11px] text-amber-700 block pt-1">
             Feather is strictly for cycle date logging and event milestone planning. It does not provide medical advice.
           </span>
         </div>
@@ -386,17 +386,17 @@ export function VoiceFlowPage() {
       {/* Plan Overlap Alerts */}
       {planOverlaps && planOverlaps.length > 0 && (
         <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
-          <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+          <span className="font-sans text-xs font-semibold text-violet-700 block">
             Plan Around It — Overlap Analysis
           </span>
           <div className="space-y-2">
             {planOverlaps.map((item, idx) => (
               <div key={idx} className="p-3 rounded-[16px] bg-white/80 border border-stone-200/60 flex items-center justify-between text-xs">
                 <div>
-                  <span className="font-bold text-stone-900 block">{item.eventName} ({prettyDate(item.date)})</span>
+                  <span className="font-semibold text-stone-900 block font-sans">{item.eventName} ({prettyDate(item.date)})</span>
                   <span className="text-stone-600 text-[11px] block">{item.note}</span>
                 </div>
-                <span className={`font-mono text-[10px] uppercase font-bold px-2.5 py-1 rounded-full ${
+                <span className={`font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full ${
                   item.overlap === "likely" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
                 }`}>
                   {item.overlap === "likely" ? "Likely Overlap" : "Unlikely Overlap"}
@@ -412,14 +412,14 @@ export function VoiceFlowPage() {
         <div className="liquid-glass-card rounded-[26px] p-6 space-y-5 border border-white/95 shadow-md animate-in fade-in">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-emerald-700 block">
+              <span className="font-sans text-xs font-semibold text-emerald-700 block">
                 Accession Slip Preview
               </span>
-              <h3 className="font-serif text-xl font-bold text-stone-900">
+              <h3 className="font-serif text-xl font-semibold text-stone-900">
                 Confirm Cycle Entry Details
               </h3>
             </div>
-            <span className="font-mono text-[10px] bg-stone-100 text-stone-600 px-2.5 py-1 rounded-full">
+            <span className="font-sans text-[11px] font-medium bg-white/80 text-stone-600 px-2.5 py-1 rounded-full border border-stone-200/70">
               Confirmation Required
             </span>
           </div>
@@ -427,17 +427,17 @@ export function VoiceFlowPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             {/* Date Picker */}
             <div className="space-y-1">
-              <label className="font-mono text-[10px] uppercase font-bold text-stone-500 block">
+              <label className="font-sans text-xs font-medium text-stone-600 block">
                 Entry Date:
               </label>
               <input
                 type="date"
                 value={confirmEntry.date}
                 onChange={(e) => setConfirmEntry({ ...confirmEntry, date: e.target.value })}
-                className="w-full liquid-glass-input rounded-xl p-2.5 text-xs font-mono text-stone-900"
+                className="w-full liquid-glass-input rounded-xl p-2.5 text-xs font-sans text-stone-900"
               />
               {confirmEntry.landmarkName && (
-                <span className="text-[10px] text-violet-700 font-medium block">
+                <span className="text-[11px] text-violet-700 font-medium block">
                   Resolved landmark: {confirmEntry.landmarkName}
                 </span>
               )}
@@ -445,7 +445,7 @@ export function VoiceFlowPage() {
 
             {/* Flow Selector */}
             <div className="space-y-1">
-              <label className="font-mono text-[10px] uppercase font-bold text-stone-500 block">
+              <label className="font-sans text-xs font-medium text-stone-600 block">
                 Flow Intensity:
               </label>
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -454,9 +454,9 @@ export function VoiceFlowPage() {
                     key={f.key}
                     type="button"
                     onClick={() => setConfirmEntry({ ...confirmEntry, flow: f.key })}
-                    className={`px-3 py-1.5 rounded-full text-xs font-mono uppercase transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all cursor-pointer ${
                       confirmEntry.flow === f.key
-                        ? "liquid-glass-button-dark font-bold"
+                        ? "liquid-glass-button-dark font-semibold"
                         : "liquid-glass-pill text-stone-700"
                     }`}
                   >
@@ -469,7 +469,7 @@ export function VoiceFlowPage() {
 
           {/* Symptom Tag Toggles */}
           <div className="space-y-1.5 text-xs">
-            <label className="font-mono text-[10px] uppercase font-bold text-stone-500 block">
+            <label className="font-sans text-xs font-medium text-stone-600 block">
               Symptoms Logged:
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -495,7 +495,7 @@ export function VoiceFlowPage() {
 
           {/* Conversational Slip Correction Bar */}
           <form onSubmit={handleApplyCorrection} className="pt-2 border-t border-stone-200/40 space-y-1.5">
-            <label className="font-mono text-[10px] uppercase text-stone-500 block">
+            <label className="font-sans text-xs font-medium text-stone-600 block">
               Slip Correction (Conversation):
             </label>
             <div className="flex items-center gap-2">
@@ -509,7 +509,7 @@ export function VoiceFlowPage() {
               <button
                 type="submit"
                 disabled={!slipCorrectionText.trim() || isProcessing}
-                className="liquid-glass-pill px-3 py-2 font-mono text-[10px] uppercase font-bold text-stone-900 hover:bg-stone-900 hover:text-white cursor-pointer"
+                className="liquid-glass-pill px-3 py-2 font-sans text-xs font-semibold text-stone-900 hover:bg-stone-900 hover:text-white cursor-pointer shadow-2xs"
               >
                 Apply
               </button>
@@ -521,14 +521,14 @@ export function VoiceFlowPage() {
             <button
               type="button"
               onClick={handleDiscard}
-              className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase text-stone-600 hover:text-stone-900 cursor-pointer"
+              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer"
             >
               Discard
             </button>
             <button
               type="button"
               onClick={handleSaveConfirmed}
-              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer shadow-sm"
+              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               ✓ Confirm &amp; Save Entry
             </button>
@@ -541,9 +541,9 @@ export function VoiceFlowPage() {
         <button
           type="button"
           onClick={() => setIsUnderHoodOpen(!isUnderHoodOpen)}
-          className="w-full flex items-center justify-between text-stone-700 hover:text-stone-950 font-mono text-[11px] uppercase tracking-wider cursor-pointer"
+          className="w-full flex items-center justify-between text-stone-700 hover:text-stone-950 font-sans text-xs font-medium cursor-pointer"
         >
-          <span className="font-bold flex items-center gap-1.5">
+          <span className="font-semibold flex items-center gap-1.5">
             <span>⚙️</span> Under the Hood (Pipeline &amp; Tool Calls)
           </span>
           <span className="text-stone-400">{isUnderHoodOpen ? "Hide ▲" : "Inspect ▼"}</span>

@@ -36,7 +36,7 @@ export function InsightsPage() {
             type="button"
             onClick={runSynthesis}
             disabled={isSynthesizing}
-            className="liquid-glass-button-dark rounded-full px-4 py-2 font-mono text-xs uppercase tracking-wider font-bold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+            className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
           >
             {isSynthesizing ? (
               <>
@@ -65,10 +65,10 @@ export function InsightsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="liquid-glass-card rounded-[22px] p-5 md:col-span-2 space-y-2">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700">
+            <span className="font-sans text-xs font-semibold text-violet-700">
               Chronobiology Executive Summary
             </span>
-            <span className="font-mono text-[10px] text-stone-500">
+            <span className="font-sans text-[11px] text-stone-500 font-medium">
               Provider: {synthesisResult.telemetry?.provider || "Local Deterministic Engine"}
             </span>
           </div>
@@ -79,13 +79,13 @@ export function InsightsPage() {
         </div>
 
         <div className="liquid-glass-card rounded-[22px] p-5 space-y-1 flex flex-col justify-center text-center">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Regularity Index
           </span>
-          <div className="font-serif text-3xl sm:text-4xl font-bold text-violet-900">
+          <div className="font-serif text-3xl sm:text-4xl font-semibold text-violet-900">
             {synthesisResult.regularityScore}/100
           </div>
-          <span className="text-[11px] text-emerald-700 font-medium">
+          <span className="text-[11px] text-emerald-700 font-medium font-sans">
             {synthesisResult.regularityScore >= 80 ? "High Consistency Pattern" : "Normal Variable Pattern"}
           </span>
         </div>
@@ -93,14 +93,14 @@ export function InsightsPage() {
 
       {/* Biological Phase Legend */}
       <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
-        <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-stone-500 block">
+        <span className="font-sans text-xs font-semibold text-stone-700 block">
           Biological Phase Correlations
         </span>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
           <div className="p-3 rounded-[16px] bg-rose-50/70 border border-rose-200/70 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-rose-900">1. Menstrual</span>
-              <span className="font-mono text-[10px] text-rose-700">Days 1-5</span>
+              <span className="font-bold text-rose-900 font-sans">1. Menstrual</span>
+              <span className="font-sans text-[11px] text-rose-700 font-medium">Days 1-5</span>
             </div>
             <p className="text-[11px] text-rose-800 leading-tight">
               Restorative focus, iron-rich nutrition, gentle movement.
@@ -109,8 +109,8 @@ export function InsightsPage() {
 
           <div className="p-3 rounded-[16px] bg-sky-50/70 border border-sky-200/70 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-sky-900">2. Follicular</span>
-              <span className="font-mono text-[10px] text-sky-700">Days 6-13</span>
+              <span className="font-bold text-sky-900 font-sans">2. Follicular</span>
+              <span className="font-sans text-[11px] text-sky-700 font-medium">Days 6-13</span>
             </div>
             <p className="text-[11px] text-sky-800 leading-tight">
               Rising estrogen, mental clarity, creative projects, endurance.
@@ -119,8 +119,8 @@ export function InsightsPage() {
 
           <div className="p-3 rounded-[16px] bg-amber-50/70 border border-amber-200/70 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-amber-900">3. Ovulatory</span>
-              <span className="font-mono text-[10px] text-amber-700">Days 14-16</span>
+              <span className="font-bold text-amber-900 font-sans">3. Ovulatory</span>
+              <span className="font-sans text-[11px] text-amber-700 font-medium">Days 14-16</span>
             </div>
             <p className="text-[11px] text-amber-800 leading-tight">
               Peak biological energy, social presentation, peak athletic power.
@@ -129,8 +129,8 @@ export function InsightsPage() {
 
           <div className="p-3 rounded-[16px] bg-purple-50/70 border border-purple-200/70 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-purple-900">4. Luteal</span>
-              <span className="font-mono text-[10px] text-purple-700">Days 17-28</span>
+              <span className="font-bold text-purple-900 font-sans">4. Luteal</span>
+              <span className="font-sans text-[11px] text-purple-700 font-medium">Days 17-28</span>
             </div>
             <p className="text-[11px] text-purple-800 leading-tight">
               Progesterone elevation, detail work, steady stamina, wind-down.
@@ -154,7 +154,7 @@ export function InsightsPage() {
               onClick={() => setForesightFilter(tab.id as any)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
                 foresightFilter === tab.id
-                  ? "bg-stone-900 text-white shadow-xs font-bold"
+                  ? "bg-stone-900 text-white shadow-xs font-semibold"
                   : "text-stone-600 hover:text-stone-950"
               }`}
             >
@@ -168,8 +168,8 @@ export function InsightsPage() {
           <button
             type="button"
             onClick={() => setViewMode("cards")}
-            className={`px-3 py-1 rounded-full text-xs font-mono uppercase font-bold cursor-pointer ${
-              viewMode === "cards" ? "bg-white text-stone-900 shadow-xs" : "text-stone-500"
+            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer ${
+              viewMode === "cards" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
             }`}
           >
             Cards
@@ -177,8 +177,8 @@ export function InsightsPage() {
           <button
             type="button"
             onClick={() => setViewMode("table")}
-            className={`px-3 py-1 rounded-full text-xs font-mono uppercase font-bold cursor-pointer ${
-              viewMode === "table" ? "bg-white text-stone-900 shadow-xs" : "text-stone-500"
+            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer ${
+              viewMode === "table" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
             }`}
           >
             Table
@@ -194,19 +194,19 @@ export function InsightsPage() {
             return (
               <div
                 key={idx}
-                className="liquid-glass-card rounded-[22px] p-4 space-y-2.5 border border-white/90 shadow-xs hover:border-stone-300 transition-all"
+                className="liquid-glass-card rounded-[22px] p-4 space-y-2.5 shadow-xs hover:border-stone-300 transition-all"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-serif text-base font-bold text-stone-900 leading-tight">
+                    <h4 className="font-serif text-base font-semibold text-stone-900 leading-tight">
                       {item.milestone}
                     </h4>
-                    <span className="font-mono text-[10px] text-stone-500 block pt-0.5">
+                    <span className="font-sans text-[11px] text-stone-500 block pt-0.5 font-medium">
                       {prettyDate(item.date)}
                     </span>
                   </div>
 
-                  <span className={`px-2 py-0.5 rounded-full font-mono text-[9px] uppercase font-bold tracking-wider shrink-0 ${
+                  <span className={`px-2.5 py-0.5 rounded-full font-sans text-[11px] font-semibold shrink-0 ${
                     isLikely
                       ? "bg-rose-100 text-rose-800 border border-rose-200"
                       : "bg-emerald-100 text-emerald-800 border border-emerald-200"
@@ -216,11 +216,11 @@ export function InsightsPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/50">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] text-stone-400 uppercase">Phase:</span>
+                  <div className="flex items-center gap-1.5 font-sans">
+                    <span className="text-[11px] text-stone-400">Phase:</span>
                     <span className="font-semibold text-stone-800">{item.phaseAtMilestone}</span>
                   </div>
-                  <span className="font-mono text-[10px] text-violet-700 font-bold">2026-2027</span>
+                  <span className="font-sans text-[11px] text-violet-700 font-semibold">2026-2027</span>
                 </div>
 
                 {item.note && (
@@ -234,16 +234,16 @@ export function InsightsPage() {
         </div>
       ) : (
         /* Matrix Display: Compact Table View */
-        <div className="liquid-glass-card rounded-[22px] overflow-hidden border border-white/90">
+        <div className="liquid-glass-card rounded-[22px] overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-sans">
-              <thead className="bg-stone-100/60 font-mono text-[10px] uppercase text-stone-500 border-b border-stone-200/60">
+              <thead className="bg-stone-100/60 font-sans text-[11px] font-semibold text-stone-600 border-b border-stone-200/60">
                 <tr>
-                  <th className="py-2.5 px-4 font-bold">Milestone</th>
-                  <th className="py-2.5 px-4 font-bold">Date</th>
-                  <th className="py-2.5 px-4 font-bold">Biological Phase</th>
-                  <th className="py-2.5 px-4 font-bold">Overlap Forecast</th>
-                  <th className="py-2.5 px-4 font-bold">Planning Note</th>
+                  <th className="py-2.5 px-4 font-semibold">Milestone</th>
+                  <th className="py-2.5 px-4 font-semibold">Date</th>
+                  <th className="py-2.5 px-4 font-semibold">Biological Phase</th>
+                  <th className="py-2.5 px-4 font-semibold">Overlap Forecast</th>
+                  <th className="py-2.5 px-4 font-semibold">Planning Note</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200/40">
@@ -251,11 +251,11 @@ export function InsightsPage() {
                   const isLikely = item.overlapRisk.toLowerCase().includes("likely");
                   return (
                     <tr key={idx} className="hover:bg-white/60 transition-colors">
-                      <td className="py-2.5 px-4 font-bold text-stone-900">{item.milestone}</td>
-                      <td className="py-2.5 px-4 font-mono text-[11px] text-stone-600">{item.date}</td>
+                      <td className="py-2.5 px-4 font-semibold text-stone-900">{item.milestone}</td>
+                      <td className="py-2.5 px-4 font-sans text-[11px] text-stone-600">{item.date}</td>
                       <td className="py-2.5 px-4 font-semibold text-stone-800">{item.phaseAtMilestone}</td>
                       <td className="py-2.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-full font-mono text-[9px] uppercase font-bold ${
+                        <span className={`px-2.5 py-0.5 rounded-full font-sans text-[11px] font-semibold ${
                           isLikely
                             ? "bg-rose-100 text-rose-800"
                             : "bg-emerald-100 text-emerald-800"

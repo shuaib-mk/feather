@@ -142,12 +142,12 @@ export function Sidebar() {
 
             <div className={`flex flex-col overflow-hidden transition-opacity duration-200 ${isHovered ? "opacity-100 block" : "opacity-0 hidden"}`}>
               <div className="flex items-center gap-1.5">
-                <span className="font-serif text-base font-bold tracking-tight text-stone-900">
+                <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
                   Feather
                 </span>
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-              <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500">
+              <span className="font-sans text-[11px] text-stone-500 font-medium">
                 Cycle Companion
               </span>
             </div>
@@ -186,7 +186,7 @@ export function Sidebar() {
                   to={item.path}
                   className={`group/item flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer ${
                     active
-                      ? "liquid-glass-pill bg-white text-stone-950 font-semibold shadow-xs"
+                      ? "liquid-glass-pill bg-white text-stone-950 font-semibold shadow-2xs"
                       : "text-stone-700 hover:bg-black/[0.04] hover:text-stone-950"
                   }`}
                   aria-label={item.label}
@@ -220,7 +220,7 @@ export function Sidebar() {
             <span className="font-sans text-[11px] font-semibold text-stone-800">
               100% On-Device
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500">
+            <span className="font-sans text-[10px] text-stone-500 font-medium">
               Zero Server Vault
             </span>
           </div>
@@ -248,7 +248,7 @@ export function Sidebar() {
             <circle cx="10" cy="7" r="2" fill="currentColor" />
             <circle cx="17" cy="11" r="2" fill="currentColor" />
           </svg>
-          <span className="font-serif text-base font-bold tracking-tight text-stone-900">
+          <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
             Feather
           </span>
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -257,7 +257,7 @@ export function Sidebar() {
         <div className="flex items-center gap-1.5">
           <Link
             to="/voice"
-            className="liquid-glass-pill px-3 py-1.5 font-mono text-[10px] uppercase font-bold text-stone-900 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="liquid-glass-pill px-3 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer shadow-2xs"
             aria-label="Voice Capture"
           >
             <span className="size-1.5 rounded-full bg-rose-500" />
@@ -297,12 +297,12 @@ export function Sidebar() {
                   ? "text-stone-950 font-bold"
                   : "text-stone-500 hover:text-stone-800"
               }`}
-              aria-label={item.label}
+              aria-label={item.shortLabel}
             >
               <div className={active ? "text-stone-950" : "text-stone-500"}>
                 {item.icon(active)}
               </div>
-              <span className="font-mono text-[9px] uppercase tracking-wider">
+              <span className="font-sans text-[10px] font-medium tracking-normal">
                 {item.shortLabel}
               </span>
             </Link>

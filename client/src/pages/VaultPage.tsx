@@ -79,61 +79,61 @@ export function VaultPage() {
       {/* Vault Statistics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Confirmed Periods
           </span>
-          <div className="font-serif text-2xl font-bold text-stone-900">{periodsCount}</div>
-          <span className="text-[11px] text-stone-500">Historical cycles</span>
+          <div className="font-serif text-2xl font-semibold text-stone-900">{periodsCount}</div>
+          <span className="text-[11px] text-stone-500 font-sans">Historical cycles</span>
         </div>
 
         <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Daily Symptom Logs
           </span>
-          <div className="font-serif text-2xl font-bold text-stone-900">{logsCount}</div>
-          <span className="text-[11px] text-stone-500">Logged daily notes</span>
+          <div className="font-serif text-2xl font-semibold text-stone-900">{logsCount}</div>
+          <span className="text-[11px] text-stone-500 font-sans">Logged daily notes</span>
         </div>
 
         <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Average Cycle
           </span>
-          <div className="font-serif text-2xl font-bold text-stone-900">{stats.avgCycleLength} days</div>
-          <span className="text-[11px] text-stone-500">
+          <div className="font-serif text-2xl font-semibold text-stone-900">{stats.avgCycleLength} days</div>
+          <span className="text-[11px] text-stone-500 font-sans">
             {stats.isDefaultCycle ? "Default estimate" : "From history"}
           </span>
         </div>
 
         <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-medium text-stone-500 block">
             Demo Mode
           </span>
-          <div className="font-serif text-2xl font-bold text-stone-900">
+          <div className="font-serif text-2xl font-semibold text-stone-900">
             {isDemoActive ? "Active" : "Normal"}
           </div>
-          <span className="text-[11px] text-stone-500">
+          <span className="text-[11px] text-stone-500 font-sans">
             {isDemoActive ? "Synthetic test data" : "Personal vault"}
           </span>
         </div>
       </div>
 
       {/* Backup Import & Export Section */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/90 shadow-sm">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/50 pb-3">
           <div>
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+            <span className="font-sans text-xs font-semibold text-violet-700 block">
               Data Portability
             </span>
-            <h3 className="font-serif text-xl font-bold text-stone-900">
+            <h3 className="font-serif text-xl font-semibold text-stone-900">
               JSON Backup &amp; Device Transfer
             </h3>
           </div>
-          <span className="text-xs text-stone-500">
+          <span className="text-xs text-stone-500 font-sans">
             Because storage is local, export regularly.
           </span>
         </div>
 
-        <p className="text-xs text-stone-600 leading-relaxed max-w-xl">
+        <p className="text-xs text-stone-600 leading-relaxed max-w-xl font-sans">
           Download a complete snapshot of all confirmed period records and symptom logs. You can import this file anytime to restore or migrate to another device.
         </p>
 
@@ -150,7 +150,7 @@ export function VaultPage() {
             type="button"
             onClick={exportBackup}
             disabled={periodsCount === 0 && logsCount === 0}
-            className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-mono text-xs uppercase tracking-wider font-bold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
+            className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-40"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -171,7 +171,7 @@ export function VaultPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="liquid-glass-pill px-5 py-2.5 font-mono text-xs uppercase font-medium text-stone-800 hover:text-stone-950 flex items-center gap-2 cursor-pointer shadow-xs"
+            className="liquid-glass-pill px-5 py-2.5 font-sans text-xs font-medium text-stone-800 hover:text-stone-950 flex items-center gap-2 cursor-pointer shadow-2xs"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -184,17 +184,17 @@ export function VaultPage() {
       </div>
 
       {/* Advanced Data Management: Reset & Demo Mode */}
-      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/90">
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4">
         <div className="border-b border-stone-200/50 pb-3">
-          <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-stone-500 block">
+          <span className="font-sans text-xs font-semibold text-stone-600 block">
             Vault Operations
           </span>
-          <h3 className="font-serif text-lg font-bold text-stone-900">
+          <h3 className="font-serif text-lg font-semibold text-stone-900">
             Data Management &amp; Hackathon Demo
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
           {/* Hackathon Reviewer Demo State */}
           <div className="p-4 rounded-[18px] bg-white/70 border border-stone-200/70 space-y-2">
             <span className="font-bold text-stone-900 block">Reviewer Synthetic Demo</span>
@@ -205,7 +205,7 @@ export function VaultPage() {
               <button
                 type="button"
                 onClick={clearDemo}
-                className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase text-amber-800 border border-amber-300 font-bold hover:bg-amber-50 cursor-pointer"
+                className="liquid-glass-pill px-4 py-2 font-sans text-xs text-amber-800 border border-amber-300 font-semibold hover:bg-amber-50 cursor-pointer"
               >
                 Clear Demo Data
               </button>
@@ -213,7 +213,7 @@ export function VaultPage() {
               <button
                 type="button"
                 onClick={loadDemo}
-                className="liquid-glass-button-dark rounded-full px-4 py-2 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer"
+                className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer"
               >
                 ✨ Load Synthetic Demo
               </button>
@@ -229,7 +229,7 @@ export function VaultPage() {
             <button
               type="button"
               onClick={() => setIsClearModalOpen(true)}
-              className="px-4 py-2 rounded-full font-mono text-xs uppercase tracking-wider font-bold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer shadow-xs"
+              className="px-4 py-2 rounded-full font-sans text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer shadow-xs"
             >
               Reset All Vault Data
             </button>

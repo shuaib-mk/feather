@@ -12,11 +12,11 @@ export function PageHeader({ title, subtitle, badge, actions }: PageHeaderProps)
     <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-stone-200/50">
       <div className="space-y-1">
         <div className="flex items-center gap-2.5">
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+          <h1 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
             {title}
           </h1>
           {badge && (
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 border border-stone-200/80">
+            <span className="font-sans text-[11px] font-medium tracking-normal px-2.5 py-0.5 rounded-full bg-white/70 text-stone-600 border border-stone-200/80 shadow-2xs">
               {badge}
             </span>
           )}

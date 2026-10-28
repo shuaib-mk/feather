@@ -84,7 +84,7 @@ export function ChroniclePage() {
           <div className="flex items-center gap-2">
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-4 py-2 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer shadow-sm"
+              className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               + Log New Entry
             </Link>
@@ -106,7 +106,7 @@ export function ChroniclePage() {
               onClick={() => setFilterType(tab.id as any)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
                 filterType === tab.id
-                  ? "bg-stone-900 text-white shadow-xs font-bold"
+                  ? "bg-stone-900 text-white shadow-xs font-semibold"
                   : "text-stone-600 hover:text-stone-950"
               }`}
             >
@@ -115,7 +115,7 @@ export function ChroniclePage() {
           ))}
         </div>
 
-        <span className="font-mono text-[10px] uppercase text-stone-500">
+        <span className="font-sans text-[11px] text-stone-500 font-medium">
           Saved in localStorage
         </span>
       </div>
@@ -135,7 +135,7 @@ export function ChroniclePage() {
           action={
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-5 py-2 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer"
+              className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer"
             >
               Log Entry Now
             </Link>
@@ -151,28 +151,28 @@ export function ChroniclePage() {
             return (
               <div
                 key={item.id}
-                className="liquid-glass-card rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-white/90 shadow-xs hover:border-stone-300 transition-all"
+                className="liquid-glass-card rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs hover:border-stone-300 transition-all"
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-serif text-lg font-bold text-stone-900">
+                    <span className="font-serif text-lg font-semibold text-stone-900">
                       {prettyDate(item.date)}
                     </span>
 
                     {item.isPeriod && (
-                      <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] uppercase font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-semibold bg-rose-50/90 text-rose-700 border border-rose-200/80">
                         Period Start {duration ? `(${duration}d)` : ""}
                       </span>
                     )}
 
                     {l?.flow && l.flow !== "none" && (
-                      <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] uppercase font-semibold bg-violet-50 text-violet-700 border border-violet-200">
+                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-violet-50/90 text-violet-700 border border-violet-200/80">
                         {l.flow} flow
                       </span>
                     )}
 
                     {p?.landmarkName && (
-                      <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] bg-stone-100 text-stone-700 border border-stone-200">
+                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-white/70 text-stone-700 border border-stone-200/70">
                         🏷️ {p.landmarkName}
                       </span>
                     )}
@@ -185,7 +185,7 @@ export function ChroniclePage() {
                         {l.symptoms.map((sym) => (
                           <span
                             key={sym}
-                            className="liquid-glass-pill px-2 py-0.5 text-[10px] text-stone-600"
+                            className="liquid-glass-pill px-2.5 py-0.5 text-[11px] text-stone-600 font-sans"
                           >
                             {sym}
                           </span>
@@ -200,7 +200,7 @@ export function ChroniclePage() {
                     )}
 
                     {l?.energy != null && (
-                      <span className="font-mono text-[10px] text-stone-500">
+                      <span className="font-sans text-[11px] text-stone-500">
                         Energy: {l.energy}/5
                       </span>
                     )}

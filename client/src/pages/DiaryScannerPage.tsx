@@ -99,16 +99,16 @@ export function DiaryScannerPage() {
         <div className="rounded-[20px] bg-emerald-50 border border-emerald-300 p-4 text-xs text-emerald-900 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-emerald-500" />
-            <span className="font-bold">Successfully imported {successCount} cycle periods to your vault!</span>
+            <span className="font-semibold">Successfully imported {successCount} cycle periods to your vault!</span>
           </div>
-          <Link to="/chronicle" className="font-mono text-[10px] uppercase font-bold underline text-emerald-800">
+          <Link to="/chronicle" className="font-sans text-xs font-semibold underline text-emerald-800">
             View in Chronicle →
           </Link>
         </div>
       )}
 
       {/* Upload & Image Dropzone */}
-      <div className="liquid-glass-card rounded-[24px] p-6 sm:p-8 space-y-5 border border-white/90 text-center">
+      <div className="liquid-glass-card rounded-[24px] p-6 sm:p-8 space-y-5 text-center">
         {!previewUrl ? (
           <label className="border-2 border-dashed border-stone-300 hover:border-violet-500 rounded-[20px] p-8 flex flex-col items-center justify-center space-y-3 cursor-pointer transition-colors bg-white/40 hover:bg-white/70">
             <div className="size-12 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
@@ -118,10 +118,10 @@ export function DiaryScannerPage() {
               </svg>
             </div>
             <div>
-              <span className="font-bold text-stone-900 block text-sm">
+              <span className="font-semibold text-stone-900 block text-sm font-sans">
                 Choose a calendar photo or drop it here
               </span>
-              <span className="text-stone-500 text-xs block pt-0.5">
+              <span className="text-stone-500 text-xs block pt-0.5 font-sans">
                 Supports PNG, JPEG, and WebP (up to 4MB)
               </span>
             </div>
@@ -143,7 +143,7 @@ export function DiaryScannerPage() {
             </div>
 
             <div className="flex items-center justify-center gap-3">
-              <label className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase font-medium text-stone-700 hover:text-stone-900 cursor-pointer">
+              <label className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-2xs">
                 Change Photo
                 <input
                   type="file"
@@ -157,7 +157,7 @@ export function DiaryScannerPage() {
                 type="button"
                 onClick={handleAnalyze}
                 disabled={isAnalyzing}
-                className="liquid-glass-button-dark rounded-full px-5 py-2 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer disabled:opacity-50 shadow-sm"
+                className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer disabled:opacity-50 shadow-sm"
               >
                 {isAnalyzing ? "Scanning Image..." : "Analyze with Muse Vision"}
               </button>
@@ -166,7 +166,7 @@ export function DiaryScannerPage() {
         )}
 
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 text-rose-800 text-xs border border-rose-200 text-left">
+          <div className="p-3 rounded-xl bg-rose-50 text-rose-800 text-xs border border-rose-200 text-left font-sans">
             {error}
           </div>
         )}
@@ -174,39 +174,39 @@ export function DiaryScannerPage() {
 
       {/* Extracted Dates Review Table */}
       {extractedPeriods.length > 0 && (
-        <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 border border-white/95 shadow-md animate-in fade-in">
+        <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 animate-in fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/50 pb-3">
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-emerald-700 block">
+              <span className="font-sans text-xs font-semibold text-emerald-700 block">
                 Extracted Dates (Confirmation Required)
               </span>
-              <h3 className="font-serif text-xl font-bold text-stone-900">
+              <h3 className="font-serif text-xl font-semibold text-stone-900">
                 Review Extracted Period Dates
               </h3>
             </div>
             <button
               type="button"
               onClick={handleAddManualRow}
-              className="liquid-glass-pill px-3 py-1 font-mono text-[10px] uppercase font-bold text-stone-700 self-start sm:self-auto cursor-pointer"
+              className="liquid-glass-pill px-3 py-1 font-sans text-xs font-medium text-stone-700 self-start sm:self-auto cursor-pointer"
             >
               + Add Row
             </button>
           </div>
 
           {summary && (
-            <p className="text-xs text-stone-600 bg-white/80 p-3 rounded-xl border border-stone-200/60 leading-relaxed">
+            <p className="text-xs text-stone-600 bg-white/80 p-3 rounded-xl border border-stone-200/60 leading-relaxed font-sans">
               <strong>Scanner Summary:</strong> {summary}
             </p>
           )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-sans">
-              <thead className="bg-stone-100/60 font-mono text-[10px] uppercase text-stone-500 border-b border-stone-200/60">
+              <thead className="bg-stone-100/60 font-sans text-[11px] font-semibold text-stone-600 border-b border-stone-200/60">
                 <tr>
-                  <th className="py-2.5 px-3 font-bold">Start Date</th>
-                  <th className="py-2.5 px-3 font-bold">End Date (Optional)</th>
-                  <th className="py-2.5 px-3 font-bold">Confidence / Source</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Action</th>
+                  <th className="py-2.5 px-3 font-semibold">Start Date</th>
+                  <th className="py-2.5 px-3 font-semibold">End Date (Optional)</th>
+                  <th className="py-2.5 px-3 font-semibold">Confidence / Source</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200/40">
@@ -217,7 +217,7 @@ export function DiaryScannerPage() {
                         type="date"
                         value={period.startDate}
                         onChange={(e) => handleDateChange(idx, "startDate", e.target.value)}
-                        className="liquid-glass-input rounded-lg p-1.5 text-xs font-mono"
+                        className="liquid-glass-input rounded-lg p-1.5 text-xs font-sans"
                       />
                     </td>
                     <td className="py-2.5 px-3">
@@ -226,10 +226,10 @@ export function DiaryScannerPage() {
                         value={period.endDate || ""}
                         onChange={(e) => handleDateChange(idx, "endDate", e.target.value)}
                         placeholder="Optional"
-                        className="liquid-glass-input rounded-lg p-1.5 text-xs font-mono"
+                        className="liquid-glass-input rounded-lg p-1.5 text-xs font-sans"
                       />
                     </td>
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-stone-600">
+                    <td className="py-2.5 px-3 font-sans text-[11px] text-stone-600">
                       {period.confidence != null ? `${Math.round(period.confidence * 100)}% match` : "Manual"}
                     </td>
                     <td className="py-2.5 px-3 text-right">
@@ -252,14 +252,14 @@ export function DiaryScannerPage() {
             <button
               type="button"
               onClick={() => setExtractedPeriods([])}
-              className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase text-stone-600 hover:text-stone-900 cursor-pointer"
+              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleConfirmImport}
-              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer shadow-sm"
+              className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
               ✓ Import {extractedPeriods.length} Periods to Vault
             </button>

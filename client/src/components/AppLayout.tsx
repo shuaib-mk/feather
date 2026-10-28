@@ -35,7 +35,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <button
             type="button"
             onClick={exportBackup}
-            className="liquid-glass-button-dark rounded-full px-3 py-1 text-[10px] uppercase font-mono tracking-wider shrink-0 cursor-pointer"
+            className="liquid-glass-button-dark rounded-full px-3.5 py-1 text-xs font-sans font-semibold shrink-0 cursor-pointer shadow-sm"
           >
             Export
           </button>
@@ -79,14 +79,14 @@ export function AppLayout({ children }: AppLayoutProps) {
               <button
                 type="button"
                 onClick={exportBackup}
-                className="liquid-glass-button-dark rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-wider cursor-pointer shadow-xs"
+                className="liquid-glass-button-dark rounded-full px-3.5 py-1 font-sans text-xs font-semibold cursor-pointer shadow-xs"
               >
                 Export JSON
               </button>
               <button
                 type="button"
                 onClick={dismissOverdueBanner}
-                className="text-stone-400 hover:text-stone-700 text-xs px-2 py-1 cursor-pointer"
+                className="text-stone-600 hover:text-stone-900 text-xs px-2 py-1 cursor-pointer font-sans font-medium"
               >
                 Dismiss
               </button>
@@ -100,15 +100,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Minimal Editorial Footer */}
-        <footer className="pt-8 pb-4 text-center border-t border-stone-200/40 text-[11px] text-stone-500 font-sans space-y-1">
+        <footer className="pt-8 pb-4 text-center border-t border-stone-200/40 text-[11px] text-stone-600 font-sans space-y-1">
           <p className="flex items-center justify-center gap-2 flex-wrap">
             <span>Feather · Voice-First Menstrual Companion</span>
             <span>·</span>
-            <Link to="/vault" className="underline hover:text-stone-800">Local Vault</Link>
+            <Link to="/vault" className="underline hover:text-stone-900">Local Vault</Link>
             <span>·</span>
-            <Link to="/settings" className="underline hover:text-stone-800">Settings &amp; Architecture</Link>
+            <Link to="/settings" className="underline hover:text-stone-900">Settings &amp; Architecture</Link>
           </p>
-          <p className="text-[10px] text-stone-400 font-mono">
+          <p className="text-[10px] text-stone-500 font-sans">
             Meta Global AI Dev Hackathon · Muse Voice Transcribe 1.0 &amp; Muse Spark 1.3 · 100% On-Device Storage
           </p>
         </footer>

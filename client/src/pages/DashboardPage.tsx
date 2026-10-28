@@ -40,14 +40,14 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={loadDemo}
-                className="liquid-glass-pill px-3 py-1.5 font-mono text-[10px] uppercase font-bold text-violet-700 hover:text-violet-900 border border-violet-200 cursor-pointer shadow-xs"
+                className="liquid-glass-pill px-3 py-1.5 font-sans text-xs font-medium text-violet-700 hover:text-violet-900 border border-violet-200/80 cursor-pointer shadow-2xs"
               >
                 ✨ Load Demo Data
               </button>
             )}
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-4 py-2 font-mono text-xs uppercase tracking-wider font-bold flex items-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button-dark rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
@@ -61,13 +61,13 @@ export function DashboardPage() {
       />
 
       {/* Primary Action Hero Card: Compact & Inviting */}
-      <div className="liquid-glass-card rounded-[24px] p-5 sm:p-6 border border-white/90 shadow-sm relative overflow-hidden">
+      <div className="liquid-glass-card rounded-[24px] p-5 sm:p-6 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 max-w-lg">
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-violet-700 block">
+            <span className="font-sans text-[11px] font-semibold tracking-wide text-violet-700 uppercase block">
               Voice &amp; Landmark Accession
             </span>
-            <h2 className="font-serif text-xl sm:text-2xl font-bold text-stone-900 leading-snug">
+            <h2 className="font-serif text-xl sm:text-2xl font-semibold text-stone-900 leading-snug">
               "Period started 2 days before Diwali..."
             </h2>
             <p className="font-sans text-xs text-stone-600 leading-relaxed">
@@ -78,14 +78,14 @@ export function DashboardPage() {
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               to="/voice"
-              className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-mono text-xs uppercase tracking-wider font-bold text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button-dark rounded-full px-5 py-2.5 font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
               <span>Start Recording</span>
             </Link>
             <Link
               to="/voice"
-              className="liquid-glass-pill px-4 py-2.5 font-mono text-xs uppercase font-medium text-stone-700 hover:text-stone-950 text-center cursor-pointer shadow-xs"
+              className="liquid-glass-pill px-4 py-2.5 font-sans text-xs font-medium text-stone-700 hover:text-stone-950 text-center cursor-pointer shadow-2xs"
             >
               Type via Text →
             </Link>
@@ -109,14 +109,14 @@ export function DashboardPage() {
             <div className="flex items-center gap-2.5 flex-wrap justify-center">
               <Link
                 to="/voice"
-                className="liquid-glass-button-dark rounded-full px-5 py-2 font-mono text-xs uppercase tracking-wider font-bold cursor-pointer shadow-sm"
+                className="liquid-glass-button-dark rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
               >
                 Record First Entry
               </Link>
               <button
                 type="button"
                 onClick={loadDemo}
-                className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-xs"
+                className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-2xs"
               >
                 Load Judge Demo Data
               </button>
@@ -128,10 +128,10 @@ export function DashboardPage() {
           {/* Key Cycle Statistics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+              <span className="font-sans text-xs font-medium text-stone-500 block">
                 Next Estimate
               </span>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900">
                 {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate).split(",")[0] : "Estimating"}
               </div>
               <span className="font-sans text-[11px] text-violet-700 font-medium block">
@@ -146,10 +146,10 @@ export function DashboardPage() {
             </div>
 
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+              <span className="font-sans text-xs font-medium text-stone-500 block">
                 Cycle Length
               </span>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900">
                 {stats.avgCycleLength}d
               </div>
               <span className="font-sans text-[11px] text-stone-500 block">
@@ -158,10 +158,10 @@ export function DashboardPage() {
             </div>
 
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+              <span className="font-sans text-xs font-medium text-stone-500 block">
                 Flow Duration
               </span>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900">
                 {stats.avgPeriodLength}d
               </div>
               <span className="font-sans text-[11px] text-stone-500 block">
@@ -170,10 +170,10 @@ export function DashboardPage() {
             </div>
 
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-mono text-[9px] uppercase tracking-wider text-stone-500 block">
+              <span className="font-sans text-xs font-medium text-stone-500 block">
                 Vault Status
               </span>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-emerald-700 flex items-center gap-1.5">
+              <div className="font-serif text-2xl font-semibold text-emerald-700 flex items-center gap-1.5">
                 <span>Local</span>
                 <span className="size-2 rounded-full bg-emerald-500" />
               </div>
@@ -188,12 +188,12 @@ export function DashboardPage() {
             {/* Latest Period Summary */}
             <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-stone-200/50 pb-2.5">
-                <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-stone-600">
+                <span className="font-sans text-xs font-semibold text-stone-700">
                   Latest Period Entry
                 </span>
                 <Link
                   to="/chronicle"
-                  className="font-mono text-[10px] uppercase font-bold text-violet-700 hover:text-violet-900 underline"
+                  className="font-sans text-xs font-medium text-violet-700 hover:text-violet-900"
                 >
                   View All History →
                 </Link>
@@ -203,7 +203,7 @@ export function DashboardPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-serif text-lg font-bold text-stone-900">
+                      <div className="font-serif text-lg font-semibold text-stone-900">
                         {prettyDate(latestPeriod.startDate)}
                       </div>
                       <span className="text-xs text-stone-500">
@@ -214,7 +214,7 @@ export function DashboardPage() {
                     </div>
 
                     {latestPeriod.landmarkName && (
-                      <span className="liquid-glass-pill px-2.5 py-1 text-[10px] font-mono font-medium text-stone-700 bg-stone-100">
+                      <span className="liquid-glass-pill px-2.5 py-1 text-[11px] font-sans font-medium text-stone-700 bg-white/70">
                         🏷️ {latestPeriod.landmarkName}
                       </span>
                     )}
@@ -232,12 +232,12 @@ export function DashboardPage() {
             {/* Recent Daily Logs */}
             <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-stone-200/50 pb-2.5">
-                <span className="font-mono text-[10px] uppercase font-bold tracking-wider text-stone-600">
+                <span className="font-sans text-xs font-semibold text-stone-700">
                   Recent Symptom Logs
                 </span>
                 <Link
                   to="/chronicle"
-                  className="font-mono text-[10px] uppercase font-bold text-violet-700 hover:text-violet-900 underline"
+                  className="font-sans text-xs font-medium text-violet-700 hover:text-violet-900"
                 >
                   Log History →
                 </Link>
@@ -248,27 +248,27 @@ export function DashboardPage() {
                   {recentLogs.map((log) => (
                     <div
                       key={log.id || log.logDate}
-                      className="p-2.5 rounded-[14px] bg-white/70 border border-stone-200/60 flex items-center justify-between text-xs"
+                      className="p-2.5 rounded-[14px] bg-white/60 border border-stone-200/60 flex items-center justify-between text-xs"
                     >
                       <div>
-                        <span className="font-bold text-stone-900 block">
+                        <span className="font-semibold text-stone-900 block font-sans">
                           {prettyDate(log.logDate)}
                         </span>
                         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                           {log.flow && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 font-semibold border border-rose-200">
+                            <span className="text-[11px] font-sans px-2.5 py-0.5 rounded-full bg-rose-50/90 text-rose-700 font-medium border border-rose-200/80">
                               {log.flow} flow
                             </span>
                           )}
                           {log.symptoms && log.symptoms.slice(0, 2).map((s) => (
-                            <span key={s} className="text-[10px] text-stone-600">
+                            <span key={s} className="text-[11px] text-stone-600">
                               · {s}
                             </span>
                           ))}
                         </div>
                       </div>
                       {log.energy != null && (
-                        <span className="text-[10px] font-mono text-stone-500 shrink-0">
+                        <span className="text-[11px] font-sans text-stone-500 shrink-0">
                           Energy: {log.energy}/5
                         </span>
                       )}
@@ -284,10 +284,10 @@ export function DashboardPage() {
           {/* Quick Foresight Banner */}
           <div className="liquid-glass-card rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-0.5">
-              <span className="font-mono text-[9px] uppercase font-bold tracking-wider text-violet-700 block">
+              <span className="font-sans text-[11px] font-semibold tracking-wide text-violet-700 uppercase block">
                 12-Month Foresight Matrix
               </span>
-              <span className="font-serif text-base font-bold text-stone-900 block">
+              <span className="font-serif text-base sm:text-lg font-semibold text-stone-900 block">
                 Plan trips, marathons, and exams around your biological rhythm
               </span>
               <span className="text-stone-500 text-[11px] block">
@@ -297,7 +297,7 @@ export function DashboardPage() {
 
             <Link
               to="/insights"
-              className="liquid-glass-pill px-4 py-2 font-mono text-xs uppercase font-bold text-stone-900 hover:bg-stone-900 hover:text-white transition-all shrink-0 text-center cursor-pointer shadow-xs"
+              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-semibold text-stone-900 hover:bg-stone-900 hover:text-white transition-all shrink-0 text-center cursor-pointer shadow-2xs"
             >
               Open Foresight Matrix →
             </Link>
