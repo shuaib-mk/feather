@@ -11,7 +11,8 @@
     "test:guardrail": "npx tsx ai/test/guardrail.test.ts",
     "test:dates": "npx tsx ai/test/date_resolution.test.ts",
     "test:synthesis": "npx tsx ai/test/synthesis.test.ts",
-    "test:ai": "npx tsx ai/test/guardrail.test.ts && npx tsx ai/test/date_resolution.test.ts && npx tsx ai/test/synthesis.test.ts"
+    "test:ai": "npx tsx ai/test/guardrail.test.ts && npx tsx ai/test/date_resolution.test.ts && npx tsx ai/test/synthesis.test.ts",
+    "eval": "npx tsx ai/eval/runner.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
