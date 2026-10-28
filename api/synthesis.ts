@@ -28,7 +28,17 @@ function getConfig() {
 var MILESTONES_DATA = [
   {
     name: "New Year's Day",
-    aliases: ["new year", "new year's day", "new years", "jan 1"],
+    aliases: [
+      "new year",
+      "new year's day",
+      "new years",
+      "jan 1",
+      "\u0D28\u0D4D\u0D2F\u0D42 \u0D07\u0D2F\u0D7C",
+      "\u0D2A\u0D41\u0D24\u0D41\u0D35\u0D24\u0D4D\u0D38\u0D30\u0D02",
+      "\u0928\u090F \u0938\u093E\u0932",
+      "\u0928\u092F\u093E \u0938\u093E\u0932",
+      "\u0928\u094D\u092F\u0942 \u0908\u092F\u0930"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-01-01",
@@ -38,7 +48,14 @@ var MILESTONES_DATA = [
   },
   {
     name: "Valentine's Day",
-    aliases: ["valentine", "valentines", "valentine's day"],
+    aliases: [
+      "valentine",
+      "valentines",
+      "valentine's day",
+      "\u0D35\u0D3E\u0D32\u0D28\u0D4D\u0D31\u0D48\u0D7B\u0D38\u0D4D",
+      "\u0935\u0948\u0932\u0947\u0902\u091F\u093E\u0907\u0928 \u0921\u0947",
+      "\u0935\u0948\u0932\u0947\u0902\u091F\u093E\u0907\u0928"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-02-14",
@@ -48,7 +65,15 @@ var MILESTONES_DATA = [
   },
   {
     name: "International Women's Day",
-    aliases: ["women's day", "womens day", "international women's day", "iwd"],
+    aliases: [
+      "women's day",
+      "womens day",
+      "international women's day",
+      "iwd",
+      "\u0D35\u0D28\u0D3F\u0D24\u0D3E \u0D26\u0D3F\u0D28\u0D02",
+      "\u0D35\u0D28\u0D3F\u0D24\u0D3E\u0D26\u0D3F\u0D28\u0D02",
+      "\u092E\u0939\u093F\u0932\u093E \u0926\u093F\u0935\u0938"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-03-08",
@@ -68,7 +93,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Earth Day",
-    aliases: ["earth day"],
+    aliases: ["earth day", "\u0D2D\u0D42\u0D2E\u0D3F \u0D26\u0D3F\u0D28\u0D02", "\u0905\u0930\u094D\u0925 \u0921\u0947", "\u092A\u0943\u0925\u094D\u0935\u0940 \u0926\u093F\u0935\u0938"],
     kind: "milestone",
     dates: {
       "2025": "2025-04-22",
@@ -78,7 +103,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Summer Solstice (Peak Travel Season)",
-    aliases: ["summer solstice", "midsummer", "longest day", "first day of summer"],
+    aliases: ["summer solstice", "longest day", "first day of summer"],
     kind: "milestone",
     dates: {
       "2025": "2025-06-21",
@@ -88,7 +113,16 @@ var MILESTONES_DATA = [
   },
   {
     name: "Midsummer Vacation Season",
-    aliases: ["midsummer break", "summer vacation", "july holidays"],
+    aliases: [
+      "midsummer vacation break",
+      "midsummer vacation",
+      "midsummer break",
+      "summer vacation",
+      "july holidays",
+      "\u0D35\u0D47\u0D28\u0D7D \u0D05\u0D35\u0D27\u0D3F",
+      "\u0D35\u0D47\u0D28\u0D32\u0D35\u0D27\u0D3F",
+      "\u0917\u0930\u094D\u092E\u0940 \u0915\u0940 \u091B\u0941\u091F\u094D\u091F\u0940"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-07-15",
@@ -118,7 +152,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Global Marathon Season",
-    aliases: ["marathon season", "fall marathon", "october race"],
+    aliases: ["marathon season", "fall marathon", "october race", "\u092E\u0948\u0930\u093E\u0925\u0928"],
     kind: "milestone",
     dates: {
       "2025": "2025-10-18",
@@ -128,7 +162,15 @@ var MILESTONES_DATA = [
   },
   {
     name: "Winter Holiday Break",
-    aliases: ["holiday break", "winter holidays", "end of year break", "christmas holidays"],
+    aliases: [
+      "winter holiday break",
+      "winter break",
+      "winter holidays",
+      "holiday break",
+      "end of year break",
+      "christmas holidays",
+      "\u0936\u0940\u0924\u0915\u093E\u0932\u0940\u0928 \u0905\u0935\u0915\u093E\u0936"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-12-24",
@@ -138,12 +180,99 @@ var MILESTONES_DATA = [
   },
   {
     name: "New Year's Eve Gala",
-    aliases: ["new year's eve", "new years eve", "nye", "dec 31"],
+    aliases: [
+      "new year's eve",
+      "new years eve",
+      "nye",
+      "dec 31",
+      "\u0D28\u0D4D\u0D2F\u0D42 \u0D07\u0D2F\u0D7C \u0D08\u0D35\u0D4D",
+      "\u0D2A\u0D41\u0D24\u0D41\u0D35\u0D24\u0D4D\u0D38\u0D30 \u0D30\u0D3E\u0D35\u0D4D",
+      "\u0928\u094D\u092F\u0942 \u0908\u092F\u0930 \u0908\u0935"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-12-31",
       "2026": "2026-12-31",
       "2027": "2027-12-31"
+    }
+  },
+  {
+    name: "Diwali (Festival of Lights)",
+    aliases: [
+      "diwali",
+      "deepavali",
+      "\u0926\u0940\u0935\u093E\u0932\u0940",
+      "\u0D26\u0D40\u0D2A\u0D3E\u0D35\u0D32\u0D3F",
+      "\u0D26\u0D40\u0D2A\u0D3E\u0D35\u0D32\u0D3F\u0D15\u0D4D\u0D15\u0D4D",
+      "\u0926\u093F\u0935\u093E\u0932\u0940",
+      "festival of lights"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-10-20",
+      "2026": "2026-11-08",
+      "2027": "2027-10-29"
+    }
+  },
+  {
+    name: "Onam (Harvest Festival)",
+    aliases: [
+      "onam",
+      "thiruvonam",
+      "\u0D13\u0D23\u0D02",
+      "\u0D13\u0D23\u0D24\u0D4D\u0D24\u0D3F\u0D28\u0D4D",
+      "\u0D24\u0D3F\u0D30\u0D41\u0D35\u0D4B\u0D23\u0D02"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-09-05",
+      "2026": "2026-08-26",
+      "2027": "2027-09-12"
+    }
+  },
+  {
+    name: "Vishu (New Year)",
+    aliases: [
+      "vishu",
+      "\u0D35\u0D3F\u0D37\u0D41",
+      "\u0D35\u0D3F\u0D37\u0D41\u0D35\u0D3F\u0D28\u0D4D"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-04-14",
+      "2026": "2026-04-14",
+      "2027": "2027-04-14"
+    }
+  },
+  {
+    name: "Holi (Festival of Colours)",
+    aliases: [
+      "holi",
+      "\u0939\u094B\u0932\u0940",
+      "\u0D39\u0D4B\u0D33\u0D3F"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-03-14",
+      "2026": "2026-03-03",
+      "2027": "2027-03-22"
+    }
+  },
+  {
+    name: "Christmas",
+    aliases: [
+      "christmas",
+      "xmas",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D2E\u0D38\u0D4D",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D2E\u0D38\u0D3F\u0D28\u0D4D",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D24\u0D41\u0D2E\u0D38\u0D4D",
+      "\u0915\u094D\u0930\u093F\u0938\u092E\u0938"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-12-25",
+      "2026": "2026-12-25",
+      "2027": "2027-12-25"
     }
   }
 ];
@@ -347,6 +476,134 @@ ${userContext}` }
   }
 }
 
+// ai/backend/protection.ts
+var minuteHits = /* @__PURE__ */ new Map();
+var dailyHits = /* @__PURE__ */ new Map();
+var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var LIMIT_PER_MINUTE = 20;
+var LIMIT_PER_DAY_IP = 150;
+var DEFAULT_GLOBAL_DAILY_CAP = 500;
+function getTodayString() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function extractClientIp(req) {
+  if (!req) return "127.0.0.1";
+  const headers = req.headers || {};
+  const xForwardedFor = headers["x-forwarded-for"] || headers["x-real-ip"] || headers["client-ip"];
+  if (xForwardedFor) {
+    const ip = typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0].trim() : String(xForwardedFor);
+    if (ip) return ip;
+  }
+  if (req.socket?.remoteAddress) {
+    return req.socket.remoteAddress;
+  }
+  if (req.connection?.remoteAddress) {
+    return req.connection.remoteAddress;
+  }
+  return "127.0.0.1";
+}
+function isOriginAllowed(originOrReferer) {
+  if (!originOrReferer) return true;
+  try {
+    const url = new URL(originOrReferer);
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+      return true;
+    }
+    if (host.endsWith(".vercel.app")) {
+      return true;
+    }
+    const configuredAllowed = process.env.ALLOWED_ORIGIN;
+    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
+      return true;
+    }
+    return false;
+  } catch {
+    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
+      return true;
+    }
+    return false;
+  }
+}
+function checkStatelessProtection(req, options) {
+  const headers = req.headers || {};
+  const origin = headers["origin"] || headers["referer"];
+  if (!isOriginAllowed(origin)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Unauthorized origin.",
+      code: "ORIGIN_FORBIDDEN"
+    };
+  }
+  const contentLength = parseInt(headers["content-length"] || "0", 10);
+  const maxBodyBytes = options.maxBodyBytes || (options.endpointName === "transcribe" || options.endpointName === "vision" ? 4 * 1024 * 1024 : 50 * 1024);
+  if (contentLength > maxBodyBytes) {
+    return {
+      allowed: false,
+      statusCode: 413,
+      error: `Payload too large (max ${Math.round(maxBodyBytes / 1024)} KB)`,
+      code: "PAYLOAD_TOO_LARGE"
+    };
+  }
+  const clientIp = extractClientIp(req);
+  const now = Date.now();
+  const today = getTodayString();
+  if (globalDailyTracker.day !== today) {
+    globalDailyTracker = { count: 0, day: today };
+  }
+  const globalCap = parseInt(process.env.DAILY_REQUEST_CAP || String(DEFAULT_GLOBAL_DAILY_CAP), 10);
+  if (globalDailyTracker.count >= globalCap) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Daily demo limit reached (server cap). Please try again tomorrow.",
+      code: "DAILY_CAP_EXCEEDED",
+      clientIp
+    };
+  }
+  const windowMs = 60 * 1e3;
+  let timestamps = minuteHits.get(clientIp) || [];
+  timestamps = timestamps.filter((t) => now - t < windowMs);
+  if (timestamps.length >= LIMIT_PER_MINUTE) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Demo limit reached, try again in a minute.",
+      code: "RATE_LIMIT_MINUTE",
+      clientIp
+    };
+  }
+  const dailyRecord = dailyHits.get(clientIp);
+  if (dailyRecord && dailyRecord.day === today) {
+    if (dailyRecord.count >= LIMIT_PER_DAY_IP) {
+      return {
+        allowed: false,
+        statusCode: 429,
+        error: "Per-IP daily limit reached (150 requests/day). Please try again tomorrow.",
+        code: "RATE_LIMIT_DAILY",
+        clientIp
+      };
+    }
+  }
+  timestamps.push(now);
+  minuteHits.set(clientIp, timestamps);
+  if (!dailyRecord || dailyRecord.day !== today) {
+    dailyHits.set(clientIp, { count: 1, day: today });
+  } else {
+    dailyRecord.count += 1;
+  }
+  globalDailyTracker.count += 1;
+  if (minuteHits.size > 2e3) {
+    for (const [ip, ts] of minuteHits.entries()) {
+      if (ts.every((t) => now - t > windowMs)) {
+        minuteHits.delete(ip);
+      }
+    }
+  }
+  return { allowed: true, clientIp };
+}
+
 // api-src/synthesis.ts
 function sendResponse(res, statusCode, data) {
   if (res.setHeader) {
@@ -423,6 +680,22 @@ async function handler(req, res) {
       },
       body: ""
     };
+  }
+  const protection = checkStatelessProtection(req, {
+    endpointName: "synthesis",
+    maxBodyBytes: 100 * 1024
+  });
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody)
+      };
+    }
+    return sendResponse(res, status, errorBody);
   }
   if (!res && req && req.httpMethod) {
     if (req.httpMethod !== "POST") {

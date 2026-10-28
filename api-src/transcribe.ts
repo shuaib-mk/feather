@@ -1,4 +1,5 @@
 import { transcribeAudio } from "../ai/backend/transcribe";
+import { checkStatelessProtection, validateAudioBuffer } from "../ai/backend/protection";
 
 function sendResponse(res: any, statusCode: number, data: any) {
   if (res.setHeader) {
@@ -80,6 +81,25 @@ export async function handler(req: any, res?: any) {
     };
   }
 
+  // Stateless Protection (Rate limits, Origin, Max payload 4MB)
+  const protection = checkStatelessProtection(req, {
+    endpointName: "transcribe",
+    maxBodyBytes: 4 * 1024 * 1024,
+  });
+
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody),
+      };
+    }
+    return sendResponse(res, status, errorBody);
+  }
+
   // Netlify Lambda handler(event, context)
   if (!res && req && req.httpMethod) {
     if (req.httpMethod !== "POST") {
@@ -100,6 +120,14 @@ export async function handler(req: any, res?: any) {
         };
       }
       const buffer = Buffer.from(audioBase64, "base64");
+      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 30);
+      if (!audioCheck.valid) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: audioCheck.error, code: "AUDIO_TOO_LONG" }),
+        };
+      }
       const result = await transcribeAudio(buffer, mimeType || "audio/wav", languageHint);
       return {
         statusCode: 200,
@@ -130,6 +158,10 @@ export async function handler(req: any, res?: any) {
       return sendResponse(res, 400, { error: "Missing audioBase64 data" });
     }
     const buffer = Buffer.from(audioBase64, "base64");
+    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 30);
+    if (!audioCheck.valid) {
+      return sendResponse(res, 400, { error: audioCheck.error, code: "AUDIO_TOO_LONG" });
+    }
     const result = await transcribeAudio(buffer, mimeType || "audio/wav", languageHint);
     return sendResponse(res, 200, result);
   } catch (err: any) {

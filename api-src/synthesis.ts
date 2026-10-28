@@ -1,4 +1,5 @@
 import { runDeepCycleSynthesis } from "../ai/backend/synthesis";
+import { checkStatelessProtection } from "../ai/backend/protection";
 
 function sendResponse(res: any, statusCode: number, data: any) {
   if (res.setHeader) {
@@ -78,6 +79,25 @@ export async function handler(req: any, res?: any) {
       },
       body: "",
     };
+  }
+
+  // Stateless Protection (Rate limits, Origin, Max payload 100KB)
+  const protection = checkStatelessProtection(req, {
+    endpointName: "synthesis",
+    maxBodyBytes: 100 * 1024,
+  });
+
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody),
+      };
+    }
+    return sendResponse(res, status, errorBody);
   }
 
   // Netlify Lambda handler(event, context)

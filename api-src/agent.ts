@@ -1,4 +1,5 @@
 import { runLavenderAgent } from "../ai/backend/agent";
+import { checkStatelessProtection, validateTextLength } from "../ai/backend/protection";
 
 function sendResponse(res: any, statusCode: number, data: any) {
   if (res.setHeader) {
@@ -80,6 +81,25 @@ export async function handler(req: any, res?: any) {
     };
   }
 
+  // Stateless Protection: Allowed Origin, Rate Limits (20/min, 150/day), Daily Server Cap, Max Body Size (50KB)
+  const protection = checkStatelessProtection(req, {
+    endpointName: "agent",
+    maxBodyBytes: 50 * 1024,
+  });
+
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody),
+      };
+    }
+    return sendResponse(res, status, errorBody);
+  }
+
   // Netlify Lambda handler(event, context)
   if (!res && req && req.httpMethod) {
     if (req.httpMethod !== "POST") {
@@ -91,7 +111,7 @@ export async function handler(req: any, res?: any) {
     }
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-      const { message, context, conversationHistory } = body;
+      const { message, context, conversationHistory, provider } = body;
       if (!message) {
         return {
           statusCode: 400,
@@ -99,7 +119,16 @@ export async function handler(req: any, res?: any) {
           body: JSON.stringify({ error: "Missing 'message' field" }),
         };
       }
-      const result = await runLavenderAgent(message, context || {}, conversationHistory || []);
+      const textCheck = validateTextLength(message, 1000);
+      if (!textCheck.valid) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: textCheck.error, code: "TEXT_TOO_LONG" }),
+        };
+      }
+      const agentContext = { ...(context || {}), provider: provider || context?.provider };
+      const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
       return {
         statusCode: 200,
         headers: {
@@ -124,11 +153,16 @@ export async function handler(req: any, res?: any) {
 
   try {
     const body = await getRequestBody(req);
-    const { message, context, conversationHistory } = body;
+    const { message, context, conversationHistory, provider } = body;
     if (!message) {
       return sendResponse(res, 400, { error: "Missing 'message' field" });
     }
-    const result = await runLavenderAgent(message, context || {}, conversationHistory || []);
+    const textCheck = validateTextLength(message, 1000);
+    if (!textCheck.valid) {
+      return sendResponse(res, 400, { error: textCheck.error, code: "TEXT_TOO_LONG" });
+    }
+    const agentContext = { ...(context || {}), provider: provider || context?.provider };
+    const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
     return sendResponse(res, 200, result);
   } catch (err: any) {
     return sendResponse(res, 500, { error: err.message || "Agent execution failed" });

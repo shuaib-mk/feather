@@ -28,12 +28,13 @@ function getConfig() {
 var MEDICAL_REFUSAL_MESSAGE = "I can only help with logging and planning. For health questions, please talk to a doctor.";
 var MEDICAL_ADVICE_PATTERNS = [
   // English: Questions asking if a symptom/situation is normal, safe, okay, bad, or concerning
-  // Specifically matches interrogative questions (is this/it/my cramp...), not declarative statements like "mood is okay" or "pain is bad"
   /\b(?:is\s+(?:this|it|that|there)\s+(?:normal|abnormal|bad|dangerous|concerning|okay|safe))\b/i,
   /\b(?:is\s+(?:it|this|that)\s+(?:normal|safe|okay|bad|dangerous|concerning)\s+to)\b/i,
   /\b(?:is\s+it\s+(?:bad|abnormal|dangerous|concerning|normal)\s+(?:if|that|when))\b/i,
-  /\b(?:is\s+(?:my|this)\s+(?:cramp|cramps|pain|period|flow|bleeding|blood|discharge)\s+(?:normal|abnormal|bad|dangerous|concerning))\b/i,
+  /\b(?:is\s+(?:my|this)\s+(?:cramp|cramps|pain|period|flow|bleeding|blood|discharge|symptom)\s+(?:normal|abnormal|bad|dangerous|concerning))\b/i,
+  /\b(?:is\s+(?:this|the|my)?\s*(?:symptom|cramp|bleeding|discharge)?\s*(?:abnormal\s+or\s+normal|normal\s+or\s+abnormal))\b/i,
   /\b(?:normal\s+or\s+(?:not|abnormal))\b/i,
+  /\b(?:abnormal\s+or\s+normal)\b/i,
   /\b(?:should\s+i\s+(?:take|see|visit|worry|stop|start|drink|eat|use|be\s+concerned|go\s+to\s+(?:the\s+)?doctor))\b/i,
   // English: Medication advice & dosage inquiries (matches asking what/how much/whether to take, NOT past logging like "took ibuprofen today")
   /\b(?:what|which)\s+(?:medicine|medication|tablet|pill|drug|painkiller|dosage)\b/i,
@@ -56,9 +57,11 @@ var MEDICAL_ADVICE_PATTERNS = [
   // Spanish: Medical, medication, diagnosis, pregnancy risk
   /(?:es\s+normal\s+(?:esto|tener)|deber[ií]a\s+preocuparme|qu[eé]\s+(?:debo\s+tomar|medicina|medicamento|pastilla)|dosis\s+de|dosis\s+recom|puedo\s+quedar\s+embarazada|estoy\s+embarazada|tengo\s+(?:pcos|infecci[oó]n|endometriosis)|s[ií]ntomas\s+de|c[oó]mo\s+curar|c[oó]mo\s+tratar|diagn[oó]stico|qu[eé]\s+enfermedad|debo\s+ir\s+al\s+m[eé]dico)/i,
   // Malayalam: Advice, prescription requests, illness inquiries, pregnancy risk (NOT plain logging like "took medicine" or "doctor appointment")
-  /(?:എന്തെങ്കിലും\s+മരുന്ന്\s+കഴിക്കണോ|എന്ത്\s+മരുന്ന്|മരുന്ന്\s+കഴിക്കണോ|ഗുളിക\s+കഴിക്കണോ|ഡോക്ടറെ\s+കാണണോ|ഡോക്ടറോട്\s+ചോദിക്കണോ|വയറുവേദനയ്ക്ക്\s+എന്ത്|എന്ത്\s+കഴിക്കണം|എന്തെങ്കിലും\s+(?:രോഗം|അസുഖം)\s+ആണോ|ഇത്\s+എന്തെങ്കിലും\s+രോഗം|ചികിത്സ\s+(?:വേണമോ|ആവശ്യമുണ്ടോ)|കുഴപ്പമുണ്ടോ|സാധാരണമാണോ|പേടിക്കണോ|ഗർഭിണിയാകുമോ)/i,
+  /(?:എന്തെങ്കിലും\s+മരുന്ന്\s+കഴിക്കണോ|എന്ത്\s+മരുന്ന്|മരുന്ന്\s+കഴിക്കണോ|ഗുളിക\s+കഴിക്കണോ|ഡോക്ടറെ\s+കാണണോ|ഡോക്ടറോട്\s+ചോദിക്കണോ|വയറുവേദനയ്ക്ക്\s+എന്ത്|എന്ത്\s+കഴിക്കണം|എന്തെങ്കിലും\s+(?:രോഗം|അസുഖം)\s+ആണോ|ഇത്\s+എന്തെങ്കിലും\s+രോഗം|ചികിത്സ\s+(?:വേണമോ|ആവശ്യമുണ്ടോ)|കുഴപ്പമുണ്ടോ|സാധാരണമാണോ|പേടിക്കണോ|ഗർഭിണിയാകുമോ|പിസിഒഡി|പിസിഒഎസ്|അസുഖം\s+ഉണ്ടോ|രോഗം\s+ഉണ്ടോ)/i,
   // Hindi: Advice, prescription requests, illness inquiries, pregnancy risk (NOT plain logging like "took medicine" or "doctor appointment")
-  /(?:दर्द\s+के\s+लिए\s+कौन\s+सी\s+दवा|क्या\s+दवा\s+लूँ|कौन\s+सी\s+दवा|दवा\s+लेनी\s+चाहिए|डॉक्टर\s+को\s+दिखाना\s+चाहिए|डॉक्टर\s+के\s+पास\s+जाना|क्या\s+मुझे\s+कोई\s+बीमारी|क्या\s+यह\s+सामान्य\s+है|क्या\s+मुझे\s+चिंता\s+करनी\s+चाहिए|क्या\s+मैं\s+गर्भवती|कितनी\s+खुराक|खुराक\s+कितनी|इलाज\s+कैसे)/i
+  /(?:दर्द\s+के\s+लिए\s+कौन\s+सी\s+दवा|क्या\s+दवा\s+लूँ|कौन\s+सी\s+दवा|दवा\s+लेनी\s+चाहिए|डॉक्टर\s+को\s+दिखाना\s+चाहिए|डॉक्टर\s+के\s+पास\s+जाना|क्या\s+मुझे\s+कोई\s+बीमारी|क्या\s+यह\s+सामान्य\s+है|क्या\s+मुझे\s+चिंता\s+करनी\s+चाहिए|क्या\s+मैं\s+गर्भवती|कितनी\s+खुराक|खुराक\s+कितनी|इलाज\s+कैसे|पीसीओडी|पीसीओएस|खतरनाक|बीमारी\s+है)/i,
+  // Code-Mixed: Advice, medication, pregnancy risk, diagnostic queries
+  /(?:which\s+medicine\s+should\s+i\s+take|tablet\s+ethu\s+kazhikkanam|doctor\s+ko\s+dikhana\s+chahiye|risk\s+of\s+pregnancy\s+undo|normal\s+hai\s+ya\s+doctor)/i
 ];
 function checkMedicalAdviceGuardrail(input) {
   const normalized = input.trim();
@@ -80,7 +83,17 @@ function checkMedicalAdviceGuardrail(input) {
 var MILESTONES_DATA = [
   {
     name: "New Year's Day",
-    aliases: ["new year", "new year's day", "new years", "jan 1"],
+    aliases: [
+      "new year",
+      "new year's day",
+      "new years",
+      "jan 1",
+      "\u0D28\u0D4D\u0D2F\u0D42 \u0D07\u0D2F\u0D7C",
+      "\u0D2A\u0D41\u0D24\u0D41\u0D35\u0D24\u0D4D\u0D38\u0D30\u0D02",
+      "\u0928\u090F \u0938\u093E\u0932",
+      "\u0928\u092F\u093E \u0938\u093E\u0932",
+      "\u0928\u094D\u092F\u0942 \u0908\u092F\u0930"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-01-01",
@@ -90,7 +103,14 @@ var MILESTONES_DATA = [
   },
   {
     name: "Valentine's Day",
-    aliases: ["valentine", "valentines", "valentine's day"],
+    aliases: [
+      "valentine",
+      "valentines",
+      "valentine's day",
+      "\u0D35\u0D3E\u0D32\u0D28\u0D4D\u0D31\u0D48\u0D7B\u0D38\u0D4D",
+      "\u0935\u0948\u0932\u0947\u0902\u091F\u093E\u0907\u0928 \u0921\u0947",
+      "\u0935\u0948\u0932\u0947\u0902\u091F\u093E\u0907\u0928"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-02-14",
@@ -100,7 +120,15 @@ var MILESTONES_DATA = [
   },
   {
     name: "International Women's Day",
-    aliases: ["women's day", "womens day", "international women's day", "iwd"],
+    aliases: [
+      "women's day",
+      "womens day",
+      "international women's day",
+      "iwd",
+      "\u0D35\u0D28\u0D3F\u0D24\u0D3E \u0D26\u0D3F\u0D28\u0D02",
+      "\u0D35\u0D28\u0D3F\u0D24\u0D3E\u0D26\u0D3F\u0D28\u0D02",
+      "\u092E\u0939\u093F\u0932\u093E \u0926\u093F\u0935\u0938"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-03-08",
@@ -120,7 +148,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Earth Day",
-    aliases: ["earth day"],
+    aliases: ["earth day", "\u0D2D\u0D42\u0D2E\u0D3F \u0D26\u0D3F\u0D28\u0D02", "\u0905\u0930\u094D\u0925 \u0921\u0947", "\u092A\u0943\u0925\u094D\u0935\u0940 \u0926\u093F\u0935\u0938"],
     kind: "milestone",
     dates: {
       "2025": "2025-04-22",
@@ -130,7 +158,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Summer Solstice (Peak Travel Season)",
-    aliases: ["summer solstice", "midsummer", "longest day", "first day of summer"],
+    aliases: ["summer solstice", "longest day", "first day of summer"],
     kind: "milestone",
     dates: {
       "2025": "2025-06-21",
@@ -140,7 +168,16 @@ var MILESTONES_DATA = [
   },
   {
     name: "Midsummer Vacation Season",
-    aliases: ["midsummer break", "summer vacation", "july holidays"],
+    aliases: [
+      "midsummer vacation break",
+      "midsummer vacation",
+      "midsummer break",
+      "summer vacation",
+      "july holidays",
+      "\u0D35\u0D47\u0D28\u0D7D \u0D05\u0D35\u0D27\u0D3F",
+      "\u0D35\u0D47\u0D28\u0D32\u0D35\u0D27\u0D3F",
+      "\u0917\u0930\u094D\u092E\u0940 \u0915\u0940 \u091B\u0941\u091F\u094D\u091F\u0940"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-07-15",
@@ -170,7 +207,7 @@ var MILESTONES_DATA = [
   },
   {
     name: "Global Marathon Season",
-    aliases: ["marathon season", "fall marathon", "october race"],
+    aliases: ["marathon season", "fall marathon", "october race", "\u092E\u0948\u0930\u093E\u0925\u0928"],
     kind: "milestone",
     dates: {
       "2025": "2025-10-18",
@@ -180,7 +217,15 @@ var MILESTONES_DATA = [
   },
   {
     name: "Winter Holiday Break",
-    aliases: ["holiday break", "winter holidays", "end of year break", "christmas holidays"],
+    aliases: [
+      "winter holiday break",
+      "winter break",
+      "winter holidays",
+      "holiday break",
+      "end of year break",
+      "christmas holidays",
+      "\u0936\u0940\u0924\u0915\u093E\u0932\u0940\u0928 \u0905\u0935\u0915\u093E\u0936"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-12-24",
@@ -190,16 +235,320 @@ var MILESTONES_DATA = [
   },
   {
     name: "New Year's Eve Gala",
-    aliases: ["new year's eve", "new years eve", "nye", "dec 31"],
+    aliases: [
+      "new year's eve",
+      "new years eve",
+      "nye",
+      "dec 31",
+      "\u0D28\u0D4D\u0D2F\u0D42 \u0D07\u0D2F\u0D7C \u0D08\u0D35\u0D4D",
+      "\u0D2A\u0D41\u0D24\u0D41\u0D35\u0D24\u0D4D\u0D38\u0D30 \u0D30\u0D3E\u0D35\u0D4D",
+      "\u0928\u094D\u092F\u0942 \u0908\u092F\u0930 \u0908\u0935"
+    ],
     kind: "milestone",
     dates: {
       "2025": "2025-12-31",
       "2026": "2026-12-31",
       "2027": "2027-12-31"
     }
+  },
+  {
+    name: "Diwali (Festival of Lights)",
+    aliases: [
+      "diwali",
+      "deepavali",
+      "\u0926\u0940\u0935\u093E\u0932\u0940",
+      "\u0D26\u0D40\u0D2A\u0D3E\u0D35\u0D32\u0D3F",
+      "\u0D26\u0D40\u0D2A\u0D3E\u0D35\u0D32\u0D3F\u0D15\u0D4D\u0D15\u0D4D",
+      "\u0926\u093F\u0935\u093E\u0932\u0940",
+      "festival of lights"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-10-20",
+      "2026": "2026-11-08",
+      "2027": "2027-10-29"
+    }
+  },
+  {
+    name: "Onam (Harvest Festival)",
+    aliases: [
+      "onam",
+      "thiruvonam",
+      "\u0D13\u0D23\u0D02",
+      "\u0D13\u0D23\u0D24\u0D4D\u0D24\u0D3F\u0D28\u0D4D",
+      "\u0D24\u0D3F\u0D30\u0D41\u0D35\u0D4B\u0D23\u0D02"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-09-05",
+      "2026": "2026-08-26",
+      "2027": "2027-09-12"
+    }
+  },
+  {
+    name: "Vishu (New Year)",
+    aliases: [
+      "vishu",
+      "\u0D35\u0D3F\u0D37\u0D41",
+      "\u0D35\u0D3F\u0D37\u0D41\u0D35\u0D3F\u0D28\u0D4D"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-04-14",
+      "2026": "2026-04-14",
+      "2027": "2027-04-14"
+    }
+  },
+  {
+    name: "Holi (Festival of Colours)",
+    aliases: [
+      "holi",
+      "\u0939\u094B\u0932\u0940",
+      "\u0D39\u0D4B\u0D33\u0D3F"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-03-14",
+      "2026": "2026-03-03",
+      "2027": "2027-03-22"
+    }
+  },
+  {
+    name: "Christmas",
+    aliases: [
+      "christmas",
+      "xmas",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D2E\u0D38\u0D4D",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D2E\u0D38\u0D3F\u0D28\u0D4D",
+      "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D24\u0D41\u0D2E\u0D38\u0D4D",
+      "\u0915\u094D\u0930\u093F\u0938\u092E\u0938"
+    ],
+    kind: "milestone",
+    dates: {
+      "2025": "2025-12-25",
+      "2026": "2026-12-25",
+      "2027": "2027-12-25"
+    }
   }
 ];
-var milestonesData_default = MILESTONES_DATA;
+
+// ai/backend/dateArithmetic.ts
+var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+function applyDayOffset(isoDate, offsetDays) {
+  if (!offsetDays) return isoDate;
+  const d = /* @__PURE__ */ new Date(isoDate + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+function findWeekdayOffset(baseIsoDate, targetWeekdayName, direction) {
+  const targetDayIdx = WEEKDAYS.indexOf(targetWeekdayName.toLowerCase());
+  if (targetDayIdx === -1) return baseIsoDate;
+  const baseDate = /* @__PURE__ */ new Date(baseIsoDate + "T12:00:00Z");
+  const baseDayIdx = baseDate.getUTCDay();
+  let diffDays = 0;
+  if (direction === "before") {
+    diffDays = (baseDayIdx - targetDayIdx + 7) % 7;
+    if (diffDays === 0) diffDays = 7;
+    return applyDayOffset(baseIsoDate, -diffDays);
+  } else {
+    diffDays = (targetDayIdx - baseDayIdx + 7) % 7;
+    if (diffDays === 0) diffDays = 7;
+    return applyDayOffset(baseIsoDate, diffDays);
+  }
+}
+function matchesAlias(haystack, needle) {
+  if (!needle) return false;
+  const lowerNeedle = needle.toLowerCase().trim();
+  if (/^[a-z0-9\s'-]+$/i.test(lowerNeedle)) {
+    const escaped = lowerNeedle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`, "i").test(haystack);
+  }
+  return haystack.includes(lowerNeedle);
+}
+function parseRelativeExpression(text) {
+  const lower = text.toLowerCase();
+  const weekdayMatch = lower.match(
+    /\b(?:the\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(before|prior to|ahead of|after|following)\b/i
+  );
+  if (weekdayMatch) {
+    const weekday = weekdayMatch[1].toLowerCase();
+    const dirStr = weekdayMatch[2].toLowerCase();
+    const direction = dirStr.includes("before") || dirStr.includes("prior") || dirStr.includes("ahead") ? "before" : "after";
+    return { days: 0, weekday, direction };
+  }
+  if (lower.includes("\u0D30\u0D23\u0D4D\u0D1F\u0D4D \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D") || lower.includes("2 \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D")) return { days: -2, direction: "before" };
+  if (lower.includes("\u0D12\u0D30\u0D41 \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D") || lower.includes("1 \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D")) return { days: -1, direction: "before" };
+  if (lower.includes("\u0D2E\u0D42\u0D28\u0D4D\u0D28\u0D4D \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D") || lower.includes("3 \u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D")) return { days: -3, direction: "before" };
+  if (lower.includes("\u0D26\u0D3F\u0D35\u0D38\u0D02 \u0D2E\u0D41\u0D7B\u0D2A\u0D4D") || lower.includes("\u0D2E\u0D41\u0D7B\u0D2A\u0D4D") || lower.includes("munpe")) return { days: -1, direction: "before" };
+  if (lower.includes("\u0926\u094B \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("2 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947")) return { days: -2, direction: "before" };
+  if (lower.includes("\u090F\u0915 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("1 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("\u0938\u0947 \u090F\u0915 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947")) return { days: -1, direction: "before" };
+  if (lower.includes("\u0924\u0940\u0928 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("3 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947")) return { days: -3, direction: "before" };
+  if (lower.includes("\u092A\u0939\u0932\u0947") || lower.includes("pehle")) return { days: -1, direction: "before" };
+  const offsetRegex = /(?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+)?days?\s+(before|prior to|ahead of|after|following)/i;
+  const m = lower.match(offsetRegex);
+  if (m) {
+    const numStr = (m[1] || "1").toLowerCase();
+    let count = 1;
+    const wordMap = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+      a: 1,
+      an: 1,
+      the: 1
+    };
+    if (/^\d+$/.test(numStr)) {
+      count = parseInt(numStr, 10);
+    } else if (wordMap[numStr] !== void 0) {
+      count = wordMap[numStr];
+    }
+    const dirStr = m[2].toLowerCase();
+    const isBefore = dirStr.includes("before") || dirStr.includes("prior") || dirStr.includes("ahead");
+    return { days: isBefore ? -count : count, direction: isBefore ? "before" : "after" };
+  }
+  const singleDayMatch = lower.match(/\b(?:the\s+)?day\s+(before|after)\b/i);
+  if (singleDayMatch) {
+    const isBefore = singleDayMatch[1].toLowerCase() === "before";
+    return { days: isBefore ? -1 : 1, direction: isBefore ? "before" : "after" };
+  }
+  if (lower.includes("2 days after") || lower.includes("kazhinju 2 days") || lower.includes("kazhinjittu 3 days")) {
+    if (lower.includes("3 days")) return { days: 3, direction: "after" };
+    return { days: 2, direction: "after" };
+  }
+  return { days: 0 };
+}
+function resolveLandmarkExpression(text, today) {
+  const lower = text.toLowerCase();
+  const currentYear = parseInt(today.slice(0, 4), 10);
+  const sortedMilestones = [...MILESTONES_DATA].sort((a, b) => {
+    const maxA = Math.max(a.name.length, ...a.aliases.map((al) => al.length));
+    const maxB = Math.max(b.name.length, ...b.aliases.map((al) => al.length));
+    return maxB - maxA;
+  });
+  for (const fest of sortedMilestones) {
+    const matchesLandmark = matchesAlias(lower, fest.name) || fest.aliases.some((a) => matchesAlias(lower, a));
+    if (matchesLandmark) {
+      let baseDate = null;
+      const explicitYearMatch = lower.match(/\b(202[5-7])\b/);
+      if (explicitYearMatch && fest.dates[explicitYearMatch[1]]) {
+        baseDate = fest.dates[explicitYearMatch[1]];
+      } else if (lower.includes("next year")) {
+        const nextYear = String(currentYear + 1);
+        baseDate = fest.dates[nextYear] || fest.dates["2027"];
+      } else if (lower.includes("last ") || lower.includes("past ") || lower.includes("\u0D15\u0D34\u0D3F\u0D1E\u0D4D\u0D1E") || lower.includes("\u092A\u093F\u091B\u0932\u0940")) {
+        const pastDates = Object.values(fest.dates).filter((d) => typeof d === "string" && d <= today).sort();
+        baseDate = pastDates.length > 0 ? pastDates[pastDates.length - 1] : null;
+      } else if (fest.dates[String(currentYear)]) {
+        baseDate = fest.dates[String(currentYear)];
+      } else {
+        const allDates = Object.values(fest.dates).sort();
+        baseDate = allDates[0] || null;
+      }
+      if (!baseDate) continue;
+      const rel = parseRelativeExpression(lower);
+      let finalDate = baseDate;
+      if (rel.weekday && rel.direction) {
+        finalDate = findWeekdayOffset(baseDate, rel.weekday, rel.direction);
+      } else if (rel.days !== 0) {
+        finalDate = applyDayOffset(baseDate, rel.days);
+      }
+      return {
+        found: true,
+        landmarkName: fest.name,
+        baseDate,
+        resolvedDate: finalDate,
+        isApproximate: true
+      };
+    }
+  }
+  return {
+    found: false,
+    landmarkName: null,
+    baseDate: null,
+    resolvedDate: null,
+    isApproximate: false
+  };
+}
+function applySlipCorrections(current, correctionText) {
+  const updated = { ...current, symptoms: [...current.symptoms || []] };
+  const lower = correctionText.toLowerCase();
+  const changes = [];
+  const dayMatch = lower.match(
+    /\b(?:no,?\s+)?(?:make\s+it\s+(?:the\s+)?|change\s+(?:the\s+)?date\s+to\s+(?:the\s+)?|actually\s+(?:it\s+was\s+)?(?:the\s+)?|set\s+date\s+to\s+(?:the\s+)?|on\s+the\s+)(\d{1,2})(?:st|nd|rd|th)?\b/i
+  );
+  if (dayMatch) {
+    const dayNum = parseInt(dayMatch[1], 10);
+    if (dayNum >= 1 && dayNum <= 31) {
+      const parts = (updated.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).split("-");
+      const year = parts[0];
+      const month = parts[1];
+      const newDayStr = String(dayNum).padStart(2, "0");
+      updated.date = `${year}-${month}-${newDayStr}`;
+      changes.push(`Date updated to ${updated.date}`);
+    }
+  }
+  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+flow)\s+(none|spotting|light|medium|heavy)\b/i);
+  if (flowMatch) {
+    updated.flow = flowMatch[1].toLowerCase();
+    changes.push(`Flow updated to ${updated.flow}`);
+  } else {
+    if (lower.includes("heavy flow") || lower.includes("flow heavy")) {
+      updated.flow = "heavy";
+      changes.push("Flow set to heavy");
+    } else if (lower.includes("light flow") || lower.includes("flow light")) {
+      updated.flow = "light";
+      changes.push("Flow set to light");
+    } else if (lower.includes("medium flow") || lower.includes("flow medium")) {
+      updated.flow = "medium";
+      changes.push("Flow set to medium");
+    } else if (lower.includes("spotting")) {
+      updated.flow = "spotting";
+      changes.push("Flow set to spotting");
+    }
+  }
+  for (const sym of VALID_SYMPTOMS) {
+    const symKey = sym.replace("_", " ");
+    const addPattern = new RegExp(`\\b(?:add|include|also\\s+had|and)\\s+${symKey}\\b`, "i");
+    if (addPattern.test(lower) || lower.includes(symKey) && !lower.includes(`remove ${symKey}`) && !lower.includes(`no ${symKey}`)) {
+      if (!updated.symptoms.includes(sym)) {
+        updated.symptoms.push(sym);
+        changes.push(`Added symptom: ${symKey}`);
+      }
+    }
+  }
+  for (const sym of VALID_SYMPTOMS) {
+    const symKey = sym.replace("_", " ");
+    const removePattern = new RegExp(`\\b(?:remove|delete|no|without)\\s+${symKey}\\b`, "i");
+    if (removePattern.test(lower)) {
+      const idx = updated.symptoms.indexOf(sym);
+      if (idx !== -1) {
+        updated.symptoms.splice(idx, 1);
+        changes.push(`Removed symptom: ${symKey}`);
+      }
+    }
+  }
+  const moodWords = ["Great", "Good", "Okay", "Low", "Irritable", "Anxious", "Emotional", "Calm"];
+  for (const m of moodWords) {
+    if (lower.includes(m.toLowerCase())) {
+      updated.mood = m;
+      changes.push(`Mood updated to ${m}`);
+      break;
+    }
+  }
+  const energyMatch = lower.match(/\benergy\s+(?:is|to|level)?\s*([1-5])\b/i);
+  if (energyMatch) {
+    updated.energy = parseInt(energyMatch[1], 10);
+    changes.push(`Energy level set to ${updated.energy}`);
+  }
+  return { updated, changes };
+}
 
 // ai/backend/agent.ts
 var VALID_SYMPTOMS = [
@@ -278,14 +627,32 @@ var TOOLS = [
   {
     type: "function",
     function: {
+      name: "update_entry",
+      description: "Applies conversational corrections to a pending Accession Slip (e.g. date change, adding/removing symptoms, modifying flow).",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "YYYY-MM-DD" },
+          flow: { type: "string", enum: ["none", "spotting", "light", "medium", "heavy"] },
+          addSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          removeSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          mood: { type: "string" },
+          energy: { type: "integer", minimum: 1, maximum: 5 }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "milestone_lookup",
-      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Winter Holiday Break, New Year's Eve).",
+      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Winter Holiday Break, New Year's Eve, Diwali, Onam, Vishu).",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break)."
+            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break, Diwali)."
           },
           year: {
             type: "integer",
@@ -334,7 +701,7 @@ var TOOLS = [
 ];
 var SYSTEM_PROMPT = `You are Feather, a voice-first menstrual logging and planning companion built for women globally.
 You help women log their cycle, recall past periods relative to universal calendar landmarks (Landmark Recall), and plan around upcoming life events such as flights, marathons, work sprints, exams, and vacations (Plan Around It).
-You support natural conversational speech in English, Spanish, French, and vernacular code-switching.
+You support natural conversational speech in English, Spanish, French, Malayalam, and Hindi vernacular code-switching.
 
 CRITICAL NON-NEGOTIABLE SAFETY RULES:
 1. STRICT MEDICAL & HEALTH REFUSAL:
@@ -344,13 +711,16 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
      "I can only help with logging and planning. For health questions, please talk to a doctor."
 
 2. PURE LOGGING & PLANNING CAPABILITIES:
-   - Voice Logging: Extract date, flow, symptoms (cramps, headache, backache, bloating, breast_tenderness, acne, fatigue, cravings, nausea, mood_swings, anxiety, insomnia, dizziness, appetite_change), mood, energy (1-5), sleep (hours), and notes. Call tool \`log_entry\`.
+   - Voice Logging: Extract date, flow, symptoms, mood, energy (1-5), sleep (hours), and notes. Call tool \`log_entry\`.
+   - Slip Correction: If the user provides conversational corrections to a pending slip ("no, make it the 3rd", "add headache", "change flow to light"), call \`update_entry\`.
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before Diwali"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
 Tone: Warm, respectful, concise, neutral, non-medical.`;
 async function runLavenderAgent(userPrompt, context = {}, conversationHistory = []) {
+  const startTime = Date.now();
   const activityTrail = [];
+  const toolCallsRecorded = [];
   const guardrailCheck = checkMedicalAdviceGuardrail(userPrompt);
   if (guardrailCheck.isRefusal) {
     activityTrail.push({
@@ -361,21 +731,47 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     return {
       message: MEDICAL_REFUSAL_MESSAGE,
       needsClarification: false,
-      activityTrail
+      activityTrail,
+      toolCalls: toolCallsRecorded
     };
+  }
+  const today = context.currentDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  if (context.pendingEntry) {
+    const correctionRes = applySlipCorrections(context.pendingEntry, userPrompt);
+    if (correctionRes.changes.length > 0) {
+      toolCallsRecorded.push({
+        id: "call_update_" + Date.now(),
+        toolName: "update_entry",
+        args: { userCorrection: userPrompt },
+        result: { updated: correctionRes.updated, changes: correctionRes.changes },
+        latencyMs: Math.max(1, Date.now() - startTime),
+        model: context.provider === "baseten" ? "meta-models/muse-spark-open-1026" : "muse-spark-1.3"
+      });
+      activityTrail.push({
+        step: "Accession Slip Correction",
+        detail: correctionRes.changes.join("; "),
+        status: "done"
+      });
+      return {
+        message: "I've updated your Accession Slip with your corrections. Please review below.",
+        entry: correctionRes.updated,
+        needsClarification: false,
+        activityTrail,
+        toolCalls: toolCallsRecorded
+      };
+    }
   }
   activityTrail.push({
     step: "Processing Speech",
     detail: "Parsing voice input with Muse Spark",
     status: "pending"
   });
-  const today = context.currentDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const currentYear = parseInt(today.slice(0, 4), 10);
   const fallbackResult = parseLocally(userPrompt, today, context);
   const config = getConfig();
-  const apiKey = config.useBaseten ? config.basetenApiKey : config.metaApiKey || config.basetenApiKey;
-  const baseUrl = config.useBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
-  const model = config.useBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
+  const isBaseten = context.provider === "baseten" || config.useBaseten;
+  const apiKey = isBaseten ? config.basetenApiKey : config.metaApiKey || config.basetenApiKey;
+  const baseUrl = isBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
+  const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
   if (!apiKey) {
     activityTrail.forEach((a) => a.status = "done");
     return fallbackResult;
@@ -426,6 +822,7 @@ Today's date is ${today}.` },
         break;
       }
       for (const call of toolCalls) {
+        const toolCallStart = Date.now();
         const fnName = call.function.name;
         let fnArgs = {};
         try {
@@ -434,6 +831,7 @@ Today's date is ${today}.` },
           fnArgs = {};
         }
         let toolResponseContent = "";
+        let toolResultObj = {};
         if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
           const festName = (fnArgs.name || "").toLowerCase();
           let yr = fnArgs.year ? String(fnArgs.year) : void 0;
@@ -442,49 +840,35 @@ Today's date is ${today}.` },
             detail: `Looking up calendar milestone "${fnArgs.name}" for ${yr || "recent"}`,
             status: "done"
           });
-          const match = milestonesData_default.find(
-            (f) => f.name.toLowerCase().includes(festName) || f.aliases.some((a) => festName.includes(a) || a.includes(festName))
-          );
-          if (match) {
-            let resolvedDate;
-            if (yr && match.dates[yr]) {
-              resolvedDate = match.dates[yr];
-            } else {
-              const pastDates = Object.entries(match.dates).filter(([_, d]) => d <= today).sort((a, b) => a[1].localeCompare(b[1]));
-              if (pastDates.length > 0) {
-                const [pastYr, pastDate] = pastDates[pastDates.length - 1];
-                yr = pastYr;
-                resolvedDate = pastDate;
-              } else {
-                yr = Object.keys(match.dates).sort()[0];
-                resolvedDate = match.dates[yr];
-              }
-            }
-            toolResponseContent = JSON.stringify({
-              milestone: match.name,
-              year: yr,
-              date: resolvedDate,
+          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today);
+          if (landmarkRes.found) {
+            toolResultObj = {
+              milestone: landmarkRes.landmarkName,
+              year: yr || landmarkRes.resolvedDate?.slice(0, 4),
+              date: landmarkRes.resolvedDate,
               found: true
-            });
+            };
           } else {
-            toolResponseContent = JSON.stringify({
+            toolResultObj = {
               found: false,
               message: `Milestone "${fnArgs.name}" date not found in 2025-2027 calendar.`
-            });
+            };
           }
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "get_cycle_history") {
           activityTrail.push({
             step: "Cycle Baseline",
             detail: "Reading historical cycle pattern",
             status: "done"
           });
-          toolResponseContent = JSON.stringify({
+          toolResultObj = {
             avgCycleLength: context.cycleStats?.avgCycleLength || 28,
             avgPeriodLength: context.cycleStats?.avgPeriodLength || 5,
             lastPeriodStart: context.cycleStats?.lastPeriodStart || null,
             nextPeriodEarliest: context.cycleStats?.nextPeriodEarliest || null,
             nextPeriodLatest: context.cycleStats?.nextPeriodLatest || null
-          });
+          };
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "check_overlap") {
           activityTrail.push({
             step: "Plan Around It",
@@ -493,7 +877,8 @@ Today's date is ${today}.` },
           });
           const overlaps = evaluateOverlaps(fnArgs.events || [], context);
           planOverlaps = overlaps;
-          toolResponseContent = JSON.stringify({ overlaps });
+          toolResultObj = { overlaps };
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
           activityTrail.push({
             step: "Structured Entry",
@@ -511,8 +896,26 @@ Today's date is ${today}.` },
             isApproximate: fnArgs.isApproximate || false,
             landmarkName: fnArgs.landmarkName || null
           };
-          toolResponseContent = JSON.stringify({ success: true, entry: structuredEntry });
+          toolResultObj = { success: true, entry: structuredEntry };
+          toolResponseContent = JSON.stringify(toolResultObj);
+        } else if (fnName === "update_entry") {
+          if (context.pendingEntry) {
+            const slipRes = applySlipCorrections(context.pendingEntry, userPrompt);
+            structuredEntry = slipRes.updated;
+            toolResultObj = { success: true, entry: structuredEntry, changes: slipRes.changes };
+          } else {
+            toolResultObj = { success: false, error: "No pending slip to update" };
+          }
+          toolResponseContent = JSON.stringify(toolResultObj);
         }
+        toolCallsRecorded.push({
+          id: call.id || "call_" + Date.now(),
+          toolName: fnName,
+          args: fnArgs,
+          result: toolResultObj,
+          latencyMs: Date.now() - toolCallStart,
+          model
+        });
         messages.push({
           role: "tool",
           tool_call_id: call.id,
@@ -525,7 +928,8 @@ Today's date is ${today}.` },
       return {
         message: MEDICAL_REFUSAL_MESSAGE,
         needsClarification: false,
-        activityTrail
+        activityTrail,
+        toolCalls: toolCallsRecorded
       };
     }
     if (finalMessage.includes("?") || finalMessage.toLowerCase().includes("before or after") || finalMessage.toLowerCase().includes("which day")) {
@@ -538,6 +942,7 @@ Today's date is ${today}.` },
       needsClarification,
       clarificationQuestion,
       activityTrail,
+      toolCalls: toolCallsRecorded.length > 0 ? toolCallsRecorded : fallbackResult.toolCalls,
       planOverlaps: planOverlaps || fallbackResult.planOverlaps
     };
   } catch (err) {
@@ -545,60 +950,46 @@ Today's date is ${today}.` },
     return fallbackResult;
   }
 }
-function parseRelativeOffset(text) {
-  const offsetRegex = /(?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+)?days?\s+(before|prior to|ahead of|after|following)/i;
-  const m = text.match(offsetRegex);
-  if (!m) {
-    const singleDayMatch = text.match(/\b(the\s+)?day\s+(before|after)\b/i);
-    if (singleDayMatch) {
-      return singleDayMatch[2].toLowerCase() === "before" ? -1 : 1;
-    }
-    return 0;
-  }
-  const numStr = (m[1] || "1").toLowerCase();
-  let count = 1;
-  const wordMap = {
-    one: 1,
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-    seven: 7,
-    eight: 8,
-    nine: 9,
-    ten: 10,
-    a: 1,
-    an: 1,
-    the: 1
-  };
-  if (/^\d+$/.test(numStr)) {
-    count = parseInt(numStr, 10);
-  } else if (wordMap[numStr] !== void 0) {
-    count = wordMap[numStr];
-  }
-  const direction = m[2].toLowerCase();
-  const isBefore = direction === "before" || direction === "prior to" || direction === "ahead of";
-  return isBefore ? -count : count;
-}
-function applyDayOffset(isoDate, offsetDays) {
-  if (!offsetDays) return isoDate;
-  const d = /* @__PURE__ */ new Date(isoDate + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
-}
 function parseLocally(text, today, context) {
+  const startTime = Date.now();
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
   const activityTrail = [
     { step: "Processing Speech", detail: "Extracted keywords from voice transcript", status: "done" }
   ];
+  const toolCalls = [];
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
     return {
       message: MEDICAL_REFUSAL_MESSAGE,
       needsClarification: false,
-      activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }]
+      activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }],
+      toolCalls: []
     };
+  }
+  if (context.pendingEntry) {
+    const correctionRes = applySlipCorrections(context.pendingEntry, text);
+    if (correctionRes.changes.length > 0) {
+      toolCalls.push({
+        id: "call_update_" + Date.now(),
+        toolName: "update_entry",
+        args: { correction: text },
+        result: { updated: correctionRes.updated, changes: correctionRes.changes },
+        latencyMs: Math.max(1, Date.now() - startTime),
+        model: "offline-rule-engine"
+      });
+      activityTrail.push({
+        step: "Accession Slip Correction",
+        detail: correctionRes.changes.join("; "),
+        status: "done"
+      });
+      return {
+        message: "I've updated your Accession Slip with your corrections. Please review below.",
+        entry: correctionRes.updated,
+        needsClarification: false,
+        activityTrail,
+        toolCalls
+      };
+    }
   }
   const eventMatches = [];
   const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}|\d{4}-\d{2}-\d{2})/gi;
@@ -618,46 +1009,36 @@ function parseLocally(text, today, context) {
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
     planOverlaps = evaluateOverlaps(eventMatches, context);
+    toolCalls.push({
+      id: "call_overlap_" + Date.now(),
+      toolName: "check_overlap",
+      args: { events: eventMatches },
+      result: { overlaps: planOverlaps },
+      latencyMs: Math.max(1, Date.now() - startTime),
+      model: "offline-rule-engine"
+    });
   }
   let landmarkDate = null;
   let landmarkName = null;
   let isApproximate = false;
-  const sortedMilestones = [...milestonesData_default].sort((a, b) => {
-    const maxA = Math.max(a.name.length, ...a.aliases.map((al) => al.length));
-    const maxB = Math.max(b.name.length, ...b.aliases.map((al) => al.length));
-    return maxB - maxA;
-  });
-  for (const fest of sortedMilestones) {
-    if (lower.includes(fest.name.toLowerCase()) || fest.aliases.some((a) => lower.includes(a))) {
-      activityTrail.push({
-        step: "Landmark Recall",
-        detail: `Found calendar milestone: ${fest.name}`,
-        status: "done"
-      });
-      landmarkName = fest.name;
-      let baseDate = null;
-      const explicitYearMatch = lower.match(/\b(202[5-7])\b/);
-      if (explicitYearMatch && fest.dates[explicitYearMatch[1]]) {
-        baseDate = fest.dates[explicitYearMatch[1]];
-      } else if (lower.includes("next year")) {
-        const nextYear = String(currentYear + 1);
-        baseDate = fest.dates[nextYear] || fest.dates["2027"];
-      } else {
-        const pastDates = Object.values(fest.dates).filter((d) => typeof d === "string" && d <= today).sort();
-        if (pastDates.length > 0) {
-          baseDate = pastDates[pastDates.length - 1];
-        } else {
-          const allDates = Object.values(fest.dates).sort();
-          baseDate = allDates[0] || null;
-        }
-      }
-      if (baseDate) {
-        const offset = parseRelativeOffset(lower);
-        landmarkDate = applyDayOffset(baseDate, offset);
-      }
-      isApproximate = true;
-      break;
-    }
+  const landmarkRes = resolveLandmarkExpression(text, today);
+  if (landmarkRes.found && landmarkRes.resolvedDate) {
+    landmarkName = landmarkRes.landmarkName;
+    landmarkDate = landmarkRes.resolvedDate;
+    isApproximate = true;
+    activityTrail.push({
+      step: "Landmark Recall",
+      detail: `Found calendar milestone: ${landmarkName} -> ${landmarkDate}`,
+      status: "done"
+    });
+    toolCalls.push({
+      id: "call_milestone_" + Date.now(),
+      toolName: "milestone_lookup",
+      args: { landmarkName, anchorDate: today },
+      result: { baseDate: landmarkRes.baseDate, resolvedDate: landmarkDate },
+      latencyMs: Math.max(1, Date.now() - startTime),
+      model: "offline-rule-engine"
+    });
   }
   const detectedSymptoms = [];
   if (lower.includes("cramp") || lower.includes("\u0D35\u0D2F\u0D31\u0D41\u0D35\u0D47\u0D26\u0D28") || lower.includes("\u0926\u0930\u094D\u0926")) detectedSymptoms.push("cramps");
@@ -705,6 +1086,14 @@ function parseLocally(text, today, context) {
     isApproximate,
     landmarkName
   };
+  toolCalls.push({
+    id: "call_log_" + Date.now(),
+    toolName: "log_entry",
+    args: { date: entryDate, flow, symptoms: detectedSymptoms, mood, energy },
+    result: { entry },
+    latencyMs: Math.max(1, Date.now() - startTime),
+    model: "offline-rule-engine"
+  });
   const message = isApproximate ? `I found ${landmarkName} on ${landmarkDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
   return {
     message,
@@ -712,6 +1101,7 @@ function parseLocally(text, today, context) {
     needsClarification: isApproximate,
     clarificationQuestion: isApproximate ? `Did your period start before, on, or after ${landmarkName}?` : null,
     activityTrail,
+    toolCalls,
     planOverlaps
   };
 }
@@ -758,6 +1148,143 @@ function evaluateOverlaps(events, context) {
       overlapNote
     };
   });
+}
+
+// ai/backend/protection.ts
+var minuteHits = /* @__PURE__ */ new Map();
+var dailyHits = /* @__PURE__ */ new Map();
+var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var LIMIT_PER_MINUTE = 20;
+var LIMIT_PER_DAY_IP = 150;
+var DEFAULT_GLOBAL_DAILY_CAP = 500;
+function getTodayString() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function extractClientIp(req) {
+  if (!req) return "127.0.0.1";
+  const headers = req.headers || {};
+  const xForwardedFor = headers["x-forwarded-for"] || headers["x-real-ip"] || headers["client-ip"];
+  if (xForwardedFor) {
+    const ip = typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0].trim() : String(xForwardedFor);
+    if (ip) return ip;
+  }
+  if (req.socket?.remoteAddress) {
+    return req.socket.remoteAddress;
+  }
+  if (req.connection?.remoteAddress) {
+    return req.connection.remoteAddress;
+  }
+  return "127.0.0.1";
+}
+function isOriginAllowed(originOrReferer) {
+  if (!originOrReferer) return true;
+  try {
+    const url = new URL(originOrReferer);
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+      return true;
+    }
+    if (host.endsWith(".vercel.app")) {
+      return true;
+    }
+    const configuredAllowed = process.env.ALLOWED_ORIGIN;
+    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
+      return true;
+    }
+    return false;
+  } catch {
+    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
+      return true;
+    }
+    return false;
+  }
+}
+function checkStatelessProtection(req, options) {
+  const headers = req.headers || {};
+  const origin = headers["origin"] || headers["referer"];
+  if (!isOriginAllowed(origin)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Unauthorized origin.",
+      code: "ORIGIN_FORBIDDEN"
+    };
+  }
+  const contentLength = parseInt(headers["content-length"] || "0", 10);
+  const maxBodyBytes = options.maxBodyBytes || (options.endpointName === "transcribe" || options.endpointName === "vision" ? 4 * 1024 * 1024 : 50 * 1024);
+  if (contentLength > maxBodyBytes) {
+    return {
+      allowed: false,
+      statusCode: 413,
+      error: `Payload too large (max ${Math.round(maxBodyBytes / 1024)} KB)`,
+      code: "PAYLOAD_TOO_LARGE"
+    };
+  }
+  const clientIp = extractClientIp(req);
+  const now = Date.now();
+  const today = getTodayString();
+  if (globalDailyTracker.day !== today) {
+    globalDailyTracker = { count: 0, day: today };
+  }
+  const globalCap = parseInt(process.env.DAILY_REQUEST_CAP || String(DEFAULT_GLOBAL_DAILY_CAP), 10);
+  if (globalDailyTracker.count >= globalCap) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Daily demo limit reached (server cap). Please try again tomorrow.",
+      code: "DAILY_CAP_EXCEEDED",
+      clientIp
+    };
+  }
+  const windowMs = 60 * 1e3;
+  let timestamps = minuteHits.get(clientIp) || [];
+  timestamps = timestamps.filter((t) => now - t < windowMs);
+  if (timestamps.length >= LIMIT_PER_MINUTE) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Demo limit reached, try again in a minute.",
+      code: "RATE_LIMIT_MINUTE",
+      clientIp
+    };
+  }
+  const dailyRecord = dailyHits.get(clientIp);
+  if (dailyRecord && dailyRecord.day === today) {
+    if (dailyRecord.count >= LIMIT_PER_DAY_IP) {
+      return {
+        allowed: false,
+        statusCode: 429,
+        error: "Per-IP daily limit reached (150 requests/day). Please try again tomorrow.",
+        code: "RATE_LIMIT_DAILY",
+        clientIp
+      };
+    }
+  }
+  timestamps.push(now);
+  minuteHits.set(clientIp, timestamps);
+  if (!dailyRecord || dailyRecord.day !== today) {
+    dailyHits.set(clientIp, { count: 1, day: today });
+  } else {
+    dailyRecord.count += 1;
+  }
+  globalDailyTracker.count += 1;
+  if (minuteHits.size > 2e3) {
+    for (const [ip, ts] of minuteHits.entries()) {
+      if (ts.every((t) => now - t > windowMs)) {
+        minuteHits.delete(ip);
+      }
+    }
+  }
+  return { allowed: true, clientIp };
+}
+function validateTextLength(text, maxChars = 1e3) {
+  if (text && text.length > maxChars) {
+    return {
+      valid: false,
+      error: `Input text exceeds maximum allowed length of ${maxChars} characters (provided: ${text.length}).`
+    };
+  }
+  return { valid: true };
 }
 
 // api-src/agent.ts
@@ -837,6 +1364,22 @@ async function handler(req, res) {
       body: ""
     };
   }
+  const protection = checkStatelessProtection(req, {
+    endpointName: "agent",
+    maxBodyBytes: 50 * 1024
+  });
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody)
+      };
+    }
+    return sendResponse(res, status, errorBody);
+  }
   if (!res && req && req.httpMethod) {
     if (req.httpMethod !== "POST") {
       return {
@@ -847,7 +1390,7 @@ async function handler(req, res) {
     }
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-      const { message, context, conversationHistory } = body;
+      const { message, context, conversationHistory, provider } = body;
       if (!message) {
         return {
           statusCode: 400,
@@ -855,7 +1398,16 @@ async function handler(req, res) {
           body: JSON.stringify({ error: "Missing 'message' field" })
         };
       }
-      const result = await runLavenderAgent(message, context || {}, conversationHistory || []);
+      const textCheck = validateTextLength(message, 1e3);
+      if (!textCheck.valid) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ error: textCheck.error, code: "TEXT_TOO_LONG" })
+        };
+      }
+      const agentContext = { ...context || {}, provider: provider || context?.provider };
+      const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
       return {
         statusCode: 200,
         headers: {
@@ -877,11 +1429,16 @@ async function handler(req, res) {
   }
   try {
     const body = await getRequestBody(req);
-    const { message, context, conversationHistory } = body;
+    const { message, context, conversationHistory, provider } = body;
     if (!message) {
       return sendResponse(res, 400, { error: "Missing 'message' field" });
     }
-    const result = await runLavenderAgent(message, context || {}, conversationHistory || []);
+    const textCheck = validateTextLength(message, 1e3);
+    if (!textCheck.valid) {
+      return sendResponse(res, 400, { error: textCheck.error, code: "TEXT_TOO_LONG" });
+    }
+    const agentContext = { ...context || {}, provider: provider || context?.provider };
+    const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
     return sendResponse(res, 200, result);
   } catch (err) {
     return sendResponse(res, 500, { error: err.message || "Agent execution failed" });

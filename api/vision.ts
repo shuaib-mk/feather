@@ -99,6 +99,134 @@ If month or year is visible, use it; otherwise assume the current year. Do not p
   }
 }
 
+// ai/backend/protection.ts
+var minuteHits = /* @__PURE__ */ new Map();
+var dailyHits = /* @__PURE__ */ new Map();
+var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var LIMIT_PER_MINUTE = 20;
+var LIMIT_PER_DAY_IP = 150;
+var DEFAULT_GLOBAL_DAILY_CAP = 500;
+function getTodayString() {
+  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+}
+function extractClientIp(req) {
+  if (!req) return "127.0.0.1";
+  const headers = req.headers || {};
+  const xForwardedFor = headers["x-forwarded-for"] || headers["x-real-ip"] || headers["client-ip"];
+  if (xForwardedFor) {
+    const ip = typeof xForwardedFor === "string" ? xForwardedFor.split(",")[0].trim() : String(xForwardedFor);
+    if (ip) return ip;
+  }
+  if (req.socket?.remoteAddress) {
+    return req.socket.remoteAddress;
+  }
+  if (req.connection?.remoteAddress) {
+    return req.connection.remoteAddress;
+  }
+  return "127.0.0.1";
+}
+function isOriginAllowed(originOrReferer) {
+  if (!originOrReferer) return true;
+  try {
+    const url = new URL(originOrReferer);
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+      return true;
+    }
+    if (host.endsWith(".vercel.app")) {
+      return true;
+    }
+    const configuredAllowed = process.env.ALLOWED_ORIGIN;
+    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
+      return true;
+    }
+    return false;
+  } catch {
+    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
+      return true;
+    }
+    return false;
+  }
+}
+function checkStatelessProtection(req, options) {
+  const headers = req.headers || {};
+  const origin = headers["origin"] || headers["referer"];
+  if (!isOriginAllowed(origin)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Unauthorized origin.",
+      code: "ORIGIN_FORBIDDEN"
+    };
+  }
+  const contentLength = parseInt(headers["content-length"] || "0", 10);
+  const maxBodyBytes = options.maxBodyBytes || (options.endpointName === "transcribe" || options.endpointName === "vision" ? 4 * 1024 * 1024 : 50 * 1024);
+  if (contentLength > maxBodyBytes) {
+    return {
+      allowed: false,
+      statusCode: 413,
+      error: `Payload too large (max ${Math.round(maxBodyBytes / 1024)} KB)`,
+      code: "PAYLOAD_TOO_LARGE"
+    };
+  }
+  const clientIp = extractClientIp(req);
+  const now = Date.now();
+  const today = getTodayString();
+  if (globalDailyTracker.day !== today) {
+    globalDailyTracker = { count: 0, day: today };
+  }
+  const globalCap = parseInt(process.env.DAILY_REQUEST_CAP || String(DEFAULT_GLOBAL_DAILY_CAP), 10);
+  if (globalDailyTracker.count >= globalCap) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Daily demo limit reached (server cap). Please try again tomorrow.",
+      code: "DAILY_CAP_EXCEEDED",
+      clientIp
+    };
+  }
+  const windowMs = 60 * 1e3;
+  let timestamps = minuteHits.get(clientIp) || [];
+  timestamps = timestamps.filter((t) => now - t < windowMs);
+  if (timestamps.length >= LIMIT_PER_MINUTE) {
+    return {
+      allowed: false,
+      statusCode: 429,
+      error: "Demo limit reached, try again in a minute.",
+      code: "RATE_LIMIT_MINUTE",
+      clientIp
+    };
+  }
+  const dailyRecord = dailyHits.get(clientIp);
+  if (dailyRecord && dailyRecord.day === today) {
+    if (dailyRecord.count >= LIMIT_PER_DAY_IP) {
+      return {
+        allowed: false,
+        statusCode: 429,
+        error: "Per-IP daily limit reached (150 requests/day). Please try again tomorrow.",
+        code: "RATE_LIMIT_DAILY",
+        clientIp
+      };
+    }
+  }
+  timestamps.push(now);
+  minuteHits.set(clientIp, timestamps);
+  if (!dailyRecord || dailyRecord.day !== today) {
+    dailyHits.set(clientIp, { count: 1, day: today });
+  } else {
+    dailyRecord.count += 1;
+  }
+  globalDailyTracker.count += 1;
+  if (minuteHits.size > 2e3) {
+    for (const [ip, ts] of minuteHits.entries()) {
+      if (ts.every((t) => now - t > windowMs)) {
+        minuteHits.delete(ip);
+      }
+    }
+  }
+  return { allowed: true, clientIp };
+}
+
 // api-src/vision.ts
 function sendResponse(res, statusCode, data) {
   if (res.setHeader) {
@@ -175,6 +303,22 @@ async function handler(req, res) {
       },
       body: ""
     };
+  }
+  const protection = checkStatelessProtection(req, {
+    endpointName: "vision",
+    maxBodyBytes: 6 * 1024 * 1024
+  });
+  if (!protection.allowed) {
+    const status = protection.statusCode || 429;
+    const errorBody = { error: protection.error, code: protection.code };
+    if (!res && req && req.httpMethod) {
+      return {
+        statusCode: status,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify(errorBody)
+      };
+    }
+    return sendResponse(res, status, errorBody);
   }
   if (!res && req && req.httpMethod) {
     if (req.httpMethod !== "POST") {
