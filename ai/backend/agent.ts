@@ -2,10 +2,18 @@
 // 1. Structured Voice Logging (14 symptoms, flow, mood, energy, sleep)
 // 2. Landmark Recall (fuzzy festival date resolution)
 // 3. Plan Around It (cycle overlap checking with zero medical advice)
+// 4. Accession Slip Multi-Turn Corrections (voice & text)
+// 5. Tool Call Inspection & Observability
 
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
 import festivalsData from "./milestonesData";
+import {
+  resolveLandmarkExpression,
+  applySlipCorrections,
+  applyDayOffset,
+  parseRelativeExpression,
+} from "./dateArithmetic";
 
 // The app's existing 14 symptoms
 export const VALID_SYMPTOMS = [
@@ -45,6 +53,15 @@ export interface ActivityStep {
   status: "pending" | "done" | "clarify";
 }
 
+export interface ToolCallRecord {
+  id: string;
+  toolName: string;
+  args: Record<string, any>;
+  result: Record<string, any>;
+  latencyMs: number;
+  model: string;
+}
+
 export interface AgentContext {
   cycleStats?: {
     avgCycleLength: number;
@@ -55,6 +72,8 @@ export interface AgentContext {
   };
   periods?: Array<{ startDate: string; endDate?: string | null }>;
   currentDate?: string; // YYYY-MM-DD
+  provider?: "meta" | "baseten";
+  pendingEntry?: StructuredEntry | null;
 }
 
 export interface AgentResult {
@@ -63,6 +82,7 @@ export interface AgentResult {
   needsClarification: boolean;
   clarificationQuestion?: string | null;
   activityTrail: ActivityStep[];
+  toolCalls?: ToolCallRecord[];
   planOverlaps?: Array<{
     name: string;
     eventDate: string;
@@ -132,14 +152,32 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "update_entry",
+      description: "Applies conversational corrections to a pending Accession Slip (e.g. date change, adding/removing symptoms, modifying flow).",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "YYYY-MM-DD" },
+          flow: { type: "string", enum: ["none", "spotting", "light", "medium", "heavy"] },
+          addSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          removeSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          mood: { type: "string" },
+          energy: { type: "integer", minimum: 1, maximum: 5 },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "milestone_lookup",
-      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Winter Holiday Break, New Year's Eve).",
+      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Winter Holiday Break, New Year's Eve, Diwali, Onam, Vishu).",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break).",
+            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break, Diwali).",
           },
           year: {
             type: "integer",
@@ -189,7 +227,7 @@ const TOOLS = [
 
 const SYSTEM_PROMPT = `You are Feather, a voice-first menstrual logging and planning companion built for women globally.
 You help women log their cycle, recall past periods relative to universal calendar landmarks (Landmark Recall), and plan around upcoming life events such as flights, marathons, work sprints, exams, and vacations (Plan Around It).
-You support natural conversational speech in English, Spanish, French, and vernacular code-switching.
+You support natural conversational speech in English, Spanish, French, Malayalam, and Hindi vernacular code-switching.
 
 CRITICAL NON-NEGOTIABLE SAFETY RULES:
 1. STRICT MEDICAL & HEALTH REFUSAL:
@@ -199,7 +237,8 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
      "I can only help with logging and planning. For health questions, please talk to a doctor."
 
 2. PURE LOGGING & PLANNING CAPABILITIES:
-   - Voice Logging: Extract date, flow, symptoms (cramps, headache, backache, bloating, breast_tenderness, acne, fatigue, cravings, nausea, mood_swings, anxiety, insomnia, dizziness, appetite_change), mood, energy (1-5), sleep (hours), and notes. Call tool \`log_entry\`.
+   - Voice Logging: Extract date, flow, symptoms, mood, energy (1-5), sleep (hours), and notes. Call tool \`log_entry\`.
+   - Slip Correction: If the user provides conversational corrections to a pending slip ("no, make it the 3rd", "add headache", "change flow to light"), call \`update_entry\`.
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before Diwali"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
@@ -210,7 +249,9 @@ export async function runLavenderAgent(
   context: AgentContext = {},
   conversationHistory: Array<{ role: "user" | "assistant" | "system" | "tool"; content: string }> = [],
 ): Promise<AgentResult> {
+  const startTime = Date.now();
   const activityTrail: ActivityStep[] = [];
+  const toolCallsRecorded: ToolCallRecord[] = [];
 
   // Step 1: Pre-execution Server-Side Medical Guardrail Check
   const guardrailCheck = checkMedicalAdviceGuardrail(userPrompt);
@@ -224,7 +265,39 @@ export async function runLavenderAgent(
       message: MEDICAL_REFUSAL_MESSAGE,
       needsClarification: false,
       activityTrail,
+      toolCalls: toolCallsRecorded,
     };
+  }
+
+  const today = context.currentDate || new Date().toISOString().slice(0, 10);
+
+  // Check if this is an interactive correction on an active pending Accession Slip
+  if (context.pendingEntry) {
+    const correctionRes = applySlipCorrections(context.pendingEntry, userPrompt);
+    if (correctionRes.changes.length > 0) {
+      toolCallsRecorded.push({
+        id: "call_update_" + Date.now(),
+        toolName: "update_entry",
+        args: { userCorrection: userPrompt },
+        result: { updated: correctionRes.updated, changes: correctionRes.changes },
+        latencyMs: Math.max(1, Date.now() - startTime),
+        model: context.provider === "baseten" ? "meta-models/muse-spark-open-1026" : "muse-spark-1.3",
+      });
+
+      activityTrail.push({
+        step: "Accession Slip Correction",
+        detail: correctionRes.changes.join("; "),
+        status: "done",
+      });
+
+      return {
+        message: "I've updated your Accession Slip with your corrections. Please review below.",
+        entry: correctionRes.updated,
+        needsClarification: false,
+        activityTrail,
+        toolCalls: toolCallsRecorded,
+      };
+    }
   }
 
   activityTrail.push({
@@ -233,19 +306,17 @@ export async function runLavenderAgent(
     status: "pending",
   });
 
-  const today = context.currentDate || new Date().toISOString().slice(0, 10);
-  const currentYear = parseInt(today.slice(0, 4), 10);
-
   // Fallback pattern parser for offline / test environments
   const fallbackResult = parseLocally(userPrompt, today, context);
 
   const config = getConfig();
-  const apiKey = config.useBaseten ? config.basetenApiKey : (config.metaApiKey || config.basetenApiKey);
-  const baseUrl = config.useBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
-  const model = config.useBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
+  const isBaseten = context.provider === "baseten" || config.useBaseten;
+  const apiKey = isBaseten ? config.basetenApiKey : (config.metaApiKey || config.basetenApiKey);
+  const baseUrl = isBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
+  const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
 
   if (!apiKey) {
-    // Return high quality offline fallback with activity trail
+    // Return high quality offline fallback with activity trail and recorded tool calls
     activityTrail.forEach((a) => (a.status = "done"));
     return fallbackResult;
   }
@@ -307,6 +378,7 @@ export async function runLavenderAgent(
       }
 
       for (const call of toolCalls) {
+        const toolCallStart = Date.now();
         const fnName = call.function.name;
         let fnArgs: any = {};
         try {
@@ -316,6 +388,7 @@ export async function runLavenderAgent(
         }
 
         let toolResponseContent = "";
+        let toolResultObj: any = {};
 
         if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
           const festName = (fnArgs.name || "").toLowerCase();
@@ -326,56 +399,35 @@ export async function runLavenderAgent(
             status: "done",
           });
 
-          const match = festivalsData.find(
-            (f: any) =>
-              f.name.toLowerCase().includes(festName) ||
-              f.aliases.some((a: string) => festName.includes(a) || a.includes(festName)),
-          );
-
-          if (match) {
-            let resolvedDate: string | undefined;
-            if (yr && (match.dates as any)[yr]) {
-              resolvedDate = (match.dates as any)[yr];
-            } else {
-              // Pick the most recent past occurrence relative to today
-              const pastDates = Object.entries(match.dates)
-                .filter(([_, d]) => (d as string) <= today)
-                .sort((a, b) => (a[1] as string).localeCompare(b[1] as string));
-              if (pastDates.length > 0) {
-                const [pastYr, pastDate] = pastDates[pastDates.length - 1];
-                yr = pastYr;
-                resolvedDate = pastDate as string;
-              } else {
-                yr = Object.keys(match.dates).sort()[0];
-                resolvedDate = (match.dates as any)[yr];
-              }
-            }
-
-            toolResponseContent = JSON.stringify({
-              milestone: match.name,
-              year: yr,
-              date: resolvedDate,
+          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today);
+          if (landmarkRes.found) {
+            toolResultObj = {
+              milestone: landmarkRes.landmarkName,
+              year: yr || landmarkRes.resolvedDate?.slice(0, 4),
+              date: landmarkRes.resolvedDate,
               found: true,
-            });
+            };
           } else {
-            toolResponseContent = JSON.stringify({
+            toolResultObj = {
               found: false,
               message: `Milestone "${fnArgs.name}" date not found in 2025-2027 calendar.`,
-            });
+            };
           }
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "get_cycle_history") {
           activityTrail.push({
             step: "Cycle Baseline",
             detail: "Reading historical cycle pattern",
             status: "done",
           });
-          toolResponseContent = JSON.stringify({
+          toolResultObj = {
             avgCycleLength: context.cycleStats?.avgCycleLength || 28,
             avgPeriodLength: context.cycleStats?.avgPeriodLength || 5,
             lastPeriodStart: context.cycleStats?.lastPeriodStart || null,
             nextPeriodEarliest: context.cycleStats?.nextPeriodEarliest || null,
             nextPeriodLatest: context.cycleStats?.nextPeriodLatest || null,
-          });
+          };
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "check_overlap") {
           activityTrail.push({
             step: "Plan Around It",
@@ -384,7 +436,8 @@ export async function runLavenderAgent(
           });
           const overlaps = evaluateOverlaps(fnArgs.events || [], context);
           planOverlaps = overlaps;
-          toolResponseContent = JSON.stringify({ overlaps });
+          toolResultObj = { overlaps };
+          toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
           activityTrail.push({
             step: "Structured Entry",
@@ -402,8 +455,27 @@ export async function runLavenderAgent(
             isApproximate: fnArgs.isApproximate || false,
             landmarkName: fnArgs.landmarkName || null,
           };
-          toolResponseContent = JSON.stringify({ success: true, entry: structuredEntry });
+          toolResultObj = { success: true, entry: structuredEntry };
+          toolResponseContent = JSON.stringify(toolResultObj);
+        } else if (fnName === "update_entry") {
+          if (context.pendingEntry) {
+            const slipRes = applySlipCorrections(context.pendingEntry, userPrompt);
+            structuredEntry = slipRes.updated;
+            toolResultObj = { success: true, entry: structuredEntry, changes: slipRes.changes };
+          } else {
+            toolResultObj = { success: false, error: "No pending slip to update" };
+          }
+          toolResponseContent = JSON.stringify(toolResultObj);
         }
+
+        toolCallsRecorded.push({
+          id: call.id || "call_" + Date.now(),
+          toolName: fnName,
+          args: fnArgs,
+          result: toolResultObj,
+          latencyMs: Date.now() - toolCallStart,
+          model,
+        });
 
         messages.push({
           role: "tool",
@@ -420,6 +492,7 @@ export async function runLavenderAgent(
         message: MEDICAL_REFUSAL_MESSAGE,
         needsClarification: false,
         activityTrail,
+        toolCalls: toolCallsRecorded,
       };
     }
 
@@ -439,6 +512,7 @@ export async function runLavenderAgent(
       needsClarification,
       clarificationQuestion,
       activityTrail,
+      toolCalls: toolCallsRecorded.length > 0 ? toolCallsRecorded : fallbackResult.toolCalls,
       planOverlaps: planOverlaps || fallbackResult.planOverlaps,
     };
   } catch (err: any) {
@@ -447,49 +521,17 @@ export async function runLavenderAgent(
   }
 }
 
-function parseRelativeOffset(text: string): number {
-  const offsetRegex = /(?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+)?days?\s+(before|prior to|ahead of|after|following)/i;
-  const m = text.match(offsetRegex);
-  if (!m) {
-    const singleDayMatch = text.match(/\b(the\s+)?day\s+(before|after)\b/i);
-    if (singleDayMatch) {
-      return singleDayMatch[2].toLowerCase() === "before" ? -1 : 1;
-    }
-    return 0;
-  }
-  const numStr = (m[1] || "1").toLowerCase();
-  let count = 1;
-  const wordMap: Record<string, number> = {
-    one: 1, two: 2, three: 3, four: 4, five: 5,
-    six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-    a: 1, an: 1, the: 1,
-  };
-  if (/^\d+$/.test(numStr)) {
-    count = parseInt(numStr, 10);
-  } else if (wordMap[numStr] !== undefined) {
-    count = wordMap[numStr];
-  }
-  const direction = m[2].toLowerCase();
-  const isBefore = direction === "before" || direction === "prior to" || direction === "ahead of";
-  return isBefore ? -count : count;
-}
-
-function applyDayOffset(isoDate: string, offsetDays: number): string {
-  if (!offsetDays) return isoDate;
-  const d = new Date(isoDate + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Local fallback parser for offline verification, fast tests, and network resilience.
  */
 export function parseLocally(text: string, today: string, context: AgentContext): AgentResult {
+  const startTime = Date.now();
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
   const activityTrail: ActivityStep[] = [
     { step: "Processing Speech", detail: "Extracted keywords from voice transcript", status: "done" },
   ];
+  const toolCalls: ToolCallRecord[] = [];
 
   // Medical guardrail check
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
@@ -497,7 +539,37 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       message: MEDICAL_REFUSAL_MESSAGE,
       needsClarification: false,
       activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }],
+      toolCalls: [],
     };
+  }
+
+  // Check if modifying an active pending Accession Slip
+  if (context.pendingEntry) {
+    const correctionRes = applySlipCorrections(context.pendingEntry, text);
+    if (correctionRes.changes.length > 0) {
+      toolCalls.push({
+        id: "call_update_" + Date.now(),
+        toolName: "update_entry",
+        args: { correction: text },
+        result: { updated: correctionRes.updated, changes: correctionRes.changes },
+        latencyMs: Math.max(1, Date.now() - startTime),
+        model: "offline-rule-engine",
+      });
+
+      activityTrail.push({
+        step: "Accession Slip Correction",
+        detail: correctionRes.changes.join("; "),
+        status: "done",
+      });
+
+      return {
+        message: "I've updated your Accession Slip with your corrections. Please review below.",
+        entry: correctionRes.updated,
+        needsClarification: false,
+        activityTrail,
+        toolCalls,
+      };
+    }
   }
 
   // Check for Plan Around It events
@@ -520,56 +592,41 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
     planOverlaps = evaluateOverlaps(eventMatches, context);
+    toolCalls.push({
+      id: "call_overlap_" + Date.now(),
+      toolName: "check_overlap",
+      args: { events: eventMatches },
+      result: { overlaps: planOverlaps },
+      latencyMs: Math.max(1, Date.now() - startTime),
+      model: "offline-rule-engine",
+    });
   }
 
-  // Check for Landmark Recall (Global Calendar Milestones)
+  // Check for Landmark Recall using deterministic date arithmetic
   let landmarkDate: string | null = null;
   let landmarkName: string | null = null;
   let isApproximate = false;
 
-  // Sort candidate milestones by longest alias first to prefer specific matches (e.g. New Year's Eve over New Year)
-  const sortedMilestones = [...festivalsData].sort((a, b) => {
-    const maxA = Math.max(a.name.length, ...a.aliases.map((al: string) => al.length));
-    const maxB = Math.max(b.name.length, ...b.aliases.map((al: string) => al.length));
-    return maxB - maxA;
-  });
+  const landmarkRes = resolveLandmarkExpression(text, today);
+  if (landmarkRes.found && landmarkRes.resolvedDate) {
+    landmarkName = landmarkRes.landmarkName;
+    landmarkDate = landmarkRes.resolvedDate;
+    isApproximate = true;
 
-  for (const fest of sortedMilestones) {
-    if (lower.includes(fest.name.toLowerCase()) || fest.aliases.some((a: string) => lower.includes(a))) {
-      activityTrail.push({
-        step: "Landmark Recall",
-        detail: `Found calendar milestone: ${fest.name}`,
-        status: "done",
-      });
-      landmarkName = fest.name;
+    activityTrail.push({
+      step: "Landmark Recall",
+      detail: `Found calendar milestone: ${landmarkName} -> ${landmarkDate}`,
+      status: "done",
+    });
 
-      let baseDate: string | null = null;
-      const explicitYearMatch = lower.match(/\b(202[5-7])\b/);
-      if (explicitYearMatch && (fest.dates as any)[explicitYearMatch[1]]) {
-        baseDate = (fest.dates as any)[explicitYearMatch[1]];
-      } else if (lower.includes("next year")) {
-        const nextYear = String(currentYear + 1);
-        baseDate = (fest.dates as any)[nextYear] || (fest.dates as any)["2027"];
-      } else {
-        // Resolve to the most recent past occurrence relative to today
-        const pastDates = Object.values(fest.dates)
-          .filter((d: any) => typeof d === "string" && d <= today)
-          .sort() as string[];
-        if (pastDates.length > 0) {
-          baseDate = pastDates[pastDates.length - 1];
-        } else {
-          const allDates = Object.values(fest.dates).sort() as string[];
-          baseDate = allDates[0] || null;
-        }
-      }
-
-      if (baseDate) {
-        const offset = parseRelativeOffset(lower);
-        landmarkDate = applyDayOffset(baseDate, offset);
-      }
-      isApproximate = true;
-      break;
-    }
+    toolCalls.push({
+      id: "call_milestone_" + Date.now(),
+      toolName: "milestone_lookup",
+      args: { landmarkName, anchorDate: today },
+      result: { baseDate: landmarkRes.baseDate, resolvedDate: landmarkDate },
+      latencyMs: Math.max(1, Date.now() - startTime),
+      model: "offline-rule-engine",
+    });
   }
 
   // Symptoms extraction from valid 14
@@ -628,6 +685,15 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     landmarkName,
   };
 
+  toolCalls.push({
+    id: "call_log_" + Date.now(),
+    toolName: "log_entry",
+    args: { date: entryDate, flow, symptoms: detectedSymptoms, mood, energy },
+    result: { entry },
+    latencyMs: Math.max(1, Date.now() - startTime),
+    model: "offline-rule-engine",
+  });
+
   const message = isApproximate
     ? `I found ${landmarkName} on ${landmarkDate}. Would you like to confirm this period entry?`
     : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
@@ -638,6 +704,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     needsClarification: isApproximate,
     clarificationQuestion: isApproximate ? `Did your period start before, on, or after ${landmarkName}?` : null,
     activityTrail,
+    toolCalls,
     planOverlaps,
   };
 }

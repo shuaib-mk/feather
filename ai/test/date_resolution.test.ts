@@ -103,6 +103,76 @@ async function runTests() {
     failed++;
   }
 
+  // 7. Edge-Case: "last Diwali" resolution relative to anchor 2026-10-28 (must resolve to 2025-10-20)
+  const promptLastDiwali = "Period started during last Diwali with medium flow";
+  const resLastDiwali = await runLavenderAgent(promptLastDiwali, { currentDate: "2026-10-28" });
+  if (resLastDiwali.entry && resLastDiwali.entry.date === "2025-10-20" && resLastDiwali.entry.landmarkName?.includes("Diwali")) {
+    console.log(`[PASS] Edge-Case "last Diwali" anchored at 2026-10-28 resolved to past occurrence: ${resLastDiwali.entry.date} (landmark=${resLastDiwali.entry.landmarkName})`);
+    passed++;
+  } else {
+    console.error(`[FAIL] "last Diwali" expected 2025-10-20, got ${resLastDiwali.entry?.date} (${resLastDiwali.entry?.landmarkName})`);
+    failed++;
+  }
+
+  // 8. Edge-Case: "the Monday before Women's Day" (Women's Day 2026-03-08 is Sunday -> Monday before is 2026-03-02)
+  const promptMondayBefore = "My period started the Monday before Women's Day";
+  const resMondayBefore = await runLavenderAgent(promptMondayBefore, { currentDate: "2026-10-28" });
+  if (resMondayBefore.entry && resMondayBefore.entry.date === "2026-03-02") {
+    console.log(`[PASS] Edge-Case "the Monday before Women's Day" resolved to: ${resMondayBefore.entry.date}`);
+    passed++;
+  } else {
+    console.error(`[FAIL] "the Monday before Women's Day" expected 2026-03-02, got ${resMondayBefore.entry?.date}`);
+    failed++;
+  }
+
+  // 9. Edge-Case: Deterministic Leap Year arithmetic
+  const { isLeapYear, applyDayOffset } = await import("../backend/dateArithmetic");
+  const is2028Leap = isLeapYear(2028);
+  const is2026Leap = isLeapYear(2026);
+  const leapDayOffset = applyDayOffset("2028-02-28", 1);
+  const postLeapOffset = applyDayOffset("2028-02-29", 1);
+  if (is2028Leap && !is2026Leap && leapDayOffset === "2028-02-29" && postLeapOffset === "2028-03-01") {
+    console.log(`[PASS] Edge-Case Leap Year arithmetic verified: 2028 is leap, 2028-02-28+1=${leapDayOffset}, 2028-02-29+1=${postLeapOffset}`);
+    passed++;
+  } else {
+    console.error(`[FAIL] Leap Year arithmetic failed.`);
+    failed++;
+  }
+
+  // 10. Edge-Case: Year Boundary crossing backwards and forwards
+  const nyBoundaryBackward = applyDayOffset("2026-01-01", -2); // 2025-12-30
+  const nyeBoundaryForward = applyDayOffset("2025-12-31", 2);  // 2026-01-02
+  if (nyBoundaryBackward === "2025-12-30" && nyeBoundaryForward === "2026-01-02") {
+    console.log(`[PASS] Edge-Case Year Boundary verified: 2026-01-01 - 2 days = ${nyBoundaryBackward}; 2025-12-31 + 2 days = ${nyeBoundaryForward}`);
+    passed++;
+  } else {
+    console.error(`[FAIL] Year boundary arithmetic failed.`);
+    failed++;
+  }
+
+  // 11. Edge-Case: Multi-turn Accession Slip Correction
+  const initialSlipPrompt = "Period started today with heavy flow";
+  const initialSlip = await runLavenderAgent(initialSlipPrompt, { currentDate: "2026-10-28" });
+  if (initialSlip.entry) {
+    const correctionPrompt = "no, make it the 3rd, add headache, and change flow to light";
+    const correctedSlip = await runLavenderAgent(correctionPrompt, {
+      currentDate: "2026-10-28",
+      pendingEntry: initialSlip.entry,
+    });
+    if (
+      correctedSlip.entry &&
+      correctedSlip.entry.date === "2026-10-03" &&
+      correctedSlip.entry.flow === "light" &&
+      correctedSlip.entry.symptoms.includes("headache")
+    ) {
+      console.log(`[PASS] Edge-Case Accession Slip Correction verified: date=${correctedSlip.entry.date}, flow=${correctedSlip.entry.flow}, symptoms=${correctedSlip.entry.symptoms.join(",")}`);
+      passed++;
+    } else {
+      console.error(`[FAIL] Accession slip correction failed:`, correctedSlip.entry);
+      failed++;
+    }
+  }
+
   console.log(`\nDate Resolution Results: ${passed} passed, ${failed} failed.`);
   if (failed > 0) process.exit(1);
 }
