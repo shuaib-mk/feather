@@ -1,0 +1,32 @@
+{
+  "name": "feather",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "bundle:api": "node scripts/bundle-api.mjs",
+    "build": "node scripts/bundle-api.mjs && vite build --config vite.config.ts",
+    "start:ai": "npx tsx ai/backend/server.ts",
+    "test": "npm run test:ai",
+    "test:guardrail": "npx tsx ai/test/guardrail.test.ts",
+    "test:dates": "npx tsx ai/test/date_resolution.test.ts",
+    "test:synthesis": "npx tsx ai/test/synthesis.test.ts",
+    "test:ai": "npx tsx ai/test/guardrail.test.ts && npx tsx ai/test/date_resolution.test.ts && npx tsx ai/test/synthesis.test.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.66.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.6",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  }
+}

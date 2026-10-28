@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["api/**/*", "ai/**/*", "client/src/**/*"],
+  "exclude": ["server", "node_modules", "dist"]
+}

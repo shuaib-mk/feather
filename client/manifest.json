@@ -1,0 +1,24 @@
+{
+  "name": "Feather — Voice-First Menstrual Cycle Companion",
+  "short_name": "Feather",
+  "description": "Voice-first menstrual cycle logging and milestone planning companion. Voice transcribed via Meta Muse Voice Transcribe; all entries stored locally on your device.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f2e6",
+  "theme_color": "#2e6bd6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    },
+    {
+      "src": "./icon.webp",
+      "sizes": "512x512",
+      "type": "image/webp"
+    }
+  ],
+  "categories": ["lifestyle", "productivity"],
+  "lang": "en"
+}

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#fafafa" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Feather" />
+    <link rel="apple-touch-icon" href="/icon.webp" />
+    <link rel="icon" type="image/webp" href="/icon.webp" />
+    <title>Feather — Voice-First Menstrual Cycle Companion</title>
+    <style>
+      html, body {
+        background-color: #fafafa !important;
+        color: #1a1718 !important;
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        min-height: 100dvh;
+        width: 100%;
+        overflow-x: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #root {
+        min-height: 100%;
+        min-height: 100dvh;
+        width: 100%;
+        background-color: #fafafa;
+      }
+      .feather-splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: #fcfbfa;
+        color: #1a1718;
+        padding: 2rem;
+        text-align: center;
+      }
+      .feather-splash-spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid rgba(26, 23, 24, 0.12);
+        border-top-color: #1a1718;
+        border-radius: 50%;
+        animation: feather-spin 0.8s linear infinite;
+        margin-top: 1rem;
+      }
+      @keyframes feather-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+    <script>
+      // Automatically unregister any active service workers and clear stale caches on mobile
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          for (var reg of regs) {
+            reg.unregister();
+          }
+        }).catch(function() {});
+      }
+      if (typeof window !== "undefined" && "caches" in window) {
+        caches.keys().then(function(names) {
+          for (var name of names) caches.delete(name);
+        }).catch(function() {});
+      }
+    </script>
+    <script src="/src/main.tsx" type="module"></script>
+  </head>
+  <body>
+    <div id="root" data-feather-root="">
+      <div class="feather-splash">
+        <div style="margin-bottom: 0.75rem; display: flex; justify-content: center;">
+          <svg width="36" height="36" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #1a1718;">
+            <line x1="3" y1="17" x2="3" y2="11" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="3" y1="7" x2="3" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="10" y1="17" x2="10" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="10" y1="5" x2="10" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="17" y1="17" x2="17" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <line x1="17" y1="9" x2="17" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <circle cx="3" cy="9" r="2" fill="currentColor" />
+            <circle cx="10" cy="7" r="2" fill="currentColor" />
+            <circle cx="17" cy="11" r="2" fill="currentColor" />
+          </svg>
+        </div>
+        <div style="font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em;">Feather</div>
+        <div style="font-size: 0.75rem; color: #78716c; margin-top: 0.25rem;">Voice-First Cycle Companion</div>
+        <div class="feather-splash-spinner"></div>
+      </div>
+    </div>
+  </body>
+</html>
