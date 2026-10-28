@@ -9,6 +9,6 @@
     "strict": false,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["api/**/*", "ai/**/*", "client/src/**/*"],
-  "exclude": ["server", "node_modules", "dist"]
+  "include": ["api-src/**/*", "ai/**/*", "client/src/**/*"],
+  "exclude": ["api", "server", "node_modules", "dist"]
 }

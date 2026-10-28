@@ -211,16 +211,16 @@ feather/
 │   ├── transcribe.ts
 │   └── vision.ts
 ├── api/                      # Self-contained bundled serverless functions (Vercel)
-├── client/                   # React 19 + TypeScript + Tailwind v4 frontend
+├── client/                   # React 19 + TypeScript + Tailwind v4 multi-page SPA
 │   ├── public/               # Public assets (icon.webp, manifest.json)
 │   ├── src/
-│   │   ├── App.tsx           # Hero flow: Voice capture, Accession Slip, Overlap Forecast, Judge Demo
-│   │   ├── CreditsModal.tsx  # Settings: Open-weight toggle, Web Speech toggle, Backup
-│   │   ├── DeveloperDocsModal.tsx # In-app system architecture & guardrail documentation
-│   │   ├── LiquidGlassSidebar.tsx # Mobile dock navigation & desktop sidebar
-│   │   ├── cycleStorage.ts   # Local vault engine (synthetic demo data, average cycle estimation)
-│   │   ├── main.tsx          # React root entry point
-│   │   └── theme.css         # Liquid Glass CSS design tokens & animations
+│   │   ├── components/       # Reusable UI (Sidebar, AppLayout, PageHeader, EmptyState, ConfirmDialog)
+│   │   ├── context/          # CycleContext (shared vault data, backup, synthesis, and preferences)
+│   │   ├── pages/            # Multi-page views (Dashboard, VoiceFlow, Vault, Chronicle, Insights, Scanner, Settings)
+│   │   ├── cycleStorage.ts   # Local vault engine (on-device localStorage, average cycle estimation)
+│   │   ├── App.tsx           # React Router route definitions
+│   │   ├── main.tsx          # React root entry point with ErrorBoundary & QueryClient
+│   │   └── theme.css         # Liquid Glass CSS design tokens, ambient aura, & animations
 │   └── index.html            # App entry point
 ├── scripts/
 │   └── bundle-api.mjs        # Esbuild standalone serverless bundler

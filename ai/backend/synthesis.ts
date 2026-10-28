@@ -9,10 +9,11 @@ import milestonesData from "./milestonesData";
 
 export interface SynthesisTelemetry {
   model: string;
-  provider: "Baseten" | "Meta Model API" | "Client Fallback";
+  provider: "Baseten" | "Baseten Bridge" | "Meta Model API" | "Client Fallback";
   tokensEstimated: number;
   latencyMs: number;
   reasoningPasses: number;
+  isLiveApi?: boolean;
 }
 
 export interface MilestoneForecast {

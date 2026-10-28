@@ -21,7 +21,7 @@ for (const sample of HOLDOUT_SAMPLES) {
       text: sample.text,
       expected: sample.expectedRefusal,
       actual: result.isRefusal,
-      reason: result.matchedCategory || "none",
+      reason: (result as any).matchedCategory || "none",
     });
   }
 }

@@ -58,23 +58,43 @@ html, body {
 }
 
 /* ========================================================
-   FEATHER SIGNATURE LIQUID GLASS CONVEX LENS SYSTEM
+   FEATHER AMBIENT AURA & LIQUID GLASS CONVEX SYSTEM
    - 120Hz Hardware Accelerated (Zero CPU/GPU Blur Thrashing)
    - Deep 3D Convex Refraction (Dual Specular Inset Shadows)
    - Prismatic Rim Light Layer
    - Silky 120 FPS Mobile & Desktop Smoothness
    ======================================================== */
 
+.feather-aura-bg {
+  background-color: #faf9f6;
+  position: relative;
+  min-height: 100vh;
+}
+
+.feather-aura-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: 
+    radial-gradient(circle at 12% 15%, rgba(218, 167, 210, 0.14) 0%, transparent 40%),
+    radial-gradient(circle at 88% 18%, rgba(169, 186, 209, 0.16) 0%, transparent 45%),
+    radial-gradient(circle at 50% 65%, rgba(237, 233, 254, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 80% 85%, rgba(247, 233, 244, 0.15) 0%, transparent 42%);
+  z-index: 0;
+  transform: translateZ(0);
+}
+
 /* Floating Navigation Bars Only (Top Bar, Bottom Dock, Sidebar) */
 .liquid-glass-lens {
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 
-    inset 3px 3px 5px rgba(220, 220, 225, 0.5),
-    inset -3px -3px 5px #ffffff,
-    0 10px 28px -4px rgba(0, 0, 0, 0.06),
+    inset 2px 2px 4px rgba(220, 220, 225, 0.5),
+    inset -2px -2px 4px #ffffff,
+    0 10px 28px -4px rgba(0, 0, 0, 0.05),
     0 2px 5px 0 rgba(0, 0, 0, 0.02);
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -113,11 +133,11 @@ html, body {
 }
 
 .liquid-glass-lens:hover {
-  background-color: rgba(255, 255, 255, 0.92);
+  background-color: rgba(255, 255, 255, 0.9);
   box-shadow: 
-    inset 3px 3px 5px rgba(210, 210, 220, 0.6),
-    inset -3px -3px 5px #ffffff,
-    0 16px 36px -4px rgba(0, 0, 0, 0.08);
+    inset 2px 2px 5px rgba(210, 210, 220, 0.6),
+    inset -2px -2px 5px #ffffff,
+    0 14px 32px -4px rgba(0, 0, 0, 0.07);
 }
 
 /* Specular Rim Light Edge Layer */
@@ -137,14 +157,14 @@ html, body {
 
 /* Island Floating Modals */
 .liquid-glass-island {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 3px 3px 5px rgba(220, 220, 225, 0.5),
-    inset -3px -3px 5px #ffffff,
-    0 20px 45px -10px rgba(0, 0, 0, 0.08);
+    inset 2px 2px 4px rgba(220, 220, 225, 0.5),
+    inset -2px -2px 4px #ffffff,
+    0 18px 40px -8px rgba(0, 0, 0, 0.07);
   transform: translateZ(0);
 }
 
@@ -162,60 +182,74 @@ html, body {
   z-index: 10;
 }
 
-/* In-Page Content Glass Cards (Zero Blur Thrashing — 120Hz Pure Speed) */
+/* In-Page Content Glass Cards (Authentic Frosted Glass, 120Hz Pure Speed) */
 .liquid-glass-card {
-  background-color: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.88);
   box-shadow: 
-    inset 2px 2px 4px rgba(220, 220, 225, 0.45),
-    inset -2px -2px 4px #ffffff,
-    0 8px 24px -4px rgba(0, 0, 0, 0.04),
-    0 1px 3px 0 rgba(0, 0, 0, 0.02);
+    inset 1.5px 1.5px 3px rgba(220, 220, 225, 0.4),
+    inset -1.5px -1.5px 3px #ffffff,
+    0 6px 20px -3px rgba(0, 0, 0, 0.035),
+    0 1px 2px 0 rgba(0, 0, 0, 0.015);
   transform: translateZ(0);
+  backface-visibility: hidden;
   transition: transform 0.15s ease,
               box-shadow 0.15s ease,
               background-color 0.15s ease;
 }
 
 .liquid-glass-card:hover {
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.88);
   box-shadow: 
-    inset 2px 2px 4px rgba(210, 210, 220, 0.55),
-    inset -2px -2px 4px #ffffff,
-    0 12px 28px -4px rgba(0, 0, 0, 0.06);
+    inset 1.5px 1.5px 3px rgba(210, 210, 220, 0.5),
+    inset -1.5px -1.5px 3px #ffffff,
+    0 10px 24px -4px rgba(0, 0, 0, 0.05);
 }
 
 /* Liquid Glass Interactive Pill Controls */
 .liquid-glass-pill {
-  background-color: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.95);
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 
-    inset 1px 1px 2px rgba(220, 220, 225, 0.45),
+    inset 1px 1px 2px rgba(220, 220, 225, 0.4),
     inset -1px -1px 2px #ffffff,
-    0 2px 8px -1px rgba(0, 0, 0, 0.04);
+    0 2px 6px -1px rgba(0, 0, 0, 0.03);
   border-radius: 9999px;
   transform: translateZ(0);
+  backface-visibility: hidden;
   transition: transform 0.12s ease,
               background-color 0.12s ease,
               box-shadow 0.12s ease;
 }
 
 .liquid-glass-pill:hover {
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 1px 1px 2px rgba(210, 210, 220, 0.55),
+    inset 1px 1px 2px rgba(210, 210, 220, 0.5),
     inset -1px -1px 2px #ffffff,
-    0 4px 12px -1px rgba(0, 0, 0, 0.06);
+    0 4px 10px -1px rgba(0, 0, 0, 0.05);
 }
 
 /* Liquid Glass Input / Text Box */
 .liquid-glass-input {
-  background-color: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.98);
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(220, 218, 214, 0.65);
   box-shadow: 
-    inset 2px 2px 4px rgba(215, 215, 220, 0.4),
-    inset -2px -2px 4px #ffffff,
-    0 2px 6px rgba(0, 0, 0, 0.02);
+    inset 1.5px 1.5px 3px rgba(215, 215, 220, 0.35),
+    inset -1.5px -1.5px 3px #ffffff,
+    0 2px 4px rgba(0, 0, 0, 0.015);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.liquid-glass-input:focus {
+  border-color: rgba(124, 58, 237, 0.6);
+  background-color: #ffffff;
 }
 
 /* Liquid Glass Dark Button (Primary CTA) */
