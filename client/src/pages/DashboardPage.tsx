@@ -128,14 +128,28 @@ export function DashboardPage() {
           {/* Key Cycle Statistics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-sans text-xs font-medium text-stone-500 block">
-                Next Estimate
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="font-sans text-xs font-medium text-stone-500">
+                  Next Estimate
+                </span>
+                {stats.predictionStatus === "overdue" && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-amber-100 text-amber-800">
+                    Past Expected
+                  </span>
+                )}
+                {stats.predictionStatus === "provisional" && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-stone-100 text-stone-600">
+                    Provisional
+                  </span>
+                )}
+              </div>
               <div className="font-serif text-2xl font-semibold text-stone-900">
                 {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate).split(",")[0] : "Estimating"}
               </div>
               <span className="font-sans text-[11px] text-violet-700 font-medium block">
-                {daysUntilNext != null
+                {stats.earliestNextDate && stats.latestNextDate
+                  ? `Window: ${prettyDate(stats.earliestNextDate).split(",")[0]} – ${prettyDate(stats.latestNextDate).split(",")[0]}`
+                  : daysUntilNext != null
                   ? daysUntilNext > 0
                     ? `In ~${daysUntilNext} days`
                     : daysUntilNext === 0
@@ -150,10 +164,10 @@ export function DashboardPage() {
                 Cycle Length
               </span>
               <div className="font-serif text-2xl font-semibold text-stone-900">
-                {stats.avgCycleLength}d
+                {stats.medianCycleLength || stats.avgCycleLength}d
               </div>
               <span className="font-sans text-[11px] text-stone-500 block">
-                {stats.isDefaultCycle ? "Default estimate" : "Calculated average"}
+                {stats.isDefaultCycle ? "Population baseline (28d)" : "Observed median"}
               </span>
             </div>
 
@@ -165,7 +179,7 @@ export function DashboardPage() {
                 {stats.avgPeriodLength}d
               </div>
               <span className="font-sans text-[11px] text-stone-500 block">
-                {stats.isDefaultPeriod ? "Default estimate" : "Historical average"}
+                {stats.isDefaultPeriod ? "Default estimate (5d)" : "Observed average"}
               </span>
             </div>
 

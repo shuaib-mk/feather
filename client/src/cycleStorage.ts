@@ -2,6 +2,15 @@
 // Preserves user-confirmed entries with 100% offline persistence.
 // Zero server-side database and zero third-party analytics.
 
+import {
+  getCycleStatistics,
+  getPrediction,
+  getDailyStatus,
+  type PeriodRecord,
+  type Prediction,
+  type CycleStatistics,
+} from "./lib/periodEngine";
+
 export interface Period {
   id: number;
   startDate: string; // YYYY-MM-DD
@@ -33,6 +42,16 @@ export interface CycleStats {
   currentPeriod?: Period | null;
   nextPeriodDate?: string | null;
   cycleDay?: number | null;
+
+  // Domain Engine Ground Truth Fields
+  prediction?: Prediction;
+  statistics?: CycleStatistics;
+  medianCycleLength?: number | null;
+  earliestNextDate?: string | null;
+  latestNextDate?: string | null;
+  confidence?: Prediction["confidence"];
+  predictionStatus?: Prediction["status"];
+  predictionReason?: string;
 }
 
 export const OVERLAP_DISCLAIMER =
@@ -210,52 +229,51 @@ export function deletePeriodEntry(id: number): void {
 }
 
 /**
- * Minimal cycle calculation based on user's confirmed entries.
- * Defaults to 28-day cycle length and 5-day flow length if insufficient data.
- * Clearly flags defaults as estimates.
+ * Converts stored Period array into domain engine PeriodRecord array.
+ */
+function toPeriodRecords(periods: Period[]): PeriodRecord[] {
+  return (periods || []).map((p) => ({
+    id: String(p.id),
+    startDate: p.startDate,
+    endDate: p.endDate || undefined,
+    confirmed: true,
+    source: "manual",
+    landmarkName: p.landmarkName || null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
+/**
+ * Robust menstrual cycle domain calculation powered by Feather Period Engine.
+ * Calculates median cycle length, Median Absolute Deviation (MAD) uncertainty windows,
+ * and tracks clinical quality metrics without inventing missing data.
  */
 export function computeCycleStats(periods: Period[]): CycleStats {
+  const today = todayStr();
+
   if (!periods || periods.length === 0) {
+    const emptyPred = getPrediction([], today);
     return {
       hasData: false,
       avgCycleLength: 28,
       avgPeriodLength: 5,
       isDefaultCycle: true,
       isDefaultPeriod: true,
+      prediction: emptyPred,
+      predictionStatus: emptyPred.status,
+      confidence: emptyPred.confidence,
+      predictionReason: emptyPred.reason,
     };
   }
 
+  const records = toPeriodRecords(periods);
+  const stats = getCycleStatistics(records);
+  const prediction = getPrediction(records, today);
+  const daily = getDailyStatus(records, [], today);
+
   const sorted = [...periods].sort((a, b) => a.startDate.localeCompare(b.startDate));
-  const cycleLengths: number[] = [];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1];
-    const curr = sorted[i];
-    if (prev && curr) {
-      const diff = diffDays(prev.startDate, curr.startDate);
-      if (diff >= 18 && diff <= 60) cycleLengths.push(diff);
-    }
-  }
-
-  const hasCycleData = cycleLengths.length > 0;
-  const avgCycleLength = hasCycleData
-    ? Math.round(cycleLengths.reduce((a, b) => a + b, 0) / cycleLengths.length)
-    : 28;
-
-  const periodLengths = sorted
-    .filter((p) => p.endDate)
-    .map((p) => diffDays(p.startDate, p.endDate!) + 1)
-    .filter((l) => l >= 2 && l <= 10);
-
-  const hasPeriodData = periodLengths.length > 0;
-  const avgPeriodLength = hasPeriodData
-    ? Math.round(periodLengths.reduce((a, b) => a + b, 0) / periodLengths.length)
-    : 5;
-
   const latest = sorted[sorted.length - 1];
-  const today = todayStr();
-  const nextPeriodDate = latest ? addDays(latest.startDate, avgCycleLength) : null;
-  const cycleDay = latest ? diffDays(latest.startDate, today) + 1 : null;
 
   let currentPeriod: Period | null = null;
   if (latest && latest.startDate <= today) {
@@ -264,16 +282,27 @@ export function computeCycleStats(periods: Period[]): CycleStats {
     }
   }
 
+  const avgCycle = stats.medianCycleLength || stats.averageCycleLength || 28;
+  const avgPeriod = stats.averageBleedingDuration || 5;
+
   return {
     hasData: true,
-    avgCycleLength,
-    avgPeriodLength,
-    isDefaultCycle: !hasCycleData,
-    isDefaultPeriod: !hasPeriodData,
+    avgCycleLength: avgCycle,
+    avgPeriodLength: avgPeriod,
+    isDefaultCycle: stats.completedCycleCount === 0,
+    isDefaultPeriod: stats.averageBleedingDuration === null,
     lastPeriodStart: latest?.startDate || null,
     currentPeriod,
-    nextPeriodDate,
-    cycleDay: cycleDay != null && cycleDay > 0 ? cycleDay : null,
+    nextPeriodDate: prediction.expectedStart,
+    cycleDay: daily.cycleDay,
+    prediction,
+    statistics: stats,
+    medianCycleLength: stats.medianCycleLength,
+    earliestNextDate: prediction.earliestStart,
+    latestNextDate: prediction.latestStart,
+    confidence: prediction.confidence,
+    predictionStatus: prediction.status,
+    predictionReason: prediction.reason,
   };
 }
 
