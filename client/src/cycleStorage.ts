@@ -6,6 +6,11 @@ import {
   getCycleStatistics,
   getPrediction,
   getDailyStatus,
+  toDate,
+  dateKey,
+  addDays as engineAddDays,
+  dayDifference,
+  validateRecords,
   type PeriodRecord,
   type Prediction,
   type CycleStatistics,
@@ -61,50 +66,66 @@ const STORAGE_KEY = "feather_cycle_vault_v1";
 const LAST_EXPORT_KEY = "feather_last_export_ts";
 const ENTRIES_SINCE_EXPORT_KEY = "feather_entries_since_export";
 
+const inMemoryVault = new Map<string, string>();
+
 function safeGetItem(key: string): string | null {
   try {
-    return typeof window !== "undefined" && window.localStorage ? window.localStorage.getItem(key) : null;
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+    if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) {
+      return (globalThis as any).localStorage.getItem(key);
+    }
   } catch {
-    return null;
+    // fallback
   }
+  return inMemoryVault.get(key) ?? null;
 }
 
 function safeSetItem(key: string, value: string): void {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem(key, value);
+      return;
+    }
+    if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) {
+      (globalThis as any).localStorage.setItem(key, value);
+      return;
     }
   } catch {
     // ignore quota or private browsing restriction
   }
+  inMemoryVault.set(key, value);
 }
 
-const DAY_MS = 86400000;
 
+/**
+ * Parses calendar date string in YYYY-MM-DD format using strict UTC roundtrip.
+ */
 export function parseDate(s: string): Date {
-  const [y = 1970, m = 1, d = 1] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
+  return toDate(s);
 }
 
 export function fmtDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return dateKey(d);
 }
 
+/**
+ * Adds an integer number of calendar days, completely immune to DST and timezone drift.
+ */
 export function addDays(s: string, n: number): string {
-  const d = parseDate(s);
-  d.setTime(d.getTime() + n * DAY_MS);
-  return fmtDate(d);
+  return engineAddDays(s, n);
 }
 
+/**
+ * Computes calendar day difference (b - a).
+ */
 export function diffDays(a: string, b: string): number {
-  return Math.round((parseDate(b).getTime() - parseDate(a).getTime()) / DAY_MS);
+  return dayDifference(a, b);
 }
 
 export function todayStr(): string {
-  return fmtDate(new Date());
+  return dateKey(new Date());
 }
 
 export function prettyDate(s: string): string {
@@ -113,8 +134,10 @@ export function prettyDate(s: string): string {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
+
 
 // Initial sample seed to demonstrate landmark recall immediately on first launch
 const INITIAL_DATA: { periods: Period[]; logs: DayLog[] } = {
@@ -178,6 +201,14 @@ export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): void
 }
 
 export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }): Period {
+  toDate(period.startDate);
+  if (period.endDate) {
+    toDate(period.endDate);
+    if (period.endDate < period.startDate) {
+      throw new Error(`End date precedes start date: ${period.startDate} to ${period.endDate}`);
+    }
+  }
+
   const data = loadCycleData();
   const id = period.id || Date.now();
   const newPeriod: Period = {
@@ -187,19 +218,25 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
   };
 
   const existingIdx = data.periods.findIndex((p) => p.id === id || p.startDate === period.startDate);
+  const candidatePeriods = [...data.periods];
   if (existingIdx >= 0) {
-    data.periods[existingIdx] = newPeriod;
+    candidatePeriods[existingIdx] = newPeriod;
   } else {
-    data.periods.push(newPeriod);
+    candidatePeriods.push(newPeriod);
   }
 
-  data.periods.sort((a, b) => b.startDate.localeCompare(a.startDate));
+  // Pre-commit validation against domain rules (rejects duplicate start dates, overlaps, invalid dates)
+  validateRecords(toPeriodRecords(candidatePeriods));
+
+  candidatePeriods.sort((a, b) => b.startDate.localeCompare(a.startDate));
+  data.periods = candidatePeriods;
   saveCycleData(data);
   incrementEntriesSinceExport();
   return newPeriod;
 }
 
 export function addOrUpdateLog(log: Omit<DayLog, "id"> & { id?: number }): DayLog {
+  toDate(log.logDate);
   const data = loadCycleData();
   const id = log.id || Date.now();
   const newLog: DayLog = { ...log, id };
@@ -215,6 +252,7 @@ export function addOrUpdateLog(log: Omit<DayLog, "id"> & { id?: number }): DayLo
   saveCycleData(data);
   return newLog;
 }
+
 
 export function deleteDayLog(logDate: string): void {
   const data = loadCycleData();
@@ -337,24 +375,22 @@ export function evaluateOverlaps(
       overlapLabel = "Unlikely to overlap (estimate)";
       overlapNote = "Based on your pattern, your period is not expected to overlap this date.";
 
-      const lastDate = new Date(lastStart);
       for (let k = 1; k <= 12; k++) {
-        const predStart = new Date(lastDate.getTime() + avgCycle * k * DAY_MS);
-        const coreEnd = new Date(predStart.getTime() + (avgPeriod - 1) * DAY_MS);
-        const winStart = new Date(predStart.getTime() - 3 * DAY_MS);
-        const winEnd = new Date(coreEnd.getTime() + 3 * DAY_MS);
+        const predStart = addDays(lastStart, Math.round(avgCycle * k));
+        const coreEnd = addDays(predStart, Math.max(0, Math.round(avgPeriod - 1)));
+        const winStart = addDays(predStart, -3);
+        const winEnd = addDays(coreEnd, 3);
 
-        const evDate = new Date(ev.date);
-        if (evDate >= predStart && evDate <= coreEnd) {
+        if (ev.date >= predStart && ev.date <= coreEnd) {
           overlap = "likely";
           overlapLabel = "Likely overlap";
-          overlapNote = `Your period is predicted around ${predStart.toISOString().slice(0, 10)} to ${coreEnd.toISOString().slice(0, 10)}, so it will very likely overlap.`;
+          overlapNote = `Your period is predicted around ${predStart} to ${coreEnd}, so it will very likely overlap.`;
           break;
         }
-        if (evDate >= winStart && evDate <= winEnd) {
+        if (ev.date >= winStart && ev.date <= winEnd) {
           overlap = "possible";
           overlapLabel = "Possible overlap";
-          overlapNote = `This date falls in your wider prediction window (${winStart.toISOString().slice(0, 10)} to ${winEnd.toISOString().slice(0, 10)}). Overlap is possible.`;
+          overlapNote = `This date falls in your wider prediction window (${winStart} to ${winEnd}). Overlap is possible.`;
           break;
         }
       }
@@ -425,16 +461,60 @@ export function exportCycleDataJSON(): string {
 export function importCycleDataJSON(jsonStr: string): { success: boolean; count: number; error?: string } {
   try {
     const parsed = JSON.parse(jsonStr);
-    const periods = Array.isArray(parsed.periods) ? parsed.periods : [];
-    const logs = Array.isArray(parsed.logs) ? parsed.logs : [];
+    const rawPeriods = Array.isArray(parsed.periods) ? parsed.periods : [];
+    const rawLogs = Array.isArray(parsed.logs) ? parsed.logs : [];
 
-    if (periods.length === 0 && logs.length === 0) {
+    if (rawPeriods.length === 0 && rawLogs.length === 0) {
       return { success: false, count: 0, error: "No valid periods or logs found in file." };
     }
 
-    saveCycleData({ periods, logs });
+    const validPeriods: Period[] = [];
+    for (const p of rawPeriods) {
+      if (!p || typeof p.startDate !== "string") continue;
+      try {
+        toDate(p.startDate);
+        if (p.endDate) {
+          toDate(p.endDate);
+          if (p.endDate < p.startDate) continue;
+        }
+        validPeriods.push({
+          id: typeof p.id === "number" ? p.id : Date.now() + Math.floor(Math.random() * 100000),
+          startDate: p.startDate,
+          endDate: p.endDate || null,
+          landmarkName: p.landmarkName || null,
+          isApproximate: Boolean(p.isApproximate),
+        });
+      } catch {
+        // Skip malformed entries
+      }
+    }
+
+    // Validate period relationships (e.g. overlaps, duplicate starts)
+    validateRecords(toPeriodRecords(validPeriods));
+
+    const validLogs: DayLog[] = [];
+    for (const l of rawLogs) {
+      if (!l || typeof l.logDate !== "string") continue;
+      try {
+        toDate(l.logDate);
+        validLogs.push({
+          id: typeof l.id === "number" ? l.id : Date.now() + Math.floor(Math.random() * 100000),
+          logDate: l.logDate,
+          flow: l.flow || null,
+          symptoms: Array.isArray(l.symptoms) ? l.symptoms : [],
+          mood: l.mood || null,
+          energy: typeof l.energy === "number" ? l.energy : null,
+          sleepHours: typeof l.sleepHours === "number" ? l.sleepHours : null,
+          notes: l.notes || null,
+        });
+      } catch {
+        // Skip malformed log
+      }
+    }
+
+    saveCycleData({ periods: validPeriods, logs: validLogs });
     recordExportTimestamp();
-    return { success: true, count: periods.length + logs.length };
+    return { success: true, count: validPeriods.length + validLogs.length };
   } catch (e: any) {
     return { success: false, count: 0, error: e.message || "Invalid JSON backup file." };
   }

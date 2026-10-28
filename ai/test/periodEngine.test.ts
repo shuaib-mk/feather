@@ -1,25 +1,45 @@
 /**
- * Feather Period Engine — Acceptance Test Suite
+ * Feather Period Engine — Comprehensive Verification & Acceptance Test Suite
  *
- * Verifies all 11 core domain invariants:
- * 1. No recorded period -> No fabricated personal prediction
- * 2. One recorded start -> Clearly provisional estimate
- * 3. Two completed cycles -> Historical cycle length available
- * 4. Irregular historical cycles -> Wider uncertainty and lower confidence
- * 5. Unknown period end -> Duration remains unknown
- * 6. Duplicate start date -> Validation error
- * 7. Invalid calendar date -> Rejected
- * 8. Corrected historical date -> All dependent statistics and estimates recalculate
- * 9. New period recorded -> New cycle begins; old overdue state disappears
- * 10. Date crosses month/year boundary -> Correct date arithmetic
- * 11. Offline mode -> Core calculations work without network access
+ * Verifies all 20 required domain test cases and 7 mathematical invariants:
+ *  1. Empty history -> 'no-data' state
+ *  2. First-ever period -> 'provisional' state
+ *  3. One completed cycle -> personalized history begins
+ *  4. Multiple completed cycles -> robust median estimation
+ *  5. Stable vs highly variable cycle histories (MAD calculation)
+ *  6. Unusually short, long, and anomalous cycles
+ *  7. Duplicate IDs and duplicate start dates rejected
+ *  8. Invalid dates and reversed intervals rejected
+ *  9. Overlapping period records rejected
+ * 10. Unknown period end dates handled without fabrication
+ * 11. Explicit daily observations overriding interval bleeding
+ * 12. Record creation, editing, deletion, and correction
+ * 13. Future-dated records do not corrupt earlier predictions
+ * 14. Predictions before, on, and after the expected date
+ * 15. Correct clearing of overdue status upon new period
+ * 16. Leap years, month boundaries, and year boundaries
+ * 17. Timezone independence of calendar date arithmetic
+ * 18. Persistence, import, and migration edge cases
+ * 19. Calendar and dashboard consistency
+ * 20. Idempotent submission and retry handling
+ *
+ * Plus 7 Domain Invariants:
+ *  I1. Date arithmetic inverse consistency
+ *  I2. Cycle length equals consecutive start date difference
+ *  I3. Deterministic reproducibility
+ *  I4. Corrections propagate to all derived outputs
+ *  I5. Unconfirmed records never influence predictions
+ *  I6. Historical records immutability during calculation
+ *  I7. Calendar and dashboard prediction agreement
  */
 
 import {
   FeatherEngine,
   toDate,
+  dateKey,
   addDays,
   dayDifference,
+  median,
   validateRecords,
   reconstructCycles,
   getCycleStatistics,
@@ -31,8 +51,21 @@ import {
   type DailyObservation,
 } from "../../client/src/lib/periodEngine";
 
-async function runAcceptanceTests() {
-  console.log("=== Running Feather Menstrual Domain Engine Acceptance Tests ===\n");
+import {
+  addOrUpdatePeriod,
+  addOrUpdateLog,
+  loadCycleData,
+  saveCycleData,
+  importCycleDataJSON,
+  computeCycleStats,
+  type Period,
+} from "../../client/src/cycleStorage";
+
+async function runAllTests() {
+  console.log("==================================================================");
+  console.log("=== Feather Menstrual Cycle Domain Engine: Full Verification ===");
+  console.log("==================================================================\n");
+
   let passed = 0;
   let failed = 0;
 
@@ -46,31 +79,35 @@ async function runAcceptanceTests() {
     }
   }
 
-  // -------------------------------------------------------------
-  // Scenario 1: No recorded period -> No fabricated personal prediction
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 1. Empty History
+  // ==================================================================
   try {
-    const emptyEngine = new FeatherEngine([], []);
-    const pred = emptyEngine.getPrediction("2026-10-28");
+    const engine = new FeatherEngine([], []);
+    const pred = engine.getPrediction("2026-10-28");
+    const stats = engine.getCycleStatistics();
+
     assert(
       pred.status === "no-data" &&
         pred.expectedStart === null &&
         pred.earliestStart === null &&
         pred.latestStart === null &&
         pred.confidence === "none" &&
-        pred.cyclesUsed === 0,
-      "Scenario 1: No recorded period -> No fabricated personal prediction",
+        pred.cyclesUsed === 0 &&
+        stats.completedCycleCount === 0 &&
+        stats.averageCycleLength === null,
+      "Test 1: Empty history returns no-data state without fabricated predictions",
       `status=${pred.status}, confidence=${pred.confidence}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 1: No recorded period", err.message);
+    assert(false, "Test 1: Empty history", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 2: One recorded start -> Clearly provisional estimate
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 2. First-Ever Period
+  // ==================================================================
   try {
-    const onePeriod: PeriodRecord[] = [
+    const single: PeriodRecord[] = [
       {
         id: "p1",
         startDate: "2026-10-01",
@@ -80,283 +117,655 @@ async function runAcceptanceTests() {
         updatedAt: "2026-10-01T00:00:00Z",
       },
     ];
-    const engine = new FeatherEngine(onePeriod, []);
-    const predBefore = engine.getPrediction("2026-10-15");
-    assert(
-      predBefore.status === "provisional" &&
-        predBefore.expectedStart === "2026-10-29" && // 2026-10-01 + 28
-        predBefore.earliestStart === "2026-10-25" &&
-        predBefore.latestStart === "2026-11-02" &&
-        predBefore.confidence === "low" &&
-        predBefore.cyclesUsed === 0,
-      "Scenario 2A: One recorded start -> Clearly provisional estimate",
-      `expected=${predBefore.expectedStart}, status=${predBefore.status}`,
-    );
+    const engine = new FeatherEngine(single, []);
+    const pred = engine.getPrediction("2026-10-15");
 
-    // Overdue check
-    const predOverdue = engine.getPrediction("2026-11-05");
     assert(
-      predOverdue.status === "overdue" && predOverdue.confidence === "low",
-      "Scenario 2B: One recorded start elapsed -> Overdue provisional",
-      `status=${predOverdue.status}`,
+      pred.status === "provisional" &&
+        pred.expectedStart === "2026-10-29" && // 2026-10-01 + 28d default
+        pred.earliestStart === "2026-10-25" &&
+        pred.latestStart === "2026-11-02" &&
+        pred.confidence === "low" &&
+        pred.cyclesUsed === 0,
+      "Test 2: First-ever period returns provisional estimate anchored to default interval",
+      `expected=${pred.expectedStart}, status=${pred.status}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 2: One recorded start", err.message);
+    assert(false, "Test 2: First-ever period", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 3: Two completed cycles -> Historical cycle length available
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 3. One Completed Cycle
+  // ==================================================================
   try {
-    // 3 starts = 2 completed cycles: Aug 1 to Aug 29 (28d), Aug 29 to Sep 26 (28d)
     const records: PeriodRecord[] = [
       { id: "p1", startDate: "2026-08-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
       { id: "p2", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-      { id: "p3", startDate: "2026-09-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
     ];
     const engine = new FeatherEngine(records, []);
     const stats = engine.getCycleStatistics();
-    const pred = engine.getPrediction("2026-10-10");
+    const pred = engine.getPrediction("2026-09-10");
 
     assert(
-      stats.completedCycleCount === 2 &&
-        stats.averageCycleLength === 28 &&
-        stats.medianCycleLength === 28 &&
+      stats.completedCycleCount === 1 &&
+        stats.cycles[0].lengthDays === 28 &&
+        stats.cycles[0].quality === "valid" &&
         pred.status === "estimated" &&
-        pred.expectedStart === "2026-10-24" &&
-        pred.cyclesUsed === 2 &&
-        pred.confidence === "limited",
-      "Scenario 3: Two completed cycles -> Historical length available",
+        pred.expectedStart === "2026-09-26" && // 2026-08-29 + 28d
+        pred.cyclesUsed === 1 &&
+        pred.confidence === "low", // 1 cycle history = low confidence
+      "Test 3: One completed cycle provides personalized estimate with honest confidence",
       `completed=${stats.completedCycleCount}, expected=${pred.expectedStart}, confidence=${pred.confidence}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 3: Two completed cycles", err.message);
+    assert(false, "Test 3: One completed cycle", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 4: Irregular historical cycles -> Wider uncertainty and lower confidence
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 4. Multiple Completed Cycles
+  // ==================================================================
   try {
-    // Cycles: 24d, 35d, 22d, 36d (highly variable)
-    const irregular: PeriodRecord[] = [
+    // 5 starts = 4 completed cycles: all 28 days
+    const records: PeriodRecord[] = [
       { id: "p1", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-      { id: "p2", startDate: "2026-05-25", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 24d
-      { id: "p3", startDate: "2026-06-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 35d
-      { id: "p4", startDate: "2026-07-21", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 22d
-      { id: "p5", startDate: "2026-08-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 36d
+      { id: "p2", startDate: "2026-05-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p3", startDate: "2026-06-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p4", startDate: "2026-07-24", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p5", startDate: "2026-08-21", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
     ];
-    const engine = new FeatherEngine(irregular, []);
+    const engine = new FeatherEngine(records, []);
     const stats = engine.getCycleStatistics();
     const pred = engine.getPrediction("2026-09-01");
 
-    const margin = dayDifference(pred.expectedStart!, pred.latestStart!);
     assert(
-      stats.shortestCycle === 22 &&
-        stats.longestCycle === 36 &&
-        margin >= 6 && // Wider uncertainty margin
-        (pred.confidence === "limited" || pred.confidence === "low"),
-      "Scenario 4: Irregular cycles -> Wider uncertainty window",
-      `shortest=${stats.shortestCycle}, longest=${stats.longestCycle}, margin=±${margin} days, confidence=${pred.confidence}`,
+      stats.completedCycleCount === 4 &&
+        stats.medianCycleLength === 28 &&
+        pred.status === "estimated" &&
+        pred.expectedStart === "2026-09-18" &&
+        pred.confidence === "moderate" && // 4 cycles with mad=0 reaches moderate
+        pred.cyclesUsed === 4,
+      "Test 4: Multiple completed regular cycles yield moderate confidence prediction",
+      `completed=${stats.completedCycleCount}, expected=${pred.expectedStart}, confidence=${pred.confidence}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 4: Irregular historical cycles", err.message);
+    assert(false, "Test 4: Multiple completed cycles", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 5: Unknown period end -> Duration remains unknown
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 5. Stable vs Highly Variable Cycle Histories (MAD Margin)
+  // ==================================================================
   try {
-    const unknownEndRecords: PeriodRecord[] = [
-      { id: "p1", startDate: "2026-09-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // no endDate
-      { id: "p2", startDate: "2026-09-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // no endDate
+    const stableRecords: PeriodRecord[] = [
+      { id: "s1", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "s2", startDate: "2026-05-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "s3", startDate: "2026-06-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "s4", startDate: "2026-07-24", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
     ];
-    const engine = new FeatherEngine(unknownEndRecords, []);
-    const stats = engine.getCycleStatistics();
+    const variableRecords: PeriodRecord[] = [
+      { id: "v1", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "v2", startDate: "2026-05-23", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 22d
+      { id: "v3", startDate: "2026-06-28", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 36d
+      { id: "v4", startDate: "2026-07-20", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 22d
+      { id: "v5", startDate: "2026-08-25", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 36d
+    ];
+
+    const stablePred = new FeatherEngine(stableRecords).getPrediction("2026-08-01");
+    const variablePred = new FeatherEngine(variableRecords).getPrediction("2026-09-01");
+
+    const stableMargin = dayDifference(stablePred.expectedStart!, stablePred.latestStart!);
+    const variableMargin = dayDifference(variablePred.expectedStart!, variablePred.latestStart!);
+
     assert(
-      stats.hasUnknownEndDates === true && stats.averageBleedingDuration === null,
-      "Scenario 5: Unknown period end -> Duration remains unknown without fabrication",
-      `hasUnknownEndDates=${stats.hasUnknownEndDates}, avgBleedingDuration=${stats.averageBleedingDuration}`,
+      stableMargin === 3 && variableMargin >= 8 && variablePred.confidence === "limited",
+      "Test 5: MAD uncertainty bounds: stable history has ±3d margin; variable history widens to ±8d+",
+      `stableMargin=±${stableMargin}d, variableMargin=±${variableMargin}d`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 5: Unknown period end", err.message);
+    assert(false, "Test 5: Stable vs variable MAD", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 6: Duplicate start date -> Validation error
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 6. Unusually Short, Long, and Anomalous Cycles
+  // ==================================================================
   try {
-    let duplicateRejected = false;
+    const cyclesRecords: PeriodRecord[] = [
+      { id: "c1", startDate: "2026-01-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "c2", startDate: "2026-01-19", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 18d -> short
+      { id: "c3", startDate: "2026-03-05", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 45d -> long
+      { id: "c4", startDate: "2026-03-12", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 7d -> anomalous (<15d)
+      { id: "c5", startDate: "2026-04-10", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // 29d -> valid
+    ];
+    const engine = new FeatherEngine(cyclesRecords);
+    const stats = engine.getCycleStatistics();
+
+    const shortCycle = stats.cycles.find((c) => c.quality === "short");
+    const longCycle = stats.cycles.find((c) => c.quality === "long");
+    const anomalousCycle = stats.cycles.find((c) => c.quality === "anomalous");
+    const validCycle = stats.cycles.find((c) => c.quality === "valid");
+
+    assert(
+      shortCycle?.lengthDays === 18 &&
+        longCycle?.lengthDays === 45 &&
+        anomalousCycle?.lengthDays === 7 &&
+        validCycle?.lengthDays === 29 &&
+        stats.completedCycleCount === 4 &&
+        stats.eligibleCycleCount === 3 &&
+        stats.excludedForEstimationCount === 1,
+      "Test 6: Cycles classified into valid, short, long, and anomalous; anomalous excluded from estimation",
+      `eligible=${stats.eligibleCycleCount}, excluded=${stats.excludedForEstimationCount}`,
+    );
+  } catch (err: any) {
+    assert(false, "Test 6: Cycle classifications", err.message);
+  }
+
+  // ==================================================================
+  // 7. Duplicate IDs and Duplicate Start Dates Rejected
+  // ==================================================================
+  try {
+    let dupIdCaught = false;
+    let dupStartCaught = false;
+
     try {
       validateRecords([
-        { id: "p1", startDate: "2026-10-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-        { id: "p2", startDate: "2026-10-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+        { id: "dup_id", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+        { id: "dup_id", startDate: "2026-06-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
       ]);
     } catch (e: any) {
-      if (e.message.includes("Duplicate period start date")) {
-        duplicateRejected = true;
-      }
+      if (e.message.includes("Duplicate record ID")) dupIdCaught = true;
     }
-    assert(duplicateRejected, "Scenario 6: Duplicate start date -> Validation error thrown");
+
+    try {
+      validateRecords([
+        { id: "p1", startDate: "2026-07-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+        { id: "p2", startDate: "2026-07-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      ]);
+    } catch (e: any) {
+      if (e.message.includes("Duplicate period start date")) dupStartCaught = true;
+    }
+
+    assert(dupIdCaught && dupStartCaught, "Test 7: Duplicate IDs and duplicate start dates strictly rejected");
   } catch (err: any) {
-    assert(false, "Scenario 6: Duplicate start date", err.message);
+    assert(false, "Test 7: Duplicate IDs and dates", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 7: Invalid calendar date -> Rejected
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 8. Invalid Dates and Reversed Intervals
+  // ==================================================================
   try {
-    let invalidFebRejected = false;
-    let nonexistentMonthRejected = false;
+    let invalidDateCaught = false;
+    let reversedIntervalCaught = false;
+
     try {
       toDate("2026-02-31");
     } catch {
-      invalidFebRejected = true;
+      invalidDateCaught = true;
     }
+
     try {
-      toDate("2026-13-01");
-    } catch {
-      nonexistentMonthRejected = true;
+      validateRecords([
+        {
+          id: "rev1",
+          startDate: "2026-08-10",
+          endDate: "2026-08-05", // endDate before startDate
+          confirmed: true,
+          source: "manual",
+          createdAt: "",
+          updatedAt: "",
+        },
+      ]);
+    } catch (e: any) {
+      if (e.message.includes("End date precedes start date")) reversedIntervalCaught = true;
     }
-    assert(
-      invalidFebRejected && nonexistentMonthRejected,
-      "Scenario 7: Invalid calendar date -> Rejected strictly via UTC roundtrip",
-    );
+
+    assert(invalidDateCaught && reversedIntervalCaught, "Test 8: Invalid calendar dates and reversed intervals rejected");
   } catch (err: any) {
-    assert(false, "Scenario 7: Invalid calendar date", err.message);
+    assert(false, "Test 8: Invalid dates and intervals", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 8: Corrected historical date -> Dependent statistics & estimates recalculate
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 9. Overlapping Records Rejected
+  // ==================================================================
   try {
-    const engine = new FeatherEngine([
+    let overlapCaught = false;
+    try {
+      validateRecords([
+        { id: "p1", startDate: "2026-08-01", endDate: "2026-08-06", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+        { id: "p2", startDate: "2026-08-04", endDate: "2026-08-09", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      ]);
+    } catch (e: any) {
+      if (e.message.includes("Overlapping period records")) overlapCaught = true;
+    }
+
+    assert(overlapCaught, "Test 9: Overlapping confirmed period intervals strictly rejected");
+  } catch (err: any) {
+    assert(false, "Test 9: Overlapping records", err.message);
+  }
+
+  // ==================================================================
+  // 10. Unknown Period End Dates Handled Without Fabrication
+  // ==================================================================
+  try {
+    const unknownEnd: PeriodRecord[] = [
+      { id: "p1", startDate: "2026-09-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-09-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const engine = new FeatherEngine(unknownEnd);
+    const stats = engine.getCycleStatistics();
+    const day1Status = engine.getDailyStatus("2026-09-01");
+    const day3Status = engine.getDailyStatus("2026-09-03"); // no observation, unknown end
+
+    assert(
+      stats.hasUnknownEndDates === true &&
+        stats.averageBleedingDuration === null &&
+        day1Status.bleeding === true && // start day confirmed
+        day3Status.bleeding === null, // subsequent day unknown without explicit observation
+      "Test 10: Unknown end date preserves null duration without fabricating stopped bleeding",
+      `hasUnknown=${stats.hasUnknownEndDates}, avgDuration=${stats.averageBleedingDuration}, day3Bleeding=${day3Status.bleeding}`,
+    );
+  } catch (err: any) {
+    assert(false, "Test 10: Unknown end dates", err.message);
+  }
+
+  // ==================================================================
+  // 11. Explicit Daily Observations Overriding Inferred Bleeding
+  // ==================================================================
+  try {
+    const records: PeriodRecord[] = [
+      { id: "p1", startDate: "2026-10-01", endDate: "2026-10-05", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const obs: DailyObservation[] = [
+      { date: "2026-10-03", bleeding: false }, // user stopped bleeding early or dry day
+      { date: "2026-10-12", bleeding: true, flow: "spotting" }, // mid-cycle spotting
+    ];
+    const engine = new FeatherEngine(records, obs);
+
+    const oct3 = engine.getDailyStatus("2026-10-03");
+    const oct4 = engine.getDailyStatus("2026-10-04");
+    const oct12 = engine.getDailyStatus("2026-10-12");
+
+    assert(
+      oct3.bleeding === false && // explicit non-bleeding observation overrode interval
+        oct4.bleeding === true && // interval fallback when no observation
+        oct12.bleeding === true && // explicit spotting observation outside interval
+        oct12.periodRecordId === null, // not part of period record p1
+      "Test 11: Explicit daily observations strictly override interval bleeding assumptions",
+      `oct3=${oct3.bleeding}, oct4=${oct4.bleeding}, oct12Bleed=${oct12.bleeding}, oct12PeriodId=${oct12.periodRecordId}`,
+    );
+  } catch (err: any) {
+    assert(false, "Test 11: Explicit observation overrides", err.message);
+  }
+
+  // ==================================================================
+  // 12. Record Creation, Editing, Deletion, and Correction
+  // ==================================================================
+  try {
+    const engine = new FeatherEngine([]);
+    engine.createPeriod({ startDate: "2026-07-01", endDate: "2026-07-05" });
+    const p2 = engine.createPeriod({ startDate: "2026-07-29", endDate: "2026-08-02" });
+
+    let stats = engine.getCycleStatistics();
+    assert(stats.completedCycleCount === 1 && stats.cycles[0].lengthDays === 28, "Test 12A: Created two periods");
+
+    // Edit p2 start date to 2026-07-31 (+2 days)
+    engine.updatePeriod(p2.id, { startDate: "2026-07-31" });
+    stats = engine.getCycleStatistics();
+    assert(stats.cycles[0].lengthDays === 30, "Test 12B: Edited start date recalculated cycle length to 30d");
+
+    // Delete p2
+    engine.deletePeriod(p2.id);
+    stats = engine.getCycleStatistics();
+    assert(stats.completedCycleCount === 0 && engine.getRecords().length === 1, "Test 12C: Deleted period recalculated count to 0");
+  } catch (err: any) {
+    assert(false, "Test 12: Record mutation lifecycle", err.message);
+  }
+
+  // ==================================================================
+  // 13. Future-Dated Records Do Not Corrupt Earlier Predictions
+  // ==================================================================
+  try {
+    const records: PeriodRecord[] = [
       { id: "p1", startDate: "2026-08-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
       { id: "p2", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
       { id: "p3", startDate: "2026-09-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-    ]);
+      { id: "p_future", startDate: "2026-12-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" }, // advance entry
+    ];
+    const engine = new FeatherEngine(records);
 
-    const initialPred = engine.getPrediction("2026-10-01");
-    assert(initialPred.expectedStart === "2026-10-24", "Scenario 8A: Initial prediction before correction");
+    // Evaluate prediction as of October 15, 2026
+    const octPred = engine.getPrediction("2026-10-15");
+    // Evaluate before any periods as of July 1, 2026
+    const julyPred = engine.getPrediction("2026-07-01");
 
-    // Correct p2 date from Aug 29 to Aug 31 (+2 days)
-    engine.updatePeriod("p2", { startDate: "2026-08-31" });
-    const correctedStats = engine.getCycleStatistics();
-    const correctedPred = engine.getPrediction("2026-10-01");
-
-    // Cycles are now: 2026-08-01 to 2026-08-31 (30d), 2026-08-31 to 2026-09-26 (26d).
-    // Median cycle length: (30 + 26) / 2 = 28d.
     assert(
-      correctedStats.cycles[0].lengthDays === 30 &&
-        correctedStats.cycles[1].lengthDays === 26 &&
-        correctedPred.expectedStart === "2026-10-24",
-      "Scenario 8B: Corrected date dynamically recomputes all cycles and projections",
-      `cycle0=${correctedStats.cycles[0].lengthDays}d, cycle1=${correctedStats.cycles[1].lengthDays}d`,
+      octPred.expectedStart === "2026-10-24" && // anchored to 2026-09-26 + 28d, not 2026-12-01
+        octPred.status === "estimated" &&
+        julyPred.status === "no-data", // prior to all records -> no-data
+      "Test 13: Future-dated records do not corrupt prediction anchors for earlier dates",
+      `octExpected=${octPred.expectedStart}, octStatus=${octPred.status}, julyStatus=${julyPred.status}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 8: Corrected historical date", err.message);
+    assert(false, "Test 13: Future-dated records", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 9: New period recorded -> New cycle begins; old overdue state disappears
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 14. Predictions Before, On, and After the Expected Date
+  // ==================================================================
+  try {
+    const records: PeriodRecord[] = [
+      { id: "p1", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-09-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const engine = new FeatherEngine(records);
+    // Expected next: 2026-10-24
+
+    const beforePred = engine.getPrediction("2026-10-20");
+    const onDatePred = engine.getPrediction("2026-10-24");
+    const afterPred = engine.getPrediction("2026-10-25");
+
+    assert(
+      beforePred.status === "estimated" &&
+        onDatePred.status === "estimated" &&
+        afterPred.status === "overdue",
+      "Test 14: Prediction state transitions: 'estimated' before and on expected date, 'overdue' after",
+      `before=${beforePred.status}, on=${onDatePred.status}, after=${afterPred.status}`,
+    );
+  } catch (err: any) {
+    assert(false, "Test 14: Prediction timeline transitions", err.message);
+  }
+
+  // ==================================================================
+  // 15. Correct Clearing of Overdue Status Upon New Period
+  // ==================================================================
   try {
     const engine = new FeatherEngine([
-      { id: "p1", startDate: "2026-08-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-      { id: "p2", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p1", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-09-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
     ]);
 
-    // Expected next was 2026-09-26. On 2026-10-02, it is overdue.
-    const overduePred = engine.getPrediction("2026-10-02");
-    assert(
-      overduePred.status === "overdue" && overduePred.expectedStart === "2026-09-26",
-      "Scenario 9A: Overdue state confirmed prior to logging new period",
-      `status=${overduePred.status}`,
-    );
+    // Expected was 2026-10-24. On 2026-10-30, status is overdue.
+    const overduePred = engine.getPrediction("2026-10-30");
+    assert(overduePred.status === "overdue", "Test 15A: Overdue state before logging new period");
 
-    // Now user logs period on 2026-10-02
-    engine.createPeriod({ startDate: "2026-10-02" });
-    const freshPred = engine.getPrediction("2026-10-02");
+    // User logs new period starting 2026-10-30
+    engine.createPeriod({ startDate: "2026-10-30" });
+    const freshPred = engine.getPrediction("2026-10-30");
 
     assert(
-      freshPred.status === "estimated" &&
-        freshPred.expectedStart === "2026-11-02", // 2026-10-02 + median(28, 34) = 31d
-      "Scenario 9B: New period recorded -> New cycle begins and overdue status clears",
+      freshPred.status === "estimated" && freshPred.expectedStart === "2026-11-30",
+      "Test 15B: New period immediately clears overdue state and anchors next cycle",
       `newStatus=${freshPred.status}, newExpected=${freshPred.expectedStart}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 9: New period recorded", err.message);
+    assert(false, "Test 15: Overdue status clearing", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 10: Date crosses month/year boundary -> Correct date arithmetic
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 16. Leap Years, Month Boundaries, and Year Boundaries
+  // ==================================================================
   try {
-    // Leap year leap day arithmetic
-    const feb28 = "2028-02-28";
-    const leapDay = addDays(feb28, 1);
-    const mar01 = addDays(leapDay, 1);
-    assert(
-      leapDay === "2028-02-29" && mar01 === "2028-03-01",
-      "Scenario 10A: Leap year rollover verified",
-      `2028-02-28 + 1 = ${leapDay}, + 1 = ${mar01}`,
-    );
+    // Leap year 2028 (February has 29 days)
+    const feb28_28 = "2028-02-28";
+    const leapDay = addDays(feb28_28, 1);
+    const mar01_28 = addDays(feb28_28, 2);
 
-    // Year boundary rollover
-    const dec30 = "2025-12-30";
-    const jan02 = addDays(dec30, 3);
-    const diff = dayDifference(dec30, jan02);
+    // Non-leap year 2026 (February has 28 days)
+    const feb28_26 = "2026-02-28";
+    const mar01_26 = addDays(feb28_26, 1);
+
+    // Year boundary
+    const dec31 = "2025-12-31";
+    const jan01 = addDays(dec31, 1);
+    const diff = dayDifference("2025-12-30", "2026-01-02");
+
     assert(
-      jan02 === "2026-01-02" && diff === 3,
-      "Scenario 10B: Year boundary rollover verified",
-      `2025-12-30 + 3 days = ${jan02}, diff = ${diff}`,
+      leapDay === "2028-02-29" &&
+        mar01_28 === "2028-03-01" &&
+        mar01_26 === "2026-03-01" &&
+        jan01 === "2026-01-01" &&
+        diff === 3,
+      "Test 16: Leap year leap day, month rollovers, and year boundary arithmetic verified",
     );
   } catch (err: any) {
-    assert(false, "Scenario 10: Date boundary arithmetic", err.message);
+    assert(false, "Test 16: Leap year and boundaries", err.message);
   }
 
-  // -------------------------------------------------------------
-  // Scenario 11: Offline mode -> Core calculations work without network access
-  // -------------------------------------------------------------
+  // ==================================================================
+  // 17. Timezone Independence of Calendar Date Arithmetic
+  // ==================================================================
   try {
-    // Verify dashboard and calendar generation with zero network
+    // Tests that adding 1 day 365 times produces exact year rollover without hour drift
+    let cur = "2026-01-01";
+    for (let i = 0; i < 365; i++) {
+      cur = addDays(cur, 1);
+    }
+    assert(cur === "2027-01-01", "Test 17: Date arithmetic is 100% immune to DST/timezone drift across 365 days");
+  } catch (err: any) {
+    assert(false, "Test 17: Timezone independence", err.message);
+  }
+
+  // ==================================================================
+  // 18. Persistence, Import, and Migration Edge Cases
+  // ==================================================================
+  try {
+    const rawBackupJSON = JSON.stringify({
+      periods: [
+        { id: 101, startDate: "2026-07-01", endDate: "2026-07-05" },
+        { id: 102, startDate: "2026-07-29", endDate: "2026-08-02" },
+        { id: 999, startDate: "invalid-date", endDate: "2026-08-01" }, // should be discarded
+      ],
+      logs: [
+        { id: 201, logDate: "2026-07-01", flow: "heavy", symptoms: ["cramps"] },
+      ],
+    });
+
+    const importResult = importCycleDataJSON(rawBackupJSON);
+    const loaded = loadCycleData();
+    const stats = computeCycleStats(loaded.periods);
+
+    assert(
+      importResult.success === true &&
+        loaded.periods.length === 2 && // invalid record discarded
+        stats.hasData === true &&
+        stats.avgCycleLength === 28,
+      "Test 18: Import sanitizes corrupted records and preserves vault data integrity",
+      `success=${importResult.success}, count=${importResult.count}, periods=${loaded.periods.length}`,
+    );
+  } catch (err: any) {
+    assert(false, "Test 18: Persistence and import", err.message);
+  }
+
+  // ==================================================================
+  // 19. Calendar and Dashboard Consistency
+  // ==================================================================
+  try {
     const records: PeriodRecord[] = [
-      { id: "p1", startDate: "2026-09-01", endDate: "2026-09-06", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
-      { id: "p2", startDate: "2026-09-29", endDate: "2026-10-04", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p1", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-09-26", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
     ];
-    const observations: DailyObservation[] = [
-      { date: "2026-09-29", bleeding: true, flow: "heavy", symptoms: ["cramps"] },
-      { date: "2026-10-05", bleeding: false, symptoms: ["bloating"] },
-    ];
+    const engine = new FeatherEngine(records, []);
+    const refDate = "2026-10-15";
 
-    const engine = new FeatherEngine(records, observations);
-    const dashboard = engine.getDashboard("2026-10-15");
-    const calendarOct = engine.getCalendarMonth(2026, 10);
+    const dashboard = engine.getDashboard(refDate);
+    const calendarOct = engine.getCalendarMonth(2026, 10, refDate);
 
-    const oct5Status = calendarOct.find((d) => d.date === "2026-10-05");
+    const predictedDay = calendarOct.find((d) => d.isPredictedStart);
 
     assert(
-      dashboard.currentCycleDay === 17 && // 2026-09-29 to 2026-10-15 is day 17
-        dashboard.isPeriodInProgress === false &&
-        calendarOct.length === 31 &&
-        oct5Status?.bleeding === false, // observation overrode span
-      "Scenario 11: Offline mode -> Core calculations, daily status, and calendar operate purely in-memory",
-      `cycleDay=${dashboard.currentCycleDay}, octDays=${calendarOct.length}, oct5Bleeding=${oct5Status?.bleeding}`,
+      dashboard.prediction.expectedStart === "2026-10-24" &&
+        predictedDay?.date === "2026-10-24" &&
+        dashboard.prediction.status === "estimated",
+      "Test 19: Dashboard and calendar agree 100% on predicted date and status for identical reference date",
+      `dashboardExp=${dashboard.prediction.expectedStart}, calendarPredDay=${predictedDay?.date}`,
     );
   } catch (err: any) {
-    assert(false, "Scenario 11: Offline mode", err.message);
+    assert(false, "Test 19: Calendar/dashboard consistency", err.message);
   }
 
-  console.log("\n==========================================");
-  console.log(`TOTAL: ${passed + failed} | PASSED: ${passed} | FAILED: ${failed}`);
+  // ==================================================================
+  // 20. Idempotent Submission and Retry Handling
+  // ==================================================================
+  try {
+    const engine = new FeatherEngine([]);
+    // First creation with fixed ID
+    engine.createPeriod({ id: "fixed_id_100", startDate: "2026-10-01" });
+    assert(engine.getRecords().length === 1, "Test 20A: Initial creation with fixed ID");
+
+    // Retry submission with exact same ID (idempotent write)
+    engine.createPeriod({ id: "fixed_id_100", startDate: "2026-10-01", landmarkName: "Retry Note" });
+    assert(
+      engine.getRecords().length === 1 && engine.getRecords()[0].landmarkName === "Retry Note",
+      "Test 20B: Repeated submission with same ID updates existing record without creating duplicate",
+    );
+  } catch (err: any) {
+    assert(false, "Test 20: Idempotency", err.message);
+  }
+
+  // ==================================================================
+  // Invariant Tests (Mathematical & Behavioral Guarantees)
+  // ==================================================================
+  console.log("\n--- Testing Core Mathematical Invariants ---");
+
+  // Invariant 1: Date Addition and Subtraction Inverse Consistency
+  try {
+    const testDates = ["2026-01-01", "2026-02-28", "2028-02-29", "2026-12-31"];
+    let inv1Holds = true;
+    for (const d of testDates) {
+      for (const k of [1, 7, 28, 45, 90]) {
+        const added = addDays(d, k);
+        const subtracted = addDays(added, -k);
+        if (subtracted !== d || dayDifference(d, added) !== k) {
+          inv1Holds = false;
+        }
+      }
+    }
+    assert(inv1Holds, "Invariant 1: Date addition and subtraction are exact inverses across month/year/leap bounds");
+  } catch (err: any) {
+    assert(false, "Invariant 1", err.message);
+  }
+
+  // Invariant 2: Cycle Lengths Match Consecutive Start-Date Differences
+  try {
+    const records: PeriodRecord[] = [
+      { id: "1", startDate: "2026-01-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "2", startDate: "2026-01-28", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "3", startDate: "2026-02-27", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "4", startDate: "2026-03-30", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const cycles = reconstructCycles(records);
+    const inv2Holds =
+      cycles[0].lengthDays === dayDifference("2026-01-01", "2026-01-28") &&
+      cycles[1].lengthDays === dayDifference("2026-01-28", "2026-02-27") &&
+      cycles[2].lengthDays === dayDifference("2026-02-27", "2026-03-30");
+    assert(inv2Holds, "Invariant 2: Cycle length always equals exact calendar difference between consecutive starts");
+  } catch (err: any) {
+    assert(false, "Invariant 2", err.message);
+  }
+
+  // Invariant 3: Predictions Are Reproducible for Identical Inputs
+  try {
+    const records: PeriodRecord[] = [
+      { id: "1", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "2", startDate: "2026-05-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const p1 = getPrediction(records, "2026-06-15");
+    const p2 = getPrediction(records, "2026-06-15");
+    assert(
+      JSON.stringify(p1) === JSON.stringify(p2),
+      "Invariant 3: Predictions are 100% deterministic and reproducible for identical inputs",
+    );
+  } catch (err: any) {
+    assert(false, "Invariant 3", err.message);
+  }
+
+  // Invariant 4: Corrections Update All Derived Outputs
+  try {
+    const engine = new FeatherEngine([
+      { id: "p1", startDate: "2026-05-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-05-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ]);
+    const initExp = engine.getPrediction("2026-06-15").expectedStart;
+    engine.updatePeriod("p2", { startDate: "2026-06-01" }); // +3 days
+    const nextExp = engine.getPrediction("2026-06-15").expectedStart;
+    assert(
+      initExp !== nextExp && nextExp === addDays("2026-06-01", 31),
+      "Invariant 4: Any correction immediately updates all dependent cycles, statistics, and predictions",
+      `initExp=${initExp}, nextExp=${nextExp}`,
+    );
+  } catch (err: any) {
+    assert(false, "Invariant 4", err.message);
+  }
+
+  // Invariant 5: Unconfirmed Entries Do Not Influence Predictions
+  try {
+    const confirmedOnly: PeriodRecord[] = [
+      { id: "c1", startDate: "2026-08-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "c2", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const withUnconfirmed: PeriodRecord[] = [
+      ...confirmedOnly,
+      { id: "u1", startDate: "2026-08-15", confirmed: false, source: "voice", createdAt: "", updatedAt: "" },
+    ];
+    const pred1 = getPrediction(confirmedOnly, "2026-09-10");
+    const pred2 = getPrediction(withUnconfirmed, "2026-09-10");
+
+    assert(
+      pred1.expectedStart === pred2.expectedStart &&
+        pred1.cycleLengthDays === pred2.cycleLengthDays &&
+        pred1.status === pred2.status,
+      "Invariant 5: Unconfirmed draft records have strictly zero influence on predictions or cycle statistics",
+    );
+  } catch (err: any) {
+    assert(false, "Invariant 5", err.message);
+  }
+
+  // Invariant 6: Historical Records Immutability During Calculation
+  try {
+    const originalRecords: PeriodRecord[] = [
+      { id: "p1", startDate: "2026-08-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-08-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const snapshot = JSON.stringify(originalRecords);
+    getPrediction(originalRecords, "2026-09-15");
+    getCycleStatistics(originalRecords);
+    getDashboard(originalRecords, [], "2026-09-15");
+
+    assert(
+      JSON.stringify(originalRecords) === snapshot,
+      "Invariant 6: Historical records remain completely immutable during calculation",
+    );
+  } catch (err: any) {
+    assert(false, "Invariant 6", err.message);
+  }
+
+  // Invariant 7: Calendar and Dashboard Prediction Agreement
+  try {
+    const records: PeriodRecord[] = [
+      { id: "p1", startDate: "2026-09-01", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+      { id: "p2", startDate: "2026-09-29", confirmed: true, source: "manual", createdAt: "", updatedAt: "" },
+    ];
+    const dashboard = getDashboard(records, [], "2026-10-15");
+    const calendar = getCalendarMonth(2026, 10, records, [], "2026-10-15");
+
+    const expectedDayInCalendar = calendar.find((d) => d.isPredictedStart);
+    assert(
+      dashboard.prediction.expectedStart === expectedDayInCalendar?.date,
+      "Invariant 7: Dashboard expected date and Calendar isPredictedStart indicator match 100%",
+    );
+  } catch (err: any) {
+    assert(false, "Invariant 7", err.message);
+  }
+
+  console.log("\n==================================================================");
+  console.log(`TOTAL TESTS: ${passed + failed} | PASSED: ${passed} | FAILED: ${failed}`);
   console.log(`SUCCESS RATE: ${Math.round((passed / (passed + failed)) * 100)}%`);
-  console.log("==========================================\n");
+  console.log("==================================================================\n");
 
   if (failed > 0) {
     process.exit(1);
   }
 }
 
-runAcceptanceTests().catch((err) => {
+runAllTests().catch((err) => {
   console.error("Test execution failed:", err);
   process.exit(1);
 });
