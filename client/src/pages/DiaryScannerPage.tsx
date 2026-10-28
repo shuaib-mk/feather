@@ -89,7 +89,10 @@ export function DiaryScannerPage() {
 
       {/* Privacy Notice Card */}
       <div className="rounded-[18px] bg-stone-100/70 border border-stone-200/80 p-3.5 text-xs text-stone-600 font-sans flex items-start gap-2.5">
-        <span className="text-stone-400 shrink-0 text-sm">🔒</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone-500 shrink-0 mt-0.5">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
         <p className="leading-relaxed">
           <strong className="text-stone-800">In-Memory Image Processing:</strong> Photos are sent securely to <code className="font-mono text-[10px] bg-white px-1 py-0.5 rounded">/api/vision</code> in-memory and discarded immediately after date extraction. No calendar photos are ever saved on servers.
         </p>
@@ -236,10 +239,13 @@ export function DiaryScannerPage() {
                       <button
                         type="button"
                         onClick={() => handleRemovePeriod(idx)}
-                        className="text-stone-400 hover:text-rose-600 text-sm px-2 cursor-pointer"
+                        className="text-stone-400 hover:text-rose-600 p-1 cursor-pointer inline-flex items-center justify-center"
                         aria-label="Remove period row"
                       >
-                        ✕
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
                       </button>
                     </td>
                   </tr>
@@ -261,7 +267,7 @@ export function DiaryScannerPage() {
               onClick={handleConfirmImport}
               className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
-              ✓ Import {extractedPeriods.length} Periods to Vault
+              Import {extractedPeriods.length} Periods to Vault
             </button>
           </div>
         </div>

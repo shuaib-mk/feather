@@ -235,7 +235,11 @@ export function VoiceFlowPage() {
       {/* Rate Limit Notice */}
       {rateLimitNotice && (
         <div className="rounded-[16px] bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 font-sans flex items-center gap-2 shadow-xs">
-          <span>⚠️</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-rose-700 shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
           <span>{rateLimitNotice}</span>
         </div>
       )}
@@ -371,7 +375,9 @@ export function VoiceFlowPage() {
       {agentMessage && agentMessage.includes("talk to a doctor") && (
         <div className="rounded-[22px] bg-amber-50/90 border border-amber-300 p-5 space-y-2 shadow-xs">
           <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
-            <span>🛡️</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-800 shrink-0">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
             <span>Safety Guardrail Intercept</span>
           </div>
           <p className="font-sans text-xs text-amber-950 leading-relaxed">
@@ -486,7 +492,7 @@ export function VoiceFlowPage() {
                         : "liquid-glass-pill text-stone-600 hover:text-stone-900"
                     }`}
                   >
-                    {sym.label} {isSelected && "✓"}
+                    {sym.label}
                   </button>
                 );
               })}
@@ -530,7 +536,7 @@ export function VoiceFlowPage() {
               onClick={handleSaveConfirmed}
               className="liquid-glass-button-dark rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
             >
-              ✓ Confirm &amp; Save Entry
+              Confirm &amp; Save Entry
             </button>
           </div>
         </div>
@@ -544,9 +550,13 @@ export function VoiceFlowPage() {
           className="w-full flex items-center justify-between text-stone-700 hover:text-stone-950 font-sans text-xs font-medium cursor-pointer"
         >
           <span className="font-semibold flex items-center gap-1.5">
-            <span>⚙️</span> Under the Hood (Pipeline &amp; Tool Calls)
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone-600">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+            <span>Under the Hood (Pipeline &amp; Tool Calls)</span>
           </span>
-          <span className="text-stone-400">{isUnderHoodOpen ? "Hide ▲" : "Inspect ▼"}</span>
+          <span className="text-stone-400">{isUnderHoodOpen ? "Hide" : "Inspect"}</span>
         </button>
 
         {isUnderHoodOpen && (

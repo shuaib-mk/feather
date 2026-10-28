@@ -45,7 +45,9 @@ export function InsightsPage() {
               </>
             ) : (
               <>
-                <span>⚡</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
                 <span>Generate Deep Synthesis</span>
               </>
             )}
@@ -55,7 +57,11 @@ export function InsightsPage() {
 
       {/* Mandatory Medical Disclaimer Banner */}
       <div className="rounded-[18px] bg-stone-100/70 border border-stone-200/80 p-3.5 text-xs text-stone-600 font-sans flex items-start gap-2.5">
-        <span className="text-stone-400 shrink-0 text-sm">ℹ️</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-stone-500 shrink-0 mt-0.5">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
         <p className="leading-relaxed">
           <strong className="text-stone-800">Non-Clinical Planning Estimate:</strong> Forecasts are calculated from your confirmed historical cycles. Menstrual cycles vary naturally; these projections are never medically certain, not guaranteed, and must never be used for contraception or medical diagnosis.
         </p>
@@ -64,7 +70,11 @@ export function InsightsPage() {
       {data.periods.length === 0 && (
         <div className="rounded-[18px] bg-amber-50/70 border border-amber-200/80 p-3.5 text-xs text-amber-900 font-sans flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="shrink-0">⚠️</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-700 shrink-0 mt-0.5">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
             <p className="leading-relaxed">
               <strong className="font-semibold">Calibrating Mode:</strong> No confirmed cycles recorded yet. Projections below display population baselines (28-day cycle). Log your first period or load reviewer demo data in the Vault to activate personalized predictions.
             </p>
