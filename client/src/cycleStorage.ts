@@ -142,12 +142,11 @@ export function loadCycleData(): { periods: Period[]; logs: DayLog[] } {
   try {
     const raw = safeGetItem(STORAGE_KEY);
     if (!raw) {
-      saveCycleData(INITIAL_DATA);
-      return INITIAL_DATA;
+      return { periods: [], logs: [] };
     }
     return JSON.parse(raw);
   } catch {
-    return INITIAL_DATA;
+    return { periods: [], logs: [] };
   }
 }
 

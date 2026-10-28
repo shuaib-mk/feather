@@ -61,6 +61,23 @@ export function InsightsPage() {
         </p>
       </div>
 
+      {data.periods.length === 0 && (
+        <div className="rounded-[18px] bg-amber-50/70 border border-amber-200/80 p-3.5 text-xs text-amber-900 font-sans flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0">⚠️</span>
+            <p className="leading-relaxed">
+              <strong className="font-semibold">Calibrating Mode:</strong> No confirmed cycles recorded yet. Projections below display population baselines (28-day cycle). Log your first period or load reviewer demo data in the Vault to activate personalized predictions.
+            </p>
+          </div>
+          <Link
+            to="/voice"
+            className="liquid-glass-button-dark rounded-full px-3.5 py-1.5 font-sans text-xs font-semibold shrink-0 self-start sm:self-auto cursor-pointer text-center"
+          >
+            Record Entry
+          </Link>
+        </div>
+      )}
+
       {/* Executive Summary & Rhythm Score */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="liquid-glass-card rounded-[22px] p-5 md:col-span-2 space-y-2">
