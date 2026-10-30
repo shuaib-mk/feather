@@ -58,21 +58,6 @@
         to { transform: rotate(360deg); }
       }
     </style>
-    <script>
-      // Automatically unregister any active service workers and clear stale caches on mobile
-      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          for (var reg of regs) {
-            reg.unregister();
-          }
-        }).catch(function() {});
-      }
-      if (typeof window !== "undefined" && "caches" in window) {
-        caches.keys().then(function(names) {
-          for (var name of names) caches.delete(name);
-        }).catch(function() {});
-      }
-    </script>
     <script src="/src/main.tsx" type="module"></script>
   </head>
   <body>

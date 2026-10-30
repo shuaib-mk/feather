@@ -57,14 +57,11 @@ flowchart TD
 | Model Name | Endpoint Model ID | Exact Implementation Files | Purpose & Capabilities |
 | :--- | :--- | :--- | :--- |
 | **Meta Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | `api/transcribe.ts`<br>`api-src/transcribe.ts`<br>`ai/backend/transcribe.ts` | Real-time speech-to-text with 16kHz mono WAV streaming; multilingual ASR across English, Malayalam, Hindi, Spanish. Discarded immediately after transcription. |
-| **Meta Muse Spark** | `muse-spark-1.3` | `api/agent.ts`<br>`api-src/agent.ts`<br>`ai/backend/agent.ts`<br>`api/synthesis.ts`<br>`api/vision.ts` | Multi-turn tool-calling agent with `log_entry`, `milestone_lookup`, `update_entry`, and `check_overlap`. Drives landmark arithmetic, paper calendar photo extraction, and 12-month foresight. |
-| **Meta Muse Spark (Open-Weight)** | `meta-models/muse-spark-open-1026` | `ai/backend/config.ts`<br>`client/src/CreditsModal.tsx` | Swappable open-weight model hosted on Baseten. Judges can toggle between hosted Meta Model API and open-weight via Settings. |
 
 ---
 
 ## API Protection & Credit Safeguards
 
-To prevent demo credit exhaustion while ensuring a seamless evaluation experience for judges, all serverless functions (`/api/agent`, `/api/transcribe`, `/api/synthesis`, `/api/vision`) feature stateless, in-memory rate limiting and request validation:
 
 - **Per-IP Rate Limits:** 20 requests per minute and 150 requests per day (tracked in-memory per serverless instance).
 - **Server-Side Daily Cap:** Configurable via `DAILY_REQUEST_CAP` environment variable (defaults to 500 requests/day per instance).
@@ -80,21 +77,21 @@ To prevent demo credit exhaustion while ensuring a seamless evaluation experienc
 
 ---
 
-## Evaluation Benchmark & Honesty Split
+## Evaluation Internal regression suite & Honesty Split
 
 Feather includes a comprehensive evaluation harness covering cultural landmarks, relative date arithmetic, edge cases, blind holdouts, and medical safety guardrails. In strict adherence to evaluation integrity, results are clearly split between what was empirically measured and what was not measured due to local credential availability:
 
 ### Part A: Offline Deterministic Engine & Guardrail (Empirically Measured)
 
 ```sh
-# Run offline benchmark (170 samples)
+# Run offline internal regression suite (170 samples)
 npm run eval
 
-# Run blind holdout benchmark (19 samples)
+# Run blind holdout internal regression suite (19 samples)
 npx tsx ai/eval/run-holdout.ts
 ```
 
-| Benchmark Suite | Total Samples | Accuracy / Recall | Precision / Specificity | False Positives | False Negatives | Latency (p50 / p95) | Status |
+| Internal regression suite Suite | Total Samples | Accuracy / Recall | Precision / Specificity | False Positives | False Negatives | Latency (p50 / p95) | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Landmark Recall (Multilingual)** | 65 | **100.0%** (65/65) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
 | • English (`en`) | 25 | **100.0%** (25/25) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
@@ -108,12 +105,12 @@ npx tsx ai/eval/run-holdout.ts
 
 ### Part B: Live Remote Models (Credential-Dependent)
 
-| Provider / Model | Benchmark Scope | Status | Notes |
+| Provider / Model | Internal regression suite Scope | Status | Notes |
 | :--- | :--- | :---: | :--- |
 | **Meta Model API (`muse-spark-1.3`)** | 30 landmark phrases | **Not measured** | `META_API_KEY` not configured in local evaluation runner |
 | **Open-Weight Muse Spark (Baseten `meta-models/muse-spark-open-1026`)** | 30 landmark phrases | **Open-weight not measured** | `BASETEN_API_KEY` not configured in local evaluation runner |
 
-*For complete benchmark breakdown, blind holdout failure logs, and latency profiling, see [`EVALS.md`](file:///c:/Users/q04ti/Documents/feather/EVALS.md).*
+*For complete internal regression suite breakdown, blind holdout failure logs, and latency profiling, see [`EVALS.md`](file:///c:/Users/q04ti/Documents/feather/EVALS.md).*
 
 ---
 
@@ -190,13 +187,12 @@ feather/
 │   │   ├── milestonesData.ts # Universal & cultural landmark calendar database (2026-2027)
 │   │   ├── protection.ts     # Stateless in-memory rate limiting & payload size protection
 │   │   ├── server.ts         # Lightweight Node HTTP API server for local development
-│   │   ├── synthesis.ts      # 12-month Plate 02 foresight matrix engine
 │   │   ├── transcribe.ts     # Meta Muse Voice Transcribe service
 │   │   └── vision.ts         # Photo diary scanner service using Muse Spark
 │   ├── eval/
 │   │   ├── guardrail.dataset.ts # 105 labelled samples (medical vs. valid logs)
 │   │   ├── landmarks.dataset.ts # 65 labelled multilingual landmark expressions
-│   │   └── runner.ts            # Automated benchmark runner with p50/p95 latency profiling
+│   │   └── runner.ts            # Automated internal regression suite runner with p50/p95 latency profiling
 │   ├── frontend/
 │   │   ├── aiClient.ts       # Frontend client with 10s timeout, retry, and offline fallback
 │   │   ├── PaperDiaryImportModal.tsx # Photo calendar extractor modal
@@ -204,10 +200,8 @@ feather/
 │   └── test/
 │       ├── date_resolution.test.ts  # 22 Landmark recall, edge-case, and slip correction tests
 │       ├── guardrail.test.ts        # 57 Multilingual medical refusal tests
-│       └── synthesis.test.ts        # 6 Foresight matrix & chronobiology tests
 ├── api-src/                  # Serverless function source files with stateless protection
 │   ├── agent.ts
-│   ├── synthesis.ts
 │   ├── transcribe.ts
 │   └── vision.ts
 ├── api/                      # Self-contained bundled serverless functions (Vercel)
@@ -215,7 +209,6 @@ feather/
 │   ├── public/               # Public assets (icon.webp, manifest.json)
 │   ├── src/
 │   │   ├── components/       # Reusable UI (Sidebar, AppLayout, PageHeader, EmptyState, ConfirmDialog)
-│   │   ├── context/          # CycleContext (shared vault data, backup, synthesis, and preferences)
 │   │   ├── pages/            # Multi-page views (Dashboard, VoiceFlow, Vault, Chronicle, Insights, Scanner, Settings)
 │   │   ├── cycleStorage.ts   # Local vault engine (on-device localStorage, average cycle estimation)
 │   │   ├── App.tsx           # React Router route definitions
@@ -224,7 +217,7 @@ feather/
 │   └── index.html            # App entry point
 ├── scripts/
 │   └── bundle-api.mjs        # Esbuild standalone serverless bundler
-├── EVALS.md                  # Comprehensive benchmark report & open-weight comparison
+├── EVALS.md                  # Comprehensive internal regression suite report & open-weight comparison
 ├── .env.example              # Environment variable template
 ├── package.json              # Project dependencies and test scripts
 ├── vercel.json               # Vercel deployment configuration
@@ -256,7 +249,6 @@ PORT=3001
 
 ### 3. Run Automated Tests & Eval Harness
 ```sh
-# Run all 85 unit tests across guardrails, landmark arithmetic, and synthesis
 npm test
 
 # Run the 170-sample evaluation harness with latency profiling
@@ -274,7 +266,7 @@ npm run start:ai
 # Start local Vite development server
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:3000` in your browser.
 
 ---
 
@@ -302,3 +294,21 @@ Feather is ready for zero-configuration serverless deployment on Vercel:
 
 ## License
 MIT License. Built for the Meta Global AI Developer Hackathon.
+
+
+## Calendar sync — Future work
+Google Calendar OAuth is future work and is not implemented. Feather supports local .ics export/import only (see Settings and /calendar). Processing of imported .ics files happens entirely in the browser.
+
+## Privacy (matches the app)
+Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features.
+
+## Judge quickstart
+Open the app, tap **Try Demo** on the first screen (or add ?demo=1). Demo Mode uses the separate `feather_demo_v1` namespace with fictional irregular cycles (lengths 26-38 days). Exit demo from the banner to return to your real vault untouched. Dev URL: http://localhost:3000
+
+## Models manifest
+- Meta Muse Voice Transcribe (`MUSE_VOICE_MODEL`, server-side via `ai/backend/transcribe.ts` -> `api/transcribe.ts`)
+- Meta Muse Spark (`MUSE_SPARK_MODEL`, server-side via `ai/backend/agent.ts`, `ai/backend/vision.ts` -> `api/agent.ts`, `api/vision.ts`)
+- Exact bundled files: `api/agent.ts`, `api/transcribe.ts`, `api/vision.ts`, `api/health.ts` (sources in `api-src/`, bundled by `scripts/bundle-api.mjs`)
+
+## Known limitations
+Live Meta results are Not measured until run with a real key (`npx tsx ai/eval/run-live-meta.ts`). Languages in the internal regression suite: en, hi, ml, ta, kn and code-mixed. Rate limits are best-effort in-memory per serverless instance. Storage is localStorage (device/browser bound, size-limited). Landmark dates are limited to verified entries in `ai/backend/landmarks.json`; unverifiable dates are omitted rather than invented.

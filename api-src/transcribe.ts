@@ -1,9 +1,9 @@
 import { transcribeAudio } from "../ai/backend/transcribe";
-import { checkStatelessProtection, validateAudioBuffer } from "../ai/backend/protection";
+import { checkStatelessProtection, validateAudioBuffer, corsAllowOrigin } from "../ai/backend/protection";
 
 function sendResponse(res: any, statusCode: number, data: any) {
   if (res.setHeader) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const _aco = corsAllowOrigin((res as any)?.req); if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
@@ -25,7 +25,7 @@ function sendResponse(res: any, statusCode: number, data: any) {
   if (typeof res.writeHead === "function") {
     res.writeHead(statusCode, {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsAllowOrigin((res as any)?.req) || "null",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     });
@@ -61,7 +61,7 @@ export async function handler(req: any, res?: any) {
   // CORS Preflight
   if (req.method === "OPTIONS" || (req.httpMethod === "OPTIONS")) {
     if (res && res.setHeader) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      const _aco = corsAllowOrigin((res as any)?.req); if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
       if (typeof res.status === "function") return res.status(204).end();
@@ -73,7 +73,7 @@ export async function handler(req: any, res?: any) {
     return {
       statusCode: 204,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": corsAllowOrigin((res as any)?.req) || "null",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
@@ -93,7 +93,7 @@ export async function handler(req: any, res?: any) {
     if (!res && req && req.httpMethod) {
       return {
         statusCode: status,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": corsAllowOrigin((res as any)?.req) || "null" },
         body: JSON.stringify(errorBody),
       };
     }
@@ -133,7 +133,7 @@ export async function handler(req: any, res?: any) {
         statusCode: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": corsAllowOrigin((res as any)?.req) || "null",
         },
         body: JSON.stringify(result),
       };

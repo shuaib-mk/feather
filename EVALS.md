@@ -1,4 +1,4 @@
-# Feather AI Evaluation Benchmark & Safety Audits
+# Feather AI Evaluation Internal regression suite & Safety Audits
 
 This document details the empirical evaluation of Feather's core AI systems for the Meta Global AI Developer Hackathon. In strict adherence to evaluation integrity, all metrics below are categorized by whether they were empirically measured or not measured due to credential availability.
 
@@ -10,7 +10,7 @@ This document details the empirical evaluation of Feather's core AI systems for 
 
 These tests evaluate the on-device deterministic calendar arithmetic engine (`ai/backend/dateArithmetic.ts`) and the two-layer medical safety guardrail (`ai/backend/guardrail.ts`) running locally with zero network dependencies.
 
-| Benchmark Suite | Total Samples | Precision | Recall (Sensitivity) | F1 Score | Accuracy | Median Latency (p50) | p95 Latency | Status |
+| Internal regression suite Suite | Total Samples | Precision | Recall (Sensitivity) | F1 Score | Accuracy | Median Latency (p50) | p95 Latency | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Landmark Recall (Multilingual)** | 65 | — | — | — | **100.0%** (65/65) | **< 1 ms** | **1.0 ms** | **MEASURED** |
 | **Medical Safety Guardrail** | 105 | **100.0%** | **100.0%** | **100.0%** | **100.0%** (105/105) | **< 1 ms** | **0.8 ms** | **MEASURED** |
@@ -18,7 +18,7 @@ These tests evaluate the on-device deterministic calendar arithmetic engine (`ai
 
 ### Part B: Live Remote Models (Credential-Dependent)
 
-| Provider / Model | Benchmark Scope | Status | Notes |
+| Provider / Model | Internal regression suite Scope | Status | Notes |
 | :--- | :--- | :---: | :--- |
 | **Meta Model API (`muse-spark-1.3`)** | 30 landmark phrases | **Not measured** | `META_API_KEY` not configured in local evaluation environment |
 | **Open-Weight Muse Spark (Baseten `meta-models/muse-spark-open-1026`)** | 30 landmark phrases | **Open-weight not measured** | `BASETEN_API_KEY` not configured in local evaluation environment |
@@ -58,7 +58,7 @@ The guardrail enforces a strict non-negotiable refusal message whenever a user s
 
 ---
 
-## 4. Blind Holdout Benchmark & Iteration Log (`ai/eval/holdout.dataset.ts`)
+## 4. Blind Holdout Internal regression suite & Iteration Log (`ai/eval/holdout.dataset.ts`)
 
 A blind test suite of 19 adversarial prompts was executed to evaluate generalization:
 
@@ -111,15 +111,15 @@ Feather supports three decoupled execution paths:
 
 ---
 
-## 6. How to Re-Run the Eval Benchmark
+## 6. How to Re-Run the Eval Internal regression suite
 
 ```bash
 # Run the 170-sample offline evaluation harness:
 npm run eval
 
-# Run the 19-sample blind holdout benchmark:
+# Run the 19-sample blind holdout internal regression suite:
 npx tsx ai/eval/run-holdout.ts
 
-# Run the live Meta model benchmark (requires META_API_KEY in environment):
+# Run the live Meta model internal regression suite (requires META_API_KEY in environment):
 npx tsx ai/eval/run-live-meta.ts
 ```

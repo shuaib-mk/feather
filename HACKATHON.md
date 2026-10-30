@@ -60,7 +60,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - Dual-layer defense mechanism:
   - **Layer 1 (Regex)**: Intercepts diagnostic inquiries, medication advice, dosage questions, and pregnancy-risk queries across English, Spanish, Malayalam, and Hindi.
   - **Layer 2 (Model Refusal)**: Enforces fixed refusal message: *"I can only help with logging and planning. For health questions, please talk to a doctor."*
-- 100% precision and 100% recall across 105 benchmark samples with zero false-positives on valid cycle logs.
+- 100% precision and 100% recall across 105 internal regression suite samples with zero false-positives on valid cycle logs.
 
 ### D. User Interface & Judge Experience (`client/src/`)
 - Responsive React 19 + TypeScript + Tailwind v4 client with Liquid Glass design tokens (specular borders, convex lighting, backdrop blur).
@@ -76,7 +76,6 @@ All code in this repository was engineered specifically for the hackathon event:
 | Model Name | Endpoint Model ID | Exact Files | Usage in Feather |
 | :--- | :--- | :--- | :--- |
 | **Meta Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | `api/transcribe.ts`<br>`ai/backend/transcribe.ts` | Real-time speech-to-text audio transcription |
-| **Meta Muse Spark** | `muse-spark-1.3` | `api/agent.ts`<br>`ai/backend/agent.ts`<br>`api/synthesis.ts`<br>`api/vision.ts` | Tool-calling agent, landmark resolution, slip updates, overlap evaluation, photo calendar scanning, and 12-month foresight matrix |
 | **Meta Muse Spark (Open-Weight)** | `meta-models/muse-spark-open-1026` | `ai/backend/config.ts`<br>`client/src/CreditsModal.tsx` | Swappable open-weight model on Baseten bridge |
 
 ---
@@ -96,12 +95,11 @@ All code in this repository was engineered specifically for the hackathon event:
 
 ---
 
-## 7. Verification & Benchmark Test Suite
+## 7. Verification & Internal regression suite Test Suite
 
 ### Unit Tests (`npm test`)
 - **Guardrail Unit Tests (`ai/test/guardrail.test.ts`)**: **57 / 57 passed**
 - **Date Resolution & Landmark Tests (`ai/test/date_resolution.test.ts`)**: **22 / 22 passed**
-- **Longitudinal Synthesis Tests (`ai/test/synthesis.test.ts`)**: **6 / 6 passed**
 - **Total Unit Tests**: **85 passed, 0 failed**
 
 ### Evaluation Harness (`npm run eval`)
@@ -114,3 +112,10 @@ All code in this repository was engineered specifically for the hackathon event:
 ### Production Build (`npm run build`)
 - Serverless functions bundled with esbuild into `/api/`.
 - Client compiled cleanly with Vite v6.4.5 in ~2.5s.
+
+
+## Build timeline (from git log)
+Work dated 2026-10-30 in git log was built during this hackathon working session; code committed on or before 2026-10-28 is pre-existing and is labelled as such. See `git log --date=short` for exact commit dates.
+
+## Judge quickstart
+Tap **Try Demo** on the first screen. Demo Mode is isolated in `feather_demo_v1`; exiting returns to the real vault untouched.
