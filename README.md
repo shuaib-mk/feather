@@ -1,5 +1,24 @@
 # Feather — Voice-First Menstrual Cycle Companion
 
+## Pre-existing vs built during the hackathon
+Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, inside the hackathon building period (Oct 27 – Nov 4, 2026); no file's first commit predates the Oct 26 kickoff. No pre-existing code is knowingly included; asset provenance (including one asset whose source is unknown and must be confirmed by the owner) is recorded in [PROVENANCE.md](PROVENANCE.md). History has not been rewritten.
+
+## Known limitations
+- The offline parser is rule-based (keyword/lexicon matching and deterministic date arithmetic); it does not understand arbitrary phrasing.
+- Meta API request shapes have not been verified against a live key; live results are "Not measured" until the owner runs the live evaluation.
+- Malayalam is not in Meta's validated transcription languages; Malayalam support here is via the offline lexicon and is untested with real audio.
+- Festival/landmark dates are limited to the verified entries in `ai/backend/landmarks.json`; unverifiable dates were omitted rather than invented.
+- Cycle estimates are planning estimates only, not medical advice. The app only logs and plans; it does not diagnose, interpret symptoms, or recommend medication.
+- Data is unencrypted localStorage unless App Lock is on (Settings -> Privacy); with App Lock on, the vault is encrypted at rest on the device and the passphrase cannot be recovered if forgotten.
+- Diary Scanner is a secondary, optional feature and requires a model API key; without one it extracts nothing.
+- Live API use is capped in the evaluation scripts (default 25 calls per run) to protect the owner's credits.
+
+## Judge quickstart
+- Live URL: `<OWNER: paste the deployed Vercel URL here>`
+- Demo Mode: open the app, tap **Try Demo** on the first screen (or add `?demo=1`). Fictional data lives in a separate `feather_demo_v1` namespace; use **Exit demo** in the banner to return to your real vault untouched.
+- Phrases that work offline (no key): "period started yesterday, heavy flow with cramps", "period started 2 days before New Year's Day", "exam on Nov 20", "exam on 3rd November", "Anu's wedding is on Nov 20", "dinner on Nov 3", "actually it was light, not heavy" (correction), "my period is late" (asks what to log).
+- Phrases that work live (Meta key configured server-side): the same phrases via Muse Spark tool-calling, plus voice input via Muse Voice Transcribe. Without a key the app honestly reports offline mode.
+
 > **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database.
 
 ---
