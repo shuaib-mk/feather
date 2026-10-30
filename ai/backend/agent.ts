@@ -9,6 +9,7 @@ import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
 import festivalsData from "./milestonesData";
 import { todayLocal, parseMonthDay } from "../../client/src/lib/localDate";
+import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
 import {
   resolveLandmarkExpression,
   applySlipCorrections,
@@ -87,7 +88,7 @@ export interface AgentResult {
   planOverlaps?: Array<{
     name: string;
     eventDate: string;
-    overlap: "period-day" | "likely" | "possible" | "unlikely" | "unknown";
+    overlap: "period-day" | "likely" | "possible" | "unlikely" | "unknown" | "past";
     overlapNote: string;
   }>;
 }
@@ -244,6 +245,38 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
 Tone: Warm, respectful, concise, neutral, non-medical.`;
+
+
+function recordsFromContext(context: AgentContext): PeriodRecord[] {
+  const periods = context.periods && context.periods.length > 0
+    ? context.periods
+    : context.cycleStats?.lastPeriodStart
+      ? [{ startDate: context.cycleStats.lastPeriodStart, endDate: null }]
+      : [];
+  return periods.map((per, i) => ({
+    id: `ctx-${i}`,
+    startDate: per.startDate,
+    endDate: per.endDate || undefined,
+    confirmed: true,
+    source: "manual" as const,
+    createdAt: "",
+    updatedAt: "",
+  }));
+}
+
+function evaluateContextOverlaps(events: Array<{ name: string; date: string }>, context: AgentContext, today: string) {
+  const records = recordsFromContext(context);
+  return events.map((ev) => {
+    const result = evaluateEventOverlap(ev.date, records, today);
+    return {
+      name: ev.name,
+      eventDate: ev.date,
+      overlap: (result.status === "logged" ? "period-day" : result.status) as "period-day" | "likely" | "possible" | "unlikely" | "unknown" | "past",
+      overlapNote: result.note,
+      window: result.window,
+    };
+  });
+}
 
 export async function runLavenderAgent(
   userPrompt: string,
@@ -435,7 +468,7 @@ export async function runLavenderAgent(
             detail: `Evaluating cycle overlap for ${fnArgs.events?.length || 0} events`,
             status: "done",
           });
-          const overlaps = evaluateOverlaps(fnArgs.events || [], context);
+          const overlaps = evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
@@ -592,7 +625,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   let planOverlaps: any[] | undefined = undefined;
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
-    planOverlaps = evaluateOverlaps(eventMatches, context);
+    planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
     toolCalls.push({
       id: "call_overlap_" + Date.now(),
       toolName: "check_overlap",
@@ -708,58 +741,4 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     toolCalls,
     planOverlaps,
   };
-}
-
-/**
- * Predictor overlap evaluation logic (mirrors server/actions.ts getFeatures)
- */
-function evaluateOverlaps(events: Array<{ name: string; date: string }>, context: AgentContext) {
-  const avgCycle = context.cycleStats?.avgCycleLength || 28;
-  const avgPeriod = context.cycleStats?.avgPeriodLength || 5;
-  const lastStart = context.cycleStats?.lastPeriodStart;
-  const periods = context.periods || [];
-
-  return events.map((ev) => {
-    let overlap: "period-day" | "likely" | "possible" | "unlikely" | "unknown" = "unknown";
-    let overlapNote = "Log a past period first so predictions can be checked against this date.";
-
-    const inActual = periods.some(
-      (p) => ev.date >= p.startDate && (p.endDate ? ev.date <= p.endDate : ev.date === p.startDate),
-    );
-
-    if (inActual) {
-      overlap = "period-day";
-      overlapNote = "This date falls inside a period you have already logged.";
-    } else if (lastStart) {
-      overlap = "unlikely";
-      overlapNote = "Based on your pattern, your period is not expected to overlap this date.";
-
-      const lastDate = new Date(lastStart);
-      for (let k = 1; k <= 12; k++) {
-        const predStart = new Date(lastDate.getTime() + avgCycle * k * 86400000);
-        const coreEnd = new Date(predStart.getTime() + (avgPeriod - 1) * 86400000);
-        const winStart = new Date(predStart.getTime() - 3 * 86400000);
-        const winEnd = new Date(coreEnd.getTime() + 3 * 86400000);
-
-        const evDate = new Date(ev.date);
-        if (evDate >= predStart && evDate <= coreEnd) {
-          overlap = "likely";
-          overlapNote = `Your period is predicted around ${predStart.toISOString().slice(0, 10)} to ${coreEnd.toISOString().slice(0, 10)}, so it will very likely overlap.`;
-          break;
-        }
-        if (evDate >= winStart && evDate <= winEnd) {
-          overlap = "possible";
-          overlapNote = `This date falls in your wider prediction window (${winStart.toISOString().slice(0, 10)} to ${winEnd.toISOString().slice(0, 10)}). Overlap is possible.`;
-          break;
-        }
-      }
-    }
-
-    return {
-      name: ev.name,
-      eventDate: ev.date,
-      overlap,
-      overlapNote,
-    };
-  });
 }

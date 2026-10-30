@@ -10,6 +10,7 @@ import {
   computeCycleStats,
 } from "../../client/src/cycleStorage";
 import {
+  evaluateEventOverlap,
   getPrediction,
   type PeriodRecord,
 } from "../../client/src/lib/periodEngine";
@@ -120,5 +121,36 @@ try {
   assert(typeof stats.avgPeriodLength === "number", "1.2 open period stats compute without inventing an end");
 } catch (e: any) { assert(false, "1.2 open period", e.message); }
 
-console.log(`\nbatch1 (1.2): ${passed} passed, ${failed} failed`);
+
+// ---- 1.3 one overlap function ----
+try {
+  const rec = (id: string, startDate: string, endDate?: string): PeriodRecord => ({ id, startDate, endDate, confirmed: true, source: "manual", createdAt: "", updatedAt: "" });
+  // Irregular 25-38 day history: starts giving lengths 25, 38, 28, 33
+  const history: PeriodRecord[] = [
+    rec("1", "2026-01-01", "2026-01-05"),
+    rec("2", "2026-01-26", "2026-01-30"),
+    rec("3", "2026-03-05", "2026-03-09"),
+    rec("4", "2026-04-02", "2026-04-06"),
+    rec("5", "2026-05-05", "2026-05-09"),
+  ];
+  const today = "2026-05-10";
+  const statsCycle = 33; // median of 25,38,28,33 = 30.5 -> engine rounds; compute windows via function instead
+  const k1Date = "2026-06-04"; // ~ one cycle after last start
+  const k1 = evaluateEventOverlap(k1Date, history, today);
+  // Event ~6 cycles ahead: last start + ~183 days
+  const k6 = evaluateEventOverlap("2026-11-04", history, today);
+  const width = (r: any) => r.window ? (new Date(r.window.end).getTime() - new Date(r.window.start).getTime()) / 86400000 : 0;
+  assert(k1.window !== null && k6.window !== null, "1.3 irregular history produces windows");
+  assert(width(k6) > width(k1), "1.3 k=6 window is wider than k=1", `k1=${width(k1)}d k6=${width(k6)}d statuses=${k1.status}/${k6.status}`);
+  const past = evaluateEventOverlap("2026-05-01", history, today);
+  assert(past.status === "past" || past.status === "logged", "1.3 past event is past/logged", past.status);
+  const logged = evaluateEventOverlap("2026-05-06", history, today);
+  assert(logged.status === "logged", "1.3 event inside a logged period is logged", logged.status);
+  const unknown = evaluateEventOverlap("2027-01-01", [rec("only", "2026-05-01", "2026-05-05")], today);
+  assert(unknown.status === "unknown" && /log more cycles/i.test(unknown.note), "1.3 fewer than 2 completed cycles = unknown, never unlikely", unknown.status);
+  const oneCycle: PeriodRecord[] = [rec("a", "2026-03-01", "2026-03-05"), rec("b", "2026-03-29", "2026-04-02")];
+  assert(evaluateEventOverlap("2026-05-01", oneCycle, "2026-04-10").status === "unknown", "1.3 one completed cycle is still unknown");
+} catch (e: any) { assert(false, "1.3", e.message); }
+
+console.log(`\nbatch1: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

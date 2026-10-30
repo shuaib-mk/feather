@@ -490,6 +490,112 @@ export function getPrediction(
   };
 }
 
+export type EventOverlapStatus = "logged" | "likely" | "possible" | "unlikely" | "past" | "unknown";
+
+export interface EventOverlapResult {
+  status: EventOverlapStatus;
+  window: { start: DateKey; end: DateKey } | null;
+  note: string;
+  cyclesAhead?: number;
+  expectedStart?: DateKey | null;
+}
+
+/**
+ * The ONE event-overlap function. Uses the engine prediction's earliest/latest
+ * logic: for an event k cycles ahead, the half-width grows with sqrt(k)
+ * times the cycle variability, so far-ahead dates get honestly wider windows.
+ * Events before today are "past" (or "logged" inside a logged period).
+ * Fewer than 2 completed cycles -> "unknown", never "unlikely".
+ */
+export function evaluateEventOverlap(
+  eventDate: DateKey,
+  records: PeriodRecord[],
+  today: DateKey,
+  settings: EngineSettings = DEFAULT_SETTINGS,
+): EventOverlapResult {
+  toDate(eventDate);
+  toDate(today);
+  const sorted = validateRecords(records);
+  const confirmed = sorted.filter((r) => r.confirmed);
+
+  // Logged takes precedence over "past".
+  for (const r of confirmed) {
+    const end = r.endDate ?? r.startDate;
+    if (eventDate >= r.startDate && eventDate <= end) {
+      return {
+        status: "logged",
+        window: { start: r.startDate, end },
+        note: "This date falls inside a period you have already logged.",
+      };
+    }
+  }
+
+  if (eventDate < today) {
+    return {
+      status: "past",
+      window: { start: eventDate, end: eventDate },
+      note: "This date has already passed.",
+    };
+  }
+
+  const stats = getCycleStatistics(confirmed, settings);
+  if (stats.completedCycleCount < 2 || !stats.medianCycleLength) {
+    return {
+      status: "unknown",
+      window: null,
+      note: "Not enough data yet: log more cycles to check overlap for this date.",
+    };
+  }
+
+  const last = confirmed[confirmed.length - 1];
+  const cycleLength = stats.medianCycleLength;
+  const lengths = stats.recentCycleLengths.length ? stats.recentCycleLengths : stats.allCycleLengths;
+  const deviations = lengths.map((len) => Math.abs(len - cycleLength));
+  const variability = deviations.length ? median(deviations) : 0;
+  const bleedingDays = stats.averageBleedingDuration ?? settings.defaultPeriodDuration;
+
+  const approxHalfWidth =
+    last.startEarliest && last.startLatest && last.startEarliest < last.startLatest
+      ? Math.ceil(dayDifference(last.startEarliest, last.startLatest) / 2)
+      : 0;
+  const anchorStart = approxHalfWidth
+    ? addDays(last.startEarliest!, Math.floor(dayDifference(last.startEarliest!, last.startLatest!) / 2))
+    : last.startDate;
+
+  const k = Math.max(1, Math.round(dayDifference(anchorStart, eventDate) / cycleLength));
+  const expectedStart = addDays(anchorStart, cycleLength * k);
+  const coreEnd = addDays(expectedStart, Math.max(0, bleedingDays - 1));
+  const baseHalf = Math.max(3, Math.ceil(1.5 * variability));
+  const halfWidth = Math.ceil(baseHalf * Math.sqrt(k)) + approxHalfWidth;
+  const window = { start: addDays(expectedStart, -halfWidth), end: addDays(coreEnd, halfWidth) };
+
+  if (eventDate >= expectedStart && eventDate <= coreEnd) {
+    return {
+      status: "likely",
+      window,
+      note: `Likely overlap: a period is estimated around ${expectedStart} to ${coreEnd}.`,
+      cyclesAhead: k,
+      expectedStart,
+    };
+  }
+  if (eventDate >= window.start && eventDate <= window.end) {
+    return {
+      status: "possible",
+      window,
+      note: `Possible overlap: this date is inside the wider estimate window ${window.start} to ${window.end}.`,
+      cyclesAhead: k,
+      expectedStart,
+    };
+  }
+  return {
+    status: "unlikely",
+    window,
+    note: `Unlikely to overlap (estimate): the estimated window for that cycle is ${window.start} to ${window.end}.`,
+    cyclesAhead: k,
+    expectedStart,
+  };
+}
+
 /**
  * Returns canonical daily status for a given calendar date:
  * - Cycle Day 1 is strictly the recorded period start date

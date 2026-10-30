@@ -414,13 +414,13 @@ export function VoiceFlowPage() {
             {planOverlaps.map((item, idx) => (
               <div key={idx} className="p-3 rounded-[16px] bg-white/80 border border-stone-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div className="min-w-0">
-                  <span className="font-semibold text-stone-900 block font-sans truncate">{item.eventName} ({prettyDate(item.date)})</span>
-                  <span className="text-stone-600 text-[11px] block">{item.note}</span>
+                  <span className="font-semibold text-stone-900 block font-sans truncate">{item.name || item.eventName} ({prettyDate(item.eventDate || item.date)})</span>
+                  <span className="text-stone-600 text-[11px] block">{item.overlapNote || item.note}</span>
                 </div>
                 <span className={`font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full self-start sm:self-auto shrink-0 ${
                   item.overlap === "likely" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
                 }`}>
-                  {item.overlap === "likely" ? "Likely Overlap" : "Unlikely Overlap"}
+                  {item.overlap === "likely" ? "Likely overlap" : item.overlap === "possible" ? "Possible overlap" : item.overlap === "period-day" || item.overlap === "logged" ? "Logged period" : item.overlap === "past" ? "Past" : item.overlap === "unknown" ? "Not enough data yet" : "Unlikely to overlap (estimate)"}
                 </span>
               </div>
             ))}

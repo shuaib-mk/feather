@@ -527,68 +527,6 @@ export function computeCycleStats(periods: Period[], logs: DayLog[] = []): Cycle
   };
 }
 
-/**
- * Evaluates event overlap using neutral, safe planning language.
- * Never promises certainty or pregnancy safety.
- */
-export function evaluateOverlaps(
-  events: Array<{ name: string; date: string }>,
-  stats: CycleStats,
-  periods: Period[],
-) {
-  const avgCycle = stats.avgCycleLength || 28;
-  const avgPeriod = stats.avgPeriodLength || 5;
-  const lastStart = stats.lastPeriodStart;
-
-  return events.map((ev) => {
-    let overlap: "period-day" | "likely" | "possible" | "unlikely" | "unknown" = "unknown";
-    let overlapLabel = "Unknown";
-    let overlapNote = "Log a past period first so predictions can be checked against this date.";
-
-    const inActual = periods.some(
-      (p) => ev.date >= p.startDate && (p.endDate ? ev.date <= p.endDate : ev.date === p.startDate),
-    );
-
-    if (inActual) {
-      overlap = "period-day";
-      overlapLabel = "Logged period date";
-      overlapNote = "This date falls inside a period you have already logged.";
-    } else if (lastStart) {
-      overlap = "unlikely";
-      overlapLabel = "Unlikely to overlap (estimate)";
-      overlapNote = "Based on your pattern, your period is not expected to overlap this date.";
-
-      for (let k = 1; k <= 12; k++) {
-        const predStart = addDays(lastStart, Math.round(avgCycle * k));
-        const coreEnd = addDays(predStart, Math.max(0, Math.round(avgPeriod - 1)));
-        const winStart = addDays(predStart, -3);
-        const winEnd = addDays(coreEnd, 3);
-
-        if (ev.date >= predStart && ev.date <= coreEnd) {
-          overlap = "likely";
-          overlapLabel = "Likely overlap";
-          overlapNote = `Your period is predicted around ${predStart} to ${coreEnd}, so it will very likely overlap.`;
-          break;
-        }
-        if (ev.date >= winStart && ev.date <= winEnd) {
-          overlap = "possible";
-          overlapLabel = "Possible overlap";
-          overlapNote = `This date falls in your wider prediction window (${winStart} to ${winEnd}). Overlap is possible.`;
-          break;
-        }
-      }
-    }
-
-    return {
-      name: ev.name,
-      eventDate: ev.date,
-      overlap,
-      overlapLabel,
-      overlapNote,
-    };
-  });
-}
-
 // ========================================================
 // BACKUP, EXPORT & LOCAL VAULT MANAGEMENT
 // ========================================================
