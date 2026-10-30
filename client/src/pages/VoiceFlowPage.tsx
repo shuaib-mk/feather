@@ -286,12 +286,14 @@ export function VoiceFlowPage() {
           <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
             <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
               {[
-                { id: "auto", label: "Auto Detect", sub: " (All)" },
+                { id: "auto", label: "Auto Detect", sub: "" },
                 { id: "en", label: "English" },
-                { id: "es", label: "Español" },
-                { id: "fr", label: "Français" },
-                { id: "de", label: "Deutsch" },
-                { id: "ja", label: "日本語" },
+                { id: "hi", label: "Hindi" },
+                { id: "bn", label: "Bengali" },
+                { id: "kn", label: "Kannada" },
+                { id: "mr", label: "Marathi" },
+                { id: "ta", label: "Tamil" },
+                { id: "te", label: "Telugu" },
               ].map((lang) => (
                 <button
                   key={lang.id}
@@ -310,6 +312,7 @@ export function VoiceFlowPage() {
             </div>
           </div>
         </div>
+        <p className="text-[11px] text-stone-500 font-sans">Voice transcription supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu. Malayalam voice is not supported by Meta — Malayalam works when typed (offline parser).</p>
 
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
         <div className="flex flex-col items-center justify-center space-y-3 py-2">

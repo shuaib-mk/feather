@@ -27,7 +27,7 @@ Most menstrual trackers assume women remember calendar dates (*"my cycle started
 - *"I have a marathon on Oct 15 and a flight on Oct 28 — will my period overlap?"*
 
 **Feather** is an indie developer submission built to solve this exact problem using Meta's foundational audio and reasoning models:
-1. **Voice-First Logging**: Streams audio directly to **Meta Muse Voice Transcribe** with 16kHz mono WAV downsampling and real-time audio visualization.
+1. **Voice-First Logging**: Streams audio directly to **Meta Muse Voice Transcribe** with 24kHz mono WAV downsampling and real-time audio visualization.
 2. **Fuzzy Landmark Recall**: Uses **Meta Muse Spark** with structured tool-calling (`milestone_lookup`) and deterministic calendar arithmetic to resolve conversational temporal references into calendar coordinates.
 3. **Accession Slip Preview & Multi-Turn Corrections**: Displays an interactive glass slip card allowing the user to inspect and confirm dates, flow level, and symptoms before anything is stored, with conversational corrections (*"no, make it the 3rd"*, *"add headache"*).
 4. **Under the Hood Trace**: Live in-app disclosure rendering tool names, arguments, returned results, and millisecond latencies for hackathon judges.
@@ -43,8 +43,8 @@ Most menstrual trackers assume women remember calendar dates (*"my cycle started
 All code in this repository was engineered specifically for the hackathon event:
 
 ### A. Speech-to-Text Pipeline (`ai/backend/transcribe.ts`, `ai/frontend/useAudioRecorder.ts`)
-- Implemented real-time audio downsampling to 16kHz mono 16-bit PCM WAV.
-- Formats multipart HTTP request payload (`request` JSON metadata + `audio` binary) expected by Meta's `/asr/transcribe` endpoint.
+- Implemented real-time audio resampling to 24 kHz mono 16-bit PCM WAV (rejects audio over 10 minutes).
+- Formats the multipart HTTP request payload from the owner-provided Meta docs: `request` JSON ({mode:"PUSH_TO_TALK", model from MUSE_VOICE_MODEL, audioEncoding:"WAV", languageBias, keywords}) as application/json + `audio` WAV binary to Meta's `/asr/transcribe` endpoint; reads the `transcript` response field. Meta voice supports Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported (typed Malayalam uses the offline parser).
 - Zero audio retention: audio is processed in-memory and discarded immediately after transcription.
 - 10-second timeout via `AbortController` with automatic 1-retry fallback.
 
@@ -121,4 +121,4 @@ Work dated 2026-10-30 in git log was built during this hackathon working session
 Tap **Try Demo** on the first screen. Demo Mode is isolated in `feather_demo_v1`; exiting returns to the real vault untouched.
 
 ## Known limitations
-The offline parser is rule-based; Meta API request shapes are not verified against a live key; Malayalam is not in Meta's validated transcription languages; festival dates are limited to verified ones; estimates are not medical advice; data is unencrypted unless App Lock is on; Diary Scanner is secondary and optional. Live evaluation results are "Not measured" until run with the owner's key. See README "Known limitations" and PROVENANCE.md.
+The offline parser is rule-based; Live Meta calls are not verified against a live key (the ASR request shape follows the owner-provided Meta docs); Malayalam is not in Meta's supported voice languages; festival dates are limited to verified ones; estimates are not medical advice; data is unencrypted unless App Lock is on; Diary Scanner is secondary and optional. Live evaluation results are "Not measured" until run with the owner's key. See README "Known limitations" and PROVENANCE.md.

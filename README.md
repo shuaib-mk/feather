@@ -6,7 +6,7 @@ Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, 
 ## Known limitations
 - The offline parser is rule-based (keyword/lexicon matching and deterministic date arithmetic); it does not understand arbitrary phrasing.
 - Meta API request shapes have not been verified against a live key; live results are "Not measured" until the owner runs the live evaluation.
-- Malayalam is not in Meta's validated transcription languages; Malayalam support here is via the offline lexicon and is untested with real audio.
+- Malayalam is NOT in Meta's supported voice transcription languages (supported Indian languages: Hindi, Bengali, Kannada, Marathi, Tamil, Telugu). Malayalam support here is typed text via the offline lexicon and is untested with real audio.
 - Festival/landmark dates are limited to the verified entries in `ai/backend/landmarks.json`; unverifiable dates were omitted rather than invented.
 - Cycle estimates are planning estimates only, not medical advice. The app only logs and plans; it does not diagnose, interpret symptoms, or recommend medication.
 - Data is unencrypted localStorage unless App Lock is on (Settings -> Privacy); with App Lock on, the vault is encrypted at rest on the device and the passphrase cannot be recovered if forgotten.
@@ -41,7 +41,7 @@ Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, 
 
 ```mermaid
 flowchart TD
-    User([User Voice or Text]) --> Capture[Voice Capture Console / 16kHz WAV]
+    User([User Voice or Text]) --> Capture[Voice Capture Console / 24kHz WAV]
     Capture --> LimitCheck{Stateless Protection & Rate Limits}
     LimitCheck -- Exceeded --> Friendly429[Friendly UI Error: 'Demo limit reached, try again in a minute']
     LimitCheck -- Allowed --> TranscribeAPI["/api/transcribe (Meta Muse Voice Transcribe)"]
@@ -200,7 +200,7 @@ feather/
 │   ├── frontend/
 │   │   ├── aiClient.ts       # Frontend client with 10s timeout, retry, and offline fallback
 │   │   ├── PaperDiaryImportModal.tsx # Photo calendar extractor modal
-│   │   └── useAudioRecorder.ts       # 16kHz WAV audio recorder & live Web Audio visualizer
+│   │   └── useAudioRecorder.ts       # 24kHz WAV audio recorder & live Web Audio visualizer
 │   └── test/
 │       ├── date_resolution.test.ts  # 22 Landmark recall, edge-case, and slip correction tests
 │       ├── guardrail.test.ts        # 57 Multilingual medical refusal tests
