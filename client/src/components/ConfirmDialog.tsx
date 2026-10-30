@@ -62,7 +62,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-950 transition-colors cursor-pointer"
+            className="liquid-glass-pill rounded-full px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-950 transition-colors cursor-pointer"
           >
             {cancelLabel}
           </button>

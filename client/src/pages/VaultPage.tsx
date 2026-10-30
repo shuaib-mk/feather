@@ -171,7 +171,7 @@ export function VaultPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="liquid-glass-pill px-5 py-2.5 font-sans text-xs font-medium text-stone-800 hover:text-stone-950 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+            className="liquid-glass-pill rounded-full px-5 py-2.5 font-sans text-xs font-medium text-stone-800 hover:text-stone-950 flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -205,7 +205,7 @@ export function VaultPage() {
               <button
                 type="button"
                 onClick={clearDemo}
-                className="liquid-glass-pill px-4 py-2 font-sans text-xs text-amber-800 border border-amber-300 font-semibold hover:bg-amber-50 cursor-pointer"
+                className="liquid-glass-pill rounded-full px-4 py-2 font-sans text-xs text-amber-800 border border-amber-300 font-semibold hover:bg-amber-50 cursor-pointer"
               >
                 Exit demo
               </button>

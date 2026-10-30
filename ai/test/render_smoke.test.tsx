@@ -112,3 +112,4 @@ function renderTree(path = "/", isDemo = false) {
 }
 
 console.log("\nAll 6 Render Smoke Tests PASSED with 0 errors!");
+

@@ -147,7 +147,7 @@ export function DiaryScannerPage() {
             </div>
 
             <div className="flex items-center justify-center gap-3">
-              <label className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-2xs">
+              <label className="liquid-glass-pill rounded-full px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-2xs">
                 Change Photo
                 <input
                   type="file"
@@ -191,7 +191,7 @@ export function DiaryScannerPage() {
             <button
               type="button"
               onClick={handleAddManualRow}
-              className="liquid-glass-pill px-3 py-1 font-sans text-xs font-medium text-stone-700 self-start sm:self-auto cursor-pointer"
+              className="liquid-glass-pill rounded-full px-3 py-1 font-sans text-xs font-medium text-stone-700 self-start sm:self-auto cursor-pointer"
             >
               + Add Row
             </button>
@@ -259,7 +259,7 @@ export function DiaryScannerPage() {
             <button
               type="button"
               onClick={() => setExtractedPeriods([])}
-              className="liquid-glass-pill px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
+              className="liquid-glass-pill rounded-full px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
               Cancel
             </button>

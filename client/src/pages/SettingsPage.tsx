@@ -112,7 +112,7 @@ export function SettingsPage() {
             <button
               type="button"
               onClick={() => handleToggleBaseten(false)}
-              className="mt-3 liquid-glass-pill px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
+              className="mt-3 liquid-glass-pill rounded-full px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
             >
               Select Hosted Meta API
             </button>
@@ -134,7 +134,7 @@ export function SettingsPage() {
             <button
               type="button"
               onClick={() => handleToggleBaseten(true)}
-              className="mt-3 liquid-glass-pill px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
+              className="mt-3 liquid-glass-pill rounded-full px-3 py-1 font-sans text-xs font-semibold text-stone-800 cursor-pointer shadow-2xs"
             >
               Select Baseten Open-Weight
             </button>

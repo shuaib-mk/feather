@@ -484,7 +484,7 @@ export function VoiceFlowPage() {
       {/* Accession Slip — Confirmed Entry Preview (Editable) */}
       {presetDate && <p className="text-xs liquid-glass-card rounded-[16px] p-3">Logging for {presetDate} (chosen on the calendar). Mention the date, or confirm the slip date after parsing.</p>}
       {(agentMode || isOfflineFallback) && (
-        <p role="status" className="text-xs liquid-glass-pill inline-block px-3 py-1.5">
+        <p role="status" className="text-xs liquid-glass-pill rounded-full inline-block px-3 py-1.5">
           {isOfflineFallback || agentMode?.mode === "offline"
             ? (agentMode?.modeReason && agentMode.modeReason.startsWith("Offline parser")
                 ? agentMode.modeReason
@@ -504,7 +504,7 @@ export function VoiceFlowPage() {
                 Save Event to Calendar
               </h3>
             </div>
-            <span className="liquid-glass-pill font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
+            <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
               Confirmation Required
             </span>
           </div>
@@ -551,7 +551,7 @@ export function VoiceFlowPage() {
                 Confirm Cycle Entry Details
               </h3>
             </div>
-            <span className="liquid-glass-pill font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
+            <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
               Confirmation Required
             </span>
           </div>
@@ -645,7 +645,7 @@ export function VoiceFlowPage() {
               <button
                 type="submit"
                 disabled={!slipCorrectionText.trim() || isProcessing}
-                className="liquid-glass-button rounded-xl px-3.5 py-2 font-sans text-xs font-semibold text-stone-900 cursor-pointer shadow-xs disabled:opacity-40"
+                className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold text-stone-900 cursor-pointer shadow-xs disabled:opacity-40"
               >
                 Apply
               </button>
@@ -663,7 +663,7 @@ export function VoiceFlowPage() {
             <button
               type="button"
               onClick={handleDiscard}
-              className="liquid-glass-pill px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
+              className="liquid-glass-pill rounded-full px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
               Discard
             </button>
@@ -715,7 +715,7 @@ export function VoiceFlowPage() {
                     </span>
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full font-bold">{call.latencyMs} ms</span>
-                      <span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.model}</span><span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.executedBy || call.model}</span>
+                      <span className="liquid-glass-pill rounded-full px-2 py-0.5 text-stone-600">{call.model}</span><span className="liquid-glass-pill rounded-full px-2 py-0.5 text-stone-600">{call.executedBy || call.model}</span>
                     </div>
                   </div>
                   <pre className="bg-stone-50 p-2.5 rounded-lg text-stone-800 text-[10px] overflow-x-auto max-w-full break-all whitespace-pre-wrap font-mono">

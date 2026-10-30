@@ -67,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         {/* Persistent Demo Mode Banner */}
         {isDemoActive && (
-          <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">
+          <div role="status" className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">
             <div className="flex items-center gap-2.5">
               <div className="size-6 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center shrink-0 font-bold text-xs">
                 ✦

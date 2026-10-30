@@ -178,7 +178,7 @@ export function ChroniclePage() {
                     ) : null}
 
                     {p?.landmarkName && (
-                      <span className="liquid-glass-pill px-2.5 py-0.5 text-[11px] font-sans font-medium text-stone-700 inline-flex items-center gap-1.5">
+                      <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-stone-700 inline-flex items-center gap-1.5">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
                           <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
                           <path d="M7 7h.01" />
@@ -195,7 +195,7 @@ export function ChroniclePage() {
                         {l.symptoms.map((sym) => (
                           <span
                             key={sym}
-                            className="liquid-glass-pill px-2.5 py-0.5 text-[11px] text-stone-600 font-sans"
+                            className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] text-stone-600 font-sans"
                           >
                             {sym}
                           </span>
@@ -229,7 +229,7 @@ export function ChroniclePage() {
                           date: item.date,
                         })
                       }
-                      className="liquid-glass-pill p-2 text-stone-400 hover:text-rose-600 cursor-pointer transition-colors"
+                      className="liquid-glass-pill rounded-full p-2 text-stone-400 hover:text-rose-600 cursor-pointer transition-colors"
                       aria-label={`Delete period for ${prettyDate(item.date)}`}
                       title="Delete period record"
                     >
@@ -250,7 +250,7 @@ export function ChroniclePage() {
                           date: item.date,
                         })
                       }
-                      className="liquid-glass-pill p-2 text-stone-400 hover:text-rose-600 cursor-pointer transition-colors"
+                      className="liquid-glass-pill rounded-full p-2 text-stone-400 hover:text-rose-600 cursor-pointer transition-colors"
                       aria-label={`Delete log for ${prettyDate(item.date)}`}
                       title="Delete daily log"
                     >
