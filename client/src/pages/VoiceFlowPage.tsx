@@ -260,30 +260,33 @@ export function VoiceFlowPage() {
       {/* Recording & Input Console */}
       <div className="liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative">
         {/* Universal Language Selection Row */}
-        <div className="flex items-center justify-center gap-2 flex-wrap text-xs">
-          <span className="text-stone-500 font-sans text-xs font-medium">Language:</span>
-          <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
-            {[
-              { id: "auto", label: "Auto Detect (All Languages)" },
-              { id: "en", label: "English" },
-              { id: "es", label: "Español" },
-              { id: "fr", label: "Français" },
-              { id: "de", label: "Deutsch" },
-              { id: "ja", label: "日本語" },
-            ].map((lang) => (
-              <button
-                key={lang.id}
-                type="button"
-                onClick={() => setSelectedLanguage(lang.id)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                  selectedLanguage === lang.id
-                    ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
-                    : "text-stone-600 hover:text-stone-950"
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full">
+          <span className="text-stone-500 font-sans text-xs font-medium shrink-0">Language:</span>
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
+            <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
+              {[
+                { id: "auto", label: "Auto Detect", sub: " (All)" },
+                { id: "en", label: "English" },
+                { id: "es", label: "Español" },
+                { id: "fr", label: "Français" },
+                { id: "de", label: "Deutsch" },
+                { id: "ja", label: "日本語" },
+              ].map((lang) => (
+                <button
+                  key={lang.id}
+                  type="button"
+                  onClick={() => setSelectedLanguage(lang.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                    selectedLanguage === lang.id
+                      ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  {lang.label}
+                  {lang.sub && <span className="hidden sm:inline">{lang.sub}</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -341,21 +344,21 @@ export function VoiceFlowPage() {
         </div>
 
         {/* Alternative Natural Text Input */}
-        <div className="max-w-xl mx-auto pt-2">
-          <form onSubmit={handleManualSubmit} className="relative flex items-center">
+        <div className="max-w-xl mx-auto pt-2 w-full">
+          <form onSubmit={handleManualSubmit} className="relative flex items-center w-full">
             <input
               ref={textInputRef}
               type="text"
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
-              placeholder="Or type naturally (e.g., 'Period started 2 days before New Year\'s, medium flow')..."
+              placeholder="Or type naturally (e.g. 'Period started 2 days before New Year\'s')..."
               disabled={isProcessing || isRecording}
-              className="w-full liquid-glass-input rounded-full py-3 pl-5 pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
+              className="w-full liquid-glass-input rounded-full py-2.5 sm:py-3 pl-4 sm:pl-5 pr-22 sm:pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
             />
             <button
               type="submit"
               disabled={isProcessing || !manualText.trim()}
-              className="absolute right-1.5 liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs"
+              className="absolute right-1 sm:right-1.5 liquid-glass-button rounded-full px-3.5 sm:px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs whitespace-nowrap"
             >
               Resolve →
             </button>
@@ -399,12 +402,12 @@ export function VoiceFlowPage() {
           </span>
           <div className="space-y-2">
             {planOverlaps.map((item, idx) => (
-              <div key={idx} className="p-3 rounded-[16px] bg-white/80 border border-stone-200/60 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-semibold text-stone-900 block font-sans">{item.eventName} ({prettyDate(item.date)})</span>
+              <div key={idx} className="p-3 rounded-[16px] bg-white/80 border border-stone-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="min-w-0">
+                  <span className="font-semibold text-stone-900 block font-sans truncate">{item.eventName} ({prettyDate(item.date)})</span>
                   <span className="text-stone-600 text-[11px] block">{item.note}</span>
                 </div>
-                <span className={`font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+                <span className={`font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full self-start sm:self-auto shrink-0 ${
                   item.overlap === "likely" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
                 }`}>
                   {item.overlap === "likely" ? "Likely Overlap" : "Unlikely Overlap"}
@@ -525,18 +528,18 @@ export function VoiceFlowPage() {
           </form>
 
           {/* Save & Discard Actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-200/50">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
             <button
               type="button"
               onClick={handleDiscard}
-              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer"
+              className="liquid-glass-pill px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
               Discard
             </button>
             <button
               type="button"
               onClick={handleSaveConfirmed}
-              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center"
             >
               Confirm &amp; Save Entry
             </button>
@@ -584,7 +587,7 @@ export function VoiceFlowPage() {
                       <span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.model}</span>
                     </div>
                   </div>
-                  <pre className="bg-stone-50 p-2 rounded-lg text-stone-800 text-[10px] overflow-x-auto">
+                  <pre className="bg-stone-50 p-2.5 rounded-lg text-stone-800 text-[10px] overflow-x-auto max-w-full break-all whitespace-pre-wrap font-mono">
                     {JSON.stringify({ args: call.args, result: call.result }, null, 2)}
                   </pre>
                 </div>

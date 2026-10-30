@@ -17,10 +17,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   } = useCycle();
 
   return (
-    <div className="min-h-screen feather-aura-bg text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-18 sm:pt-20 md:pt-8 pb-28 md:pb-12">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden feather-aura-bg text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(4.75rem+env(safe-area-inset-top,0px))] md:pt-8 pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
       {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
       {backupToast && (
-        <div className="fixed top-18 md:top-6 left-4 sm:left-auto right-4 sm:right-8 z-50 flex items-center gap-3 rounded-[20px] liquid-glass-island px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm">
+        <div className="fixed top-[calc(4.75rem+env(safe-area-inset-top,0px))] md:top-6 left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
           <div className="size-7 rounded-full liquid-glass-pill bg-white/90 text-stone-900 flex items-center justify-center shrink-0 shadow-xs border border-white">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -30,7 +30,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           <div className="flex-1 min-w-0">
             <span className="block font-bold text-stone-900 truncate">Back up your data</span>
-            <span className="text-[11px] text-stone-600 block">Your entries live only on this device.</span>
+            <span className="text-[11px] text-stone-600 block truncate sm:whitespace-normal">Your entries live only on this device.</span>
           </div>
           <button
             type="button"
@@ -59,7 +59,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main Spacious Canvas (Accessible Main Landmark) */}
       <main
         id="main-content"
-        className="min-h-[85vh] md:pl-28 lg:pl-32 xl:pl-36 md:pr-8 py-2 sm:py-4 px-3.5 sm:px-6 max-w-5xl mx-auto space-y-5"
+        className="min-h-[85vh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-28 lg:pl-32 xl:pl-36 md:pr-8 space-y-5 overflow-x-hidden"
       >
         {/* Gentle 14-Day Export Overdue Reminder Banner */}
         {showOverdueBanner && (

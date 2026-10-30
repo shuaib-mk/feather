@@ -171,7 +171,7 @@ export function SettingsPage() {
 
       {/* Developer Architecture & System Docs (Tabs) */}
       <div className="liquid-glass-card rounded-[24px] p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-200/50 pb-3 flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-200/50 pb-3 gap-3">
           <div>
             <span className="font-sans text-xs font-semibold text-violet-700 block">
               Technical Documentation
@@ -181,26 +181,28 @@ export function SettingsPage() {
             </h3>
           </div>
 
-          <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
-            {[
-              { id: "models", label: "Pipeline" },
-              { id: "guardrail", label: "Guardrails" },
-              { id: "landmarks", label: "Landmark Engine" },
-              { id: "privacy", label: "Privacy" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveDocTab(tab.id as any)}
-                className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all ${
-                  activeDocTab === tab.id
-                    ? "liquid-glass-button text-stone-900 shadow-xs font-bold"
-                    : "text-stone-600 hover:text-stone-950"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-0.5">
+            <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
+              {[
+                { id: "models", label: "Pipeline" },
+                { id: "guardrail", label: "Guardrails" },
+                { id: "landmarks", label: "Landmark Engine" },
+                { id: "privacy", label: "Privacy" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveDocTab(tab.id as any)}
+                  className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all whitespace-nowrap ${
+                    activeDocTab === tab.id
+                      ? "liquid-glass-button text-stone-900 shadow-xs font-bold"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

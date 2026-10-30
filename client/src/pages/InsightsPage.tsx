@@ -167,36 +167,38 @@ export function InsightsPage() {
       </div>
 
       {/* 12-Month Foresight Matrix Filter Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
-          {[
-            { id: "all", label: `All Milestones (${matrix.length})` },
-            { id: "travel", label: "Travel & Vacations" },
-            { id: "energy", label: "High Energy Windows" },
-            { id: "rest", label: "Rest & Reset" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setForesightFilter(tab.id as any)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                foresightFilter === tab.id
-                  ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
-                  : "text-stone-600 hover:text-stone-950"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-0.5">
+          <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
+            {[
+              { id: "all", label: `All (${matrix.length})` },
+              { id: "travel", label: "Travel & Trips" },
+              { id: "energy", label: "High Energy" },
+              { id: "rest", label: "Rest & Reset" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setForesightFilter(tab.id as any)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  foresightFilter === tab.id
+                    ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
+                    : "text-stone-600 hover:text-stone-950"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* View Toggle */}
-        <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
+        <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 self-start sm:self-auto shrink-0">
           <button
             type="button"
             onClick={() => setViewMode("cards")}
-            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer ${
-              viewMode === "cards" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all ${
+              viewMode === "cards" ? "liquid-glass-button text-stone-900 shadow-2xs font-bold" : "text-stone-500"
             }`}
           >
             Cards
@@ -204,8 +206,8 @@ export function InsightsPage() {
           <button
             type="button"
             onClick={() => setViewMode("table")}
-            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer ${
-              viewMode === "table" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-500"
+            className={`px-3 py-1 rounded-full text-xs font-sans font-semibold cursor-pointer transition-all ${
+              viewMode === "table" ? "liquid-glass-button text-stone-900 shadow-2xs font-bold" : "text-stone-500"
             }`}
           >
             Table
@@ -262,8 +264,8 @@ export function InsightsPage() {
       ) : (
         /* Matrix Display: Compact Table View */
         <div className="liquid-glass-card rounded-[22px] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-sans">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full min-w-[560px] text-left text-xs font-sans">
               <thead className="bg-stone-100/60 font-sans text-[11px] font-semibold text-stone-600 border-b border-stone-200/60">
                 <tr>
                   <th className="py-2.5 px-4 font-semibold">Milestone</th>

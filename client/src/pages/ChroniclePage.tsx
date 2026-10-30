@@ -93,29 +93,31 @@ export function ChroniclePage() {
       />
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1">
-          {[
-            { id: "all", label: `All Entries (${allItems.length})` },
-            { id: "periods", label: `Periods (${periods.length})` },
-            { id: "logs", label: `Daily Notes (${logs.length})` },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setFilterType(tab.id as any)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
-                filterType === tab.id
-                  ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
-                  : "text-stone-600 hover:text-stone-950"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-0.5">
+          <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
+            {[
+              { id: "all", label: `All Entries (${allItems.length})` },
+              { id: "periods", label: `Periods (${periods.length})` },
+              { id: "logs", label: `Daily Notes (${logs.length})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilterType(tab.id as any)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  filterType === tab.id
+                    ? "liquid-glass-button text-stone-900 shadow-xs font-semibold"
+                    : "text-stone-600 hover:text-stone-950"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <span className="font-sans text-[11px] text-stone-500 font-medium">
+        <span className="font-sans text-[11px] text-stone-500 font-medium self-end sm:self-auto shrink-0">
           Saved in localStorage
         </span>
       </div>

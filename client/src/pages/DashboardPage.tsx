@@ -127,26 +127,26 @@ export function DashboardPage() {
         <>
           {/* Key Cycle Statistics Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="font-sans text-xs font-medium text-stone-500">
+            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1 min-w-0">
+              <div className="flex items-center justify-between gap-1 flex-wrap">
+                <span className="font-sans text-xs font-medium text-stone-500 shrink-0">
                   Next Estimate
                 </span>
                 {stats.predictionStatus === "overdue" && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-amber-100 text-amber-800">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-amber-100 text-amber-800 shrink-0">
                     Past Expected
                   </span>
                 )}
                 {stats.predictionStatus === "provisional" && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-stone-100 text-stone-600">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-stone-100 text-stone-600 shrink-0">
                     Provisional
                   </span>
                 )}
               </div>
-              <div className="font-serif text-2xl font-semibold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                 {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate).split(",")[0] : "Estimating"}
               </div>
-              <span className="font-sans text-[11px] text-violet-700 font-medium block">
+              <span className="font-sans text-[11px] text-violet-700 font-medium block truncate" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate).split(",")[0]} – ${prettyDate(stats.latestNextDate).split(",")[0]}` : undefined}>
                 {stats.earliestNextDate && stats.latestNextDate
                   ? `Window: ${prettyDate(stats.earliestNextDate).split(",")[0]} – ${prettyDate(stats.latestNextDate).split(",")[0]}`
                   : daysUntilNext != null
@@ -159,40 +159,40 @@ export function DashboardPage() {
               </span>
             </div>
 
-            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-sans text-xs font-medium text-stone-500 block">
+            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1 min-w-0">
+              <span className="font-sans text-xs font-medium text-stone-500 block truncate">
                 Cycle Length
               </span>
-              <div className="font-serif text-2xl font-semibold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                 {stats.medianCycleLength || stats.avgCycleLength}d
               </div>
-              <span className="font-sans text-[11px] text-stone-500 block">
-                {stats.isDefaultCycle ? "Population baseline (28d)" : "Observed median"}
+              <span className="font-sans text-[11px] text-stone-500 block truncate">
+                {stats.isDefaultCycle ? "Population (28d)" : "Observed median"}
               </span>
             </div>
 
-            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-sans text-xs font-medium text-stone-500 block">
+            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1 min-w-0">
+              <span className="font-sans text-xs font-medium text-stone-500 block truncate">
                 Flow Duration
               </span>
-              <div className="font-serif text-2xl font-semibold text-stone-900">
+              <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                 {stats.avgPeriodLength}d
               </div>
-              <span className="font-sans text-[11px] text-stone-500 block">
-                {stats.isDefaultPeriod ? "Default estimate (5d)" : "Observed average"}
+              <span className="font-sans text-[11px] text-stone-500 block truncate">
+                {stats.isDefaultPeriod ? "Default (5d)" : "Observed average"}
               </span>
             </div>
 
-            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
-              <span className="font-sans text-xs font-medium text-stone-500 block">
+            <div className="liquid-glass-card rounded-[20px] p-4 space-y-1 min-w-0">
+              <span className="font-sans text-xs font-medium text-stone-500 block truncate">
                 Vault Status
               </span>
-              <div className="font-serif text-2xl font-semibold text-emerald-700 flex items-center gap-1.5">
+              <div className="font-serif text-2xl font-semibold text-emerald-700 flex items-center gap-1.5 truncate">
                 <span>Local</span>
-                <span className="size-2 rounded-full bg-emerald-500" />
+                <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
               </div>
-              <span className="font-sans text-[11px] text-stone-500 block">
-                100% on-device vault
+              <span className="font-sans text-[11px] text-stone-500 block truncate">
+                100% on-device
               </span>
             </div>
           </div>

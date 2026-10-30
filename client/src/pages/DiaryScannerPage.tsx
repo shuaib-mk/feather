@@ -202,8 +202,8 @@ export function DiaryScannerPage() {
             </p>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-sans">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full min-w-[500px] text-left text-xs font-sans">
               <thead className="bg-stone-100/60 font-sans text-[11px] font-semibold text-stone-600 border-b border-stone-200/60">
                 <tr>
                   <th className="py-2.5 px-3 font-semibold">Start Date</th>
@@ -254,18 +254,18 @@ export function DiaryScannerPage() {
             </table>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-200/50">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
             <button
               type="button"
               onClick={() => setExtractedPeriods([])}
-              className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer"
+              className="liquid-glass-pill px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleConfirmImport}
-              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm"
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center"
             >
               Import {extractedPeriods.length} Periods to Vault
             </button>

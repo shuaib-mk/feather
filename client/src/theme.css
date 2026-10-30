@@ -35,6 +35,38 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Suppress mobile tap highlights and touch callouts globally */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+.liquid-glass-button,
+.liquid-glass-button-dark,
+.liquid-glass-pill,
+.liquid-glass-orb,
+.liquid-glass-card,
+.liquid-glass-card-interactive,
+.liquid-glass-lens,
+.liquid-glass-dock,
+.liquid-glass-topbar {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Remove unwanted browser outline when clicking/tapping elements */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+[tabindex]:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 html, body {
@@ -49,12 +81,14 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
+  position: relative;
 }
 
 #root {
   width: 100%;
   max-width: 100vw;
   overflow-x: hidden;
+  position: relative;
 }
 
 /* ========================================================
@@ -310,6 +344,16 @@ html, body {
     0 0 0 3px rgba(124, 58, 237, 0.1);
 }
 
+/* Prevent iOS auto-zoom distortion on input focus which causes screen to become oversized */
+@media screen and (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  .liquid-glass-input {
+    font-size: 16px !important;
+  }
+}
+
 /* Liquid Glass Button System (Authentic Frosted Liquid Glass, No Solid Black) */
 .liquid-glass-button,
 .liquid-glass-button-dark {
@@ -347,11 +391,33 @@ html, body {
 
 .liquid-glass-button:active,
 .liquid-glass-button-dark:active {
-  transform: translateY(0px) scale(0.98) translateZ(0);
+  transform: scale(0.95) translateY(1px) translateZ(0) !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 235, 252, 0.95) 100%) !important;
   box-shadow: 
-    inset 2px 2px 4px rgba(190, 190, 210, 0.6),
-    inset -1px -1px 2px #ffffff,
-    0 4px 10px -2px rgba(70, 60, 90, 0.06) !important;
+    inset 2.5px 2.5px 5px rgba(185, 180, 210, 0.6),
+    inset -2px -2px 4px #ffffff,
+    0 2px 8px -2px rgba(124, 58, 237, 0.22) !important;
+  outline: none !important;
+  border-color: rgba(255, 255, 255, 0.98) !important;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.08s ease-out !important;
+}
+
+.liquid-glass-pill:active {
+  transform: scale(0.95) translateY(1px) translateZ(0) !important;
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 
+    inset 2px 2px 3.5px rgba(195, 190, 215, 0.55),
+    inset -1px -1px 2.5px #ffffff,
+    0 1px 4px -1px rgba(70, 60, 90, 0.1) !important;
+  outline: none !important;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background-color 0.08s ease-out !important;
+}
+
+/* Universal silky tactile feel on touch for all interactive elements */
+button:active:not(:disabled),
+a.liquid-glass-button:active,
+a.liquid-glass-pill:active {
+  outline: none !important;
 }
 
 /* Specular Rim Light Layer for Glass Buttons */
@@ -505,22 +571,60 @@ html, body {
   background: #bab4a9;
 }
 
+/* Horizontal pill bar no-scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
 /* ========================================================
    ACCESSIBILITY: VISIBLE FOCUS & REDUCED MOTION SUPPORT
    ======================================================== */
 
-/* High-contrast visible focus indicators for keyboard navigation */
-:focus-visible {
-  outline: 2px solid #1a1718 !important;
-  outline-offset: 2px !important;
+/* Subtle glass focus ring strictly for physical KEYBOARD navigation on desktop */
+@media (hover: hover) and (pointer: fine) {
+  :focus-visible {
+    outline: 2px solid rgba(124, 58, 237, 0.6) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12) !important;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  a:focus-visible {
+    outline: 2px solid rgba(124, 58, 237, 0.6) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12) !important;
+  }
 }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-a:focus-visible {
-  outline: 2px solid #1a1718 !important;
-  outline-offset: 2px !important;
+/* Mobile & Touch: Guaranteed zero outline, zero black border on tap, ever */
+@media (hover: none), (pointer: coarse) {
+  *,
+  *:focus,
+  *:focus-visible,
+  *:focus-within,
+  *:active,
+  button:focus,
+  button:focus-visible,
+  button:active,
+  a:focus,
+  a:focus-visible,
+  a:active,
+  input:focus,
+  input:focus-visible,
+  [tabindex]:focus,
+  [tabindex]:focus-visible {
+    outline: none !important;
+    outline-width: 0 !important;
+    outline-offset: 0 !important;
+    outline-color: transparent !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
 }
 
 /* User preference for reduced motion: disables heavy transforms & transitions */
