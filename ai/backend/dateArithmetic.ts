@@ -464,6 +464,11 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
       } else if (key > today) {
         key = parseMonthDay(ordinalMatch[0].trim(), year - 1);
       }
+      // A bare month-day landing more than ~6 months in the past is too ambiguous
+      // to log silently at high confidence (e.g. an 11-month-old rolled-back date).
+      if (key && !explicitYear && diffDateKeys(key, today) > 182) {
+        return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean ${explain(key)}? That is more than 6 months ago — please confirm the date.` };
+      }
       if (key) return { date: key, confidence: "high", explanation: `${ordinalMatch[0].trim()} = ${explain(key)}` };
     }
   }

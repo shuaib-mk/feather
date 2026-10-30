@@ -944,6 +944,9 @@ function resolveDateExpression(text, today) {
       } else if (key > today) {
         key = parseMonthDay(ordinalMatch[0].trim(), year - 1);
       }
+      if (key && !explicitYear && diffDateKeys(key, today) > 182) {
+        return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean ${explain(key)}? That is more than 6 months ago \u2014 please confirm the date.` };
+      }
       if (key) return { date: key, confidence: "high", explanation: `${ordinalMatch[0].trim()} = ${explain(key)}` };
     }
   }
@@ -1768,23 +1771,51 @@ function parseLocally(text, today, context) {
   const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
   const sleepMatch = lower.match(/\b(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/) || lower.match(/\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/);
   const sleep = sleepMatch ? parseFloat(sleepMatch[1]) : null;
+  const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+  const planDateRe = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
   const eventMatches = [];
-  const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}(?:,?\s+\d{4})?|\d{4}-\d{2}-\d{2})/gi;
-  let match;
-  while ((match = eventRegex.exec(text)) !== null) {
-    const rawDate = match[1];
-    let resolvedDate = rawDate;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      const yrMatch = rawDate.match(/(\d{4})\s*$/);
-      const parsedKey = parseMonthDay(rawDate, yrMatch ? parseInt(yrMatch[1], 10) : currentYear);
-      if (parsedKey) resolvedDate = parsedKey;
+  let planDateInvalid = false;
+  {
+    let m;
+    let prevEnd = 0;
+    const cleanTitle = (seg) => seg.replace(/[,";]+\s*$/g, "").replace(/^\s*(?:and|&)\s+/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s).trim();
+    while ((m = planDateRe.exec(text)) !== null) {
+      const rawDate = m[0];
+      const explicitYear = /\b\d{4}\b/.test(rawDate) && !/^\d{4}-/.test(rawDate) ? parseInt(rawDate.match(/\b\d{4}\b/)[0], 10) : /^\d{4}-/.test(rawDate) ? parseInt(rawDate.slice(0, 4), 10) : null;
+      let resolvedDate;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) resolvedDate = isValidDateKey(rawDate) ? rawDate : null;
+      else {
+        resolvedDate = parseMonthDay(rawDate, explicitYear ?? currentYear);
+        if (resolvedDate && explicitYear === null && resolvedDate < today) {
+          resolvedDate = parseMonthDay(rawDate, currentYear + 1);
+        }
+      }
+      const seg = text.slice(prevEnd, m.index);
+      prevEnd = m.index + rawDate.length;
+      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(seg) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(seg)) continue;
+      const title = cleanTitle(seg.split(/\band\b/i).pop() || seg) || "Event";
+      if (!resolvedDate || !isValidDateKey(resolvedDate)) {
+        planDateInvalid = true;
+        continue;
+      }
+      eventMatches.push({ name: title, date: resolvedDate });
     }
-    eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0].trim() || "Event", date: resolvedDate });
+  }
+  if (planDateInvalid && eventMatches.length === 0 && extractWithLexicon(text).symptoms.length === 0) {
+    const q = "Which date did you mean for that event? Please give the day and month.";
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
   }
   let planOverlaps = void 0;
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
-    planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+    try {
+      const bad = eventMatches.find((e) => !isValidDateKey(e.date));
+      if (bad) throw new Error(`Unparsed event date: ${bad.date}`);
+      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+    } catch {
+      const q = "Which date did you mean for that event? Please give the day and month.";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+    }
     toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   }
   const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd;
@@ -1860,7 +1891,7 @@ function parseLocally(text, today, context) {
   };
   toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
-  return { message, entry, needsClarification: isApproximate && !!landmarkName, clarificationQuestion: isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+  return { message, entry, needsClarification: isApproximate && !!landmarkName, clarificationQuestion: isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null, activityTrail, toolCalls, planOverlaps, plannedEvents: hasLogContent ? void 0 : eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
 
 // ai/backend/protection.ts
