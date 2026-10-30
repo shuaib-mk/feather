@@ -736,8 +736,16 @@ function applySlipCorrections(current, correctionText) {
       changes.push(`Date updated to ${updated.date}`);
     }
   }
-  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+flow)\s+(none|spotting|light|medium|heavy)\b/i);
-  if (flowMatch) {
+  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
+  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s+(none|spotting|light|medium|heavy)\b/i);
+  if (flowContrastMatch) {
+    updated.flow = flowContrastMatch[1].toLowerCase();
+    changes.push(`Flow updated to ${updated.flow}`);
+  } else if (flowContrastMatch2) {
+    updated.flow = flowContrastMatch2[2].toLowerCase();
+    changes.push(`Flow updated to ${updated.flow}`);
+  } else if (flowMatch) {
     updated.flow = flowMatch[1].toLowerCase();
     changes.push(`Flow updated to ${updated.flow}`);
   } else {
@@ -977,11 +985,14 @@ function resolveDateExpression(text, today) {
       const around = /\baround\b|\bnear\b/.test(lower);
       const weekOf = /\bweek of\b/.test(lower);
       const window = around ? { start: addDaysToKey(resolved, -3), end: addDaysToKey(resolved, 3) } : weekOf ? { start: resolved, end: addDaysToKey(resolved, 6) } : void 0;
+      const offsetDays = base ? diffDateKeys(base, resolved) : 0;
+      const offsetLabel = offsetDays === 0 ? "" : offsetDays < 0 ? ` (${Math.abs(offsetDays)} day${Math.abs(offsetDays) === 1 ? "" : "s"} before)` : ` (${offsetDays} day${offsetDays === 1 ? "" : "s"} after)`;
+      const baseLabel = base ? ` (${explain(base)})` : "";
       return {
         date: resolved,
         confidence: around || weekOf ? "medium" : "high",
         window,
-        explanation: `${landmarkRes.landmarkName} = ${explain(resolved)}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`
+        explanation: `Landmark: ${landmarkRes.landmarkName}${baseLabel} \u2192 Resolved date: ${explain(resolved)}${offsetLabel}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`
       };
     }
   }
@@ -1411,10 +1422,24 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     activityTrail.forEach((a) => a.status = "done");
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (Meta API key not configured)" };
   }
+  const targetEntry = context.pendingEntry || context.recentEntry;
+  let livePlannedEvents = [];
+  const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
+  if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
+    return {
+      message: "I couldn't find a recent entry to correct.",
+      entry: null,
+      needsClarification: false,
+      activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
+      toolCalls: [],
+      mode: "live",
+      modeReason: null
+    };
+  }
   const messages = [
     { role: "system", content: `${SYSTEM_PROMPT}
-Today's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${context.pendingEntry ? `
-Pending entry to correct if asked: ${JSON.stringify(context.pendingEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `
+Today's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${targetEntry ? `
+Pending or recent entry to correct if asked: ${JSON.stringify(targetEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `
 Client-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
     ...conversationHistory,
     { role: "user", content: userPrompt }
@@ -1531,6 +1556,8 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
           }
           const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
+          const rawEvents = (fnArgs.events || []).filter((e) => e && typeof e.date === "string" && isValidDateKey(e.date));
+          livePlannedEvents = rawEvents.map((e) => ({ title: e.name || e.title || "Event", date: e.date }));
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
@@ -1555,10 +1582,11 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          if (!context.pendingEntry) {
+          const entryToPatch = context.pendingEntry || context.recentEntry;
+          if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
-            const patched = applyModelPatch(context.pendingEntry, fnArgs, today);
+            const patched = applyModelPatch(entryToPatch, fnArgs, today);
             if (patched.error) toolResultObj = { error: patched.error };
             else {
               structuredEntry = patched.entry;
@@ -1604,6 +1632,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
       activityTrail,
       toolCalls: toolCallsRecorded,
       planOverlaps,
+      plannedEvents: livePlannedEvents.length > 0 ? livePlannedEvents : planOverlaps?.length ? planOverlaps.map((o) => ({ title: o.name, date: o.eventDate })) : void 0,
       mode: "live",
       modeReason: null,
       usedPersonalAnchor: usedPersonalAnchorLive
@@ -1757,15 +1786,27 @@ function parseLocally(text, today, context) {
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
-  if (context.pendingEntry) {
-    const correctionRes = applySlipCorrections(context.pendingEntry, text);
+  const targetSlip = context.pendingEntry || context.recentEntry;
+  if (targetSlip) {
+    const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
       return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
   }
-  const intent = classifyIntent(text, !!context.pendingEntry);
+  const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(text);
+  if (!targetSlip && isCorrectionAttempt && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+    return {
+      message: "I couldn't find a recent entry to correct.",
+      entry: null,
+      needsClarification: false,
+      activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
+      toolCalls: [],
+      ...offline
+    };
+  }
+  const intent = classifyIntent(text, !!targetSlip);
   const extraction = extractWithLexicon(text);
   const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
   const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;

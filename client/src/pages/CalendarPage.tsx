@@ -69,13 +69,20 @@ export function CalendarPage(){
       {importWarnings.map((w,i)=><p key={i} role="alert" className="text-amber-700">{w}</p>)}
       {importPreview && <div className="space-y-2"><p className="font-semibold">Preview — choose events to save ({importPreview.length})</p>{importPreview.slice(0,50).map(e=><label key={e.id} className="flex gap-2 items-center"><input type="checkbox" checked={checked.has(e.id)} onChange={(ev)=>{const n=new Set(checked); ev.target.checked?n.add(e.id):n.delete(e.id); setChecked(n);}} />{e.title} — {e.date}</label>)}<button type="button" className="liquid-glass-button rounded-full px-4 min-h-[44px]" onClick={saveImport}>Save selected events</button></div>}
     </div>
-    <PlanAroundIt />
+    <PlanAroundIt events={events} />
   </div>;
 }
 export function NextThirtyDaysStrip(){
   const { data } = useCycle();
   const today = todayLocal();
-  const [events] = useState(() => loadEvents());
+  const [events, setEvents] = useState(() => loadEvents());
+
+  useEffect(() => {
+    const handler = () => setEvents(loadEvents());
+    window.addEventListener("feather_events_changed", handler);
+    return () => window.removeEventListener("feather_events_changed", handler);
+  }, []);
+
   const days = useMemo(() => nextThirtyDays(data.periods, data.logs, events, today), [data, events, today]);
 
   return (

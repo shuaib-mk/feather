@@ -167,11 +167,15 @@ export function ChroniclePage() {
                       </span>
                     )}
 
-                    {l?.flow && l.flow !== "none" && (
-                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-violet-50/90 text-violet-700 border border-violet-200/80">
-                        {l.flow} flow
+                    {item.isPeriod && (!l?.flow || l.flow === "none") ? (
+                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                        flow not noted
                       </span>
-                    )}
+                    ) : l?.flow && l.flow !== "none" ? (
+                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-violet-50/90 text-violet-700 border border-violet-200/80">
+                        {l.flow === "spotting" ? "spotting" : `${l.flow} flow`}
+                      </span>
+                    ) : null}
 
                     {p?.landmarkName && (
                       <span className="liquid-glass-pill px-2.5 py-0.5 text-[11px] font-sans font-medium text-stone-700 inline-flex items-center gap-1.5">

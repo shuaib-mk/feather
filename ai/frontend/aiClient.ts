@@ -16,6 +16,32 @@ export interface ClientAgentResult extends AgentResult {
   pipelineStage?: "recording" | "transcribing" | "resolving" | "previewing" | "confirming";
 }
 
+export const SESSION_API_KEY = "feather_session_api_calls";
+
+export function getSessionApiCalls(): number {
+  try {
+    if (typeof sessionStorage === "undefined") return 0;
+    const val = sessionStorage.getItem(SESSION_API_KEY);
+    return val ? parseInt(val, 10) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function recordSessionApiCall(): number {
+  try {
+    if (typeof sessionStorage === "undefined") return 0;
+    const next = getSessionApiCalls() + 1;
+    sessionStorage.setItem(SESSION_API_KEY, String(next));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("feather_api_call_made", { detail: next }));
+    }
+    return next;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Robust fetch wrapper with 10-second timeout via AbortController and 1 automatic retry
  * on transient network failures.
@@ -26,6 +52,9 @@ async function fetchWithTimeoutAndRetry(
   timeoutMs = 10000,
   retries = 1,
 ): Promise<Response> {
+  if (typeof url === "string" && (url.startsWith("/api/agent") || url.startsWith("/api/transcribe") || url.startsWith("/api/vision"))) {
+    recordSessionApiCall();
+  }
   let attempt = 0;
   while (true) {
     const controller = new AbortController();

@@ -256,8 +256,17 @@ export function applySlipCorrections(
   }
 
   // 2. Flow correction
-  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+flow)\s+(none|spotting|light|medium|heavy)\b/i);
-  if (flowMatch) {
+  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
+  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s+(none|spotting|light|medium|heavy)\b/i);
+
+  if (flowContrastMatch) {
+    updated.flow = flowContrastMatch[1].toLowerCase() as any;
+    changes.push(`Flow updated to ${updated.flow}`);
+  } else if (flowContrastMatch2) {
+    updated.flow = flowContrastMatch2[2].toLowerCase() as any;
+    changes.push(`Flow updated to ${updated.flow}`);
+  } else if (flowMatch) {
     updated.flow = flowMatch[1].toLowerCase() as any;
     changes.push(`Flow updated to ${updated.flow}`);
   } else {
@@ -508,11 +517,18 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
       const weekOf = /\bweek of\b/.test(lower);
       const window = around ? { start: addDaysToKey(resolved, -3), end: addDaysToKey(resolved, 3) }
         : weekOf ? { start: resolved, end: addDaysToKey(resolved, 6) } : undefined;
+      const offsetDays = base ? diffDateKeys(base, resolved) : 0;
+      const offsetLabel = offsetDays === 0
+        ? ""
+        : offsetDays < 0
+          ? ` (${Math.abs(offsetDays)} day${Math.abs(offsetDays) === 1 ? "" : "s"} before)`
+          : ` (${offsetDays} day${offsetDays === 1 ? "" : "s"} after)`;
+      const baseLabel = base ? ` (${explain(base)})` : "";
       return {
         date: resolved,
         confidence: around || weekOf ? "medium" : "high",
         window,
-        explanation: `${landmarkRes.landmarkName} = ${explain(resolved)}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`,
+        explanation: `Landmark: ${landmarkRes.landmarkName}${baseLabel} → Resolved date: ${explain(resolved)}${offsetLabel}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`,
       };
     }
   }

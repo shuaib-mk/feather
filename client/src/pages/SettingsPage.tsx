@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { PrivacySettings } from "../components/PrivacySettings";
@@ -268,9 +268,44 @@ export function SettingsPage() {
 function DiagnosticsPanel() {
   const [health, setHealth] = useState<any>(null); const [test, setTest] = useState("");
   const load = async () => { try { const r = await fetch("/api/health"); setHealth(await r.json()); } catch { setHealth({ error: "No network or API unavailable" }); } };
-  const [testCalls, setTestCalls] = useState(0); const MAX_TEST_CALLS = 25;
-  const testMeta = async () => { if (testCalls >= MAX_TEST_CALLS) { setTest(`API call cap reached (${MAX_TEST_CALLS} this session). Reload to reset.`); return; } setTestCalls(testCalls + 1); const t0 = performance.now(); setTest("Testing..."); try { const r = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "hello", context: { currentDate: new Date().toLocaleDateString("en-CA") } }) }); setTest(r.ok ? `Success (${Math.round(performance.now()-t0)} ms)` : r.status === 429 ? "Rate limit (429) — try again later" : `Error ${r.status} (${Math.round(performance.now()-t0)} ms)`); } catch { setTest("No network — check your connection and try again"); } };
-  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}<p className="text-[11px] text-stone-500">API calls made this session: {testCalls} / {MAX_TEST_CALLS} (one call per click, no retries)</p></div>;
+  const [sessionCalls, setSessionCalls] = useState(() => { try { return typeof sessionStorage !== "undefined" ? (parseInt(sessionStorage.getItem("feather_session_api_calls") || "0", 10) || 0) : 0; } catch { return 0; } });
+  const MAX_TEST_CALLS = 25;
+
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const val = typeof sessionStorage !== "undefined" ? (parseInt(sessionStorage.getItem("feather_session_api_calls") || "0", 10) || 0) : 0;
+        setSessionCalls(val);
+      } catch {}
+    };
+    window.addEventListener("feather_api_call_made", handler);
+    return () => window.removeEventListener("feather_api_call_made", handler);
+  }, []);
+
+  const testMeta = async () => {
+    if (sessionCalls >= MAX_TEST_CALLS) {
+      setTest(`API call cap reached (${MAX_TEST_CALLS} this session). Reload to reset.`);
+      return;
+    }
+    const t0 = performance.now();
+    setTest("Testing...");
+    try {
+      try {
+        const next = sessionCalls + 1;
+        sessionStorage.setItem("feather_session_api_calls", String(next));
+        window.dispatchEvent(new CustomEvent("feather_api_call_made", { detail: next }));
+      } catch {}
+      const r = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "hello", context: { currentDate: new Date().toLocaleDateString("en-CA") } }),
+      });
+      setTest(r.ok ? `Success (${Math.round(performance.now()-t0)} ms)` : r.status === 429 ? "Rate limit (429) — try again later" : `Error ${r.status} (${Math.round(performance.now()-t0)} ms)`);
+    } catch {
+      setTest("No network — check your connection and try again");
+    }
+  };
+  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}<p className="text-[11px] text-stone-500">API calls made this session: {sessionCalls} / {MAX_TEST_CALLS} (one call per click, no retries)</p></div>;
 }
 function DemoModePanel() {
   const { isDemoActive, loadDemo, clearDemo } = useCycle();

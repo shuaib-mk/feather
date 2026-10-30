@@ -15,6 +15,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     backupToast,
     dismissBackupToast,
     exportBackup,
+    isDemoActive,
+    clearDemo,
   } = useCycle();
 
   return (
@@ -63,6 +65,30 @@ export function AppLayout({ children }: AppLayoutProps) {
         id="main-content"
         className="min-h-[85vh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-24 lg:pl-28 md:pr-8 space-y-5 overflow-x-hidden pb-24 md:pb-8"
       >
+        {/* Persistent Demo Mode Banner */}
+        {isDemoActive && (
+          <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">
+            <div className="flex items-center gap-2.5">
+              <div className="size-6 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center shrink-0 font-bold text-xs">
+                ✦
+              </div>
+              <div className="leading-tight">
+                <span className="font-semibold text-stone-900">Demo Mode Active:</span>{" "}
+                <span className="text-stone-700">Fictional demonstration data. Your real vault is untouched.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={clearDemo}
+                className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer shadow-xs"
+              >
+                Exit demo
+              </button>
+            </div>
+          </div>
+        )}
         {/* Gentle 14-Day Export Overdue Reminder Banner */}
         {showOverdueBanner && (
           <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-800 shadow-xs border border-amber-300 bg-amber-50/70">

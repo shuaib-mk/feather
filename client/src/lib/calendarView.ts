@@ -5,7 +5,7 @@ import type { CalendarEvent } from "./events";
 import { eventsOnDate } from "./events";
 export function weekStartForLocale(locale: string): 0|1 { return /(^|-)IN\b/i.test(locale) || locale.toLowerCase().startsWith("en-in") ? 1 : locale.toLowerCase().startsWith("en-us") ? 0 : 1; }
 export function toEngineRecords(periods: Period[]): PeriodRecord[] { return periods.map((p)=>({ id:String(p.id), startDate:p.startDate, endDate:p.endDate||undefined, confirmed:true, source:"manual", landmarkName:p.landmarkName||null, startEarliest:p.startEarliest||null, startLatest:p.startLatest||null, createdAt:"", updatedAt:"" })); }
-export function toObservations(logs: DayLog[]): DailyObservation[] { return logs.map((l)=>({ date:l.logDate, bleeding: l.flow==="light"||l.flow==="medium"||l.flow==="heavy", flow: (l.flow==="spotting"||l.flow==="light"||l.flow==="medium"||l.flow==="heavy") ? l.flow : undefined, symptoms:l.symptoms, mood:l.mood, energy:l.energy, sleepHours:l.sleepHours, notes:l.notes||undefined })); }
+export function toObservations(logs: DayLog[]): DailyObservation[] { return logs.map((l)=>({ date:l.logDate, bleeding: l.flow==="light"||l.flow==="medium"||l.flow==="heavy"||l.kind==="period_started", flow: (l.flow==="spotting"||l.flow==="light"||l.flow==="medium"||l.flow==="heavy") ? l.flow : undefined, symptoms:l.symptoms, mood:l.mood, energy:l.energy, sleepHours:l.sleepHours, notes:l.notes||undefined })); }
 export interface CalendarDayState { date: string; bleeding: boolean; spotting: boolean; predicted: boolean; isToday: boolean; hasLog: boolean; log: DayLog|null; events: CalendarEvent[]; label: string; }
 export function buildMonthDayStates(year:number, month:number, periods:Period[], logs:DayLog[], events:CalendarEvent[], today:string, locale="en-US"): { weekStart: 0|1; days: CalendarDayState[]; leadingBlanks: number } {
   const records = toEngineRecords(periods); const obs = toObservations(logs);
@@ -17,7 +17,7 @@ export function buildMonthDayStates(year:number, month:number, periods:Period[],
   const leadingBlanks = (firstDow - weekStart + 7) % 7;
   const days = cal.map((d)=>{
     const log = logs.find((l)=>l.logDate===d.date) || null;
-    const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy") : !!d.bleeding;
+    const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started") : !!d.bleeding;
     const spotting = log?.flow==="spotting";
     const predicted = !!(prediction.earliestStart && prediction.latestStart && d.date >= prediction.earliestStart && d.date <= addDays(prediction.latestStart, 4) && d.date >= today);
     const evs = eventsOnDate(events, d.date);

@@ -113,6 +113,38 @@ export function VoiceFlowPage() {
 
     const pending = activePendingEntry !== undefined ? activePendingEntry : confirmEntry;
 
+    // Resolve most recent saved entry for standalone corrections
+    const sortedLogs = [...data.logs].sort((a, b) => b.logDate.localeCompare(a.logDate));
+    const recentLog = sortedLogs[0];
+    const recentPeriod = recentLog ? data.periods.find((p) => p.startDate === recentLog.logDate) : data.periods[0];
+    const recentEntry: StructuredEntry | null = recentLog
+      ? {
+          date: recentLog.logDate,
+          flow: recentLog.flow || null,
+          symptoms: recentLog.symptoms || [],
+          mood: recentLog.mood || null,
+          energy: recentLog.energy || null,
+          sleep: recentLog.sleepHours || null,
+          notes: recentLog.notes || null,
+          landmarkName: recentPeriod?.landmarkName || null,
+          isApproximate: recentPeriod?.isApproximate || false,
+          kind: recentLog.kind || (recentPeriod ? "period_started" : "daily_log"),
+        }
+      : recentPeriod
+      ? {
+          date: recentPeriod.startDate,
+          flow: null,
+          symptoms: [],
+          mood: null,
+          energy: null,
+          sleep: null,
+          notes: null,
+          landmarkName: recentPeriod.landmarkName || null,
+          isApproximate: recentPeriod.isApproximate || false,
+          kind: "period_started",
+        }
+      : null;
+
     try {
       const res: ClientAgentResult = await sendAgentMessage(
         promptText,
@@ -125,6 +157,7 @@ export function VoiceFlowPage() {
           periods: data.periods,
           currentDate: todayStr(),
           pendingEntry: pending,
+          recentEntry,
           locale: typeof navigator !== "undefined" ? navigator.language : "en",
           matchedEvents: (()=>{ try { if (localStorage.getItem("feather_allow_matched_events")!=="true") return []; return fuzzyMatchEvents(promptText, loadEvents()).map((e)=>({title:e.title,date:e.date})); } catch { return []; } })(),
         },
@@ -139,7 +172,10 @@ export function VoiceFlowPage() {
       setIsOfflineFallback(Boolean(res.isOfflineFallback));
       setAgentMode(res);
       setUsedAnchor(Boolean((res as any).usedPersonalAnchor));
-      if ((res as any).plannedEvents?.length) setPlannedEventsState((res as any).plannedEvents);
+      const extractedEvents = (res as any).plannedEvents?.length
+        ? (res as any).plannedEvents
+        : (res.planOverlaps?.length ? res.planOverlaps.map((o: any) => ({ title: o.name || o.eventName, date: o.eventDate || o.date })) : []);
+      if (extractedEvents.length) setPlannedEventsState(extractedEvents);
 
       if (res.rateLimited) {
         setRateLimitNotice(res.message);
@@ -180,6 +216,8 @@ export function VoiceFlowPage() {
 
     // One atomic save: the log and its period are written together or not at all.
     const isBleeding = confirmEntry.flow === "light" || confirmEntry.flow === "medium" || confirmEntry.flow === "heavy";
+    const isPeriod = confirmEntry.kind === "period_started" || isBleeding;
+    const kind = isPeriod ? "period_started" : (confirmEntry.kind || "daily_log");
     const result = saveLog(
       {
         logDate: confirmEntry.date,
@@ -189,9 +227,10 @@ export function VoiceFlowPage() {
         energy: confirmEntry.energy || null,
         sleepHours: confirmEntry.sleep || null,
         notes: confirmEntry.notes || null,
+        kind,
       },
       {
-        kind: isBleeding ? "period_started" : "daily_log",
+        kind,
         landmarkName: confirmEntry.landmarkName || null,
         startEarliest: confirmEntry.isApproximate ? addDays(confirmEntry.date, -3) : null,
         startLatest: confirmEntry.isApproximate ? addDays(confirmEntry.date, 3) : null,
@@ -444,8 +483,63 @@ export function VoiceFlowPage() {
 
       {/* Accession Slip — Confirmed Entry Preview (Editable) */}
       {presetDate && <p className="text-xs liquid-glass-card rounded-[16px] p-3">Logging for {presetDate} (chosen on the calendar). Mention the date, or confirm the slip date after parsing.</p>}
-      {(agentMode || isOfflineFallback) && <p role="status" className="text-xs liquid-glass-pill inline-block px-3 py-1.5">{isOfflineFallback || agentMode?.mode==="offline" ? `Offline parser — Meta model not used (${agentMode?.modeReason || "offline fallback"})` : "Live: Meta Muse Spark"}{usedAnchor ? " · Personal calendar anchor used" : ""}</p>}
-      {plannedEventsState.length>0 && <div className="liquid-glass-card rounded-[24px] p-5 space-y-2"><h3 className="font-semibold text-sm">Event to save</h3>{plannedEventsState.map((e:any,i:number)=><div key={i} className="flex justify-between text-xs"><span>{e.title} — {e.date}</span><button type="button" className="liquid-glass-button rounded-full px-3 py-1.5" onClick={()=>{ upsertEvent({title:e.title, date:e.date, source:"voice"}); setPlannedEventsState(plannedEventsState.filter((_:any,j:number)=>j!==i)); }}>Confirm event</button></div>)}</div>}
+      {(agentMode || isOfflineFallback) && (
+        <p role="status" className="text-xs liquid-glass-pill inline-block px-3 py-1.5">
+          {isOfflineFallback || agentMode?.mode === "offline"
+            ? (agentMode?.modeReason && agentMode.modeReason.startsWith("Offline parser")
+                ? agentMode.modeReason
+                : `Offline parser — Meta model not used (${agentMode?.modeReason || "offline fallback"})`)
+            : "Live: Meta Muse Spark"}
+          {usedAnchor ? " · Personal calendar anchor used" : ""}
+        </p>
+      )}
+      {plannedEventsState.length > 0 && (
+        <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/95 shadow-md">
+          <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">
+            <div>
+              <span className="font-sans text-xs font-semibold text-emerald-700 block">
+                Plan Around It Event Detected
+              </span>
+              <h3 className="font-serif text-lg font-semibold text-stone-900">
+                Save Event to Calendar
+              </h3>
+            </div>
+            <span className="liquid-glass-pill font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
+              Confirmation Required
+            </span>
+          </div>
+          {plannedEventsState.map((e: any, i: number) => (
+            <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-white/40 p-3 rounded-xl border border-white/60">
+              <div>
+                <span className="font-semibold text-stone-900 block font-sans text-sm">{e.title}</span>
+                <span className="text-stone-600 font-sans">{prettyDate(e.date)} ({e.date})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="liquid-glass-button rounded-full px-4 py-2 font-semibold text-xs cursor-pointer shadow-xs"
+                  onClick={() => {
+                    upsertEvent({ title: e.title, date: e.date, source: "voice" });
+                    setPlannedEventsState(plannedEventsState.filter((_: any, j: number) => j !== i));
+                    setSavedSuccessMessage(`Event "${e.title}" on ${prettyDate(e.date)} saved to calendar.`);
+                  }}
+                >
+                  Save Event to Calendar
+                </button>
+                <button
+                  type="button"
+                  className="liquid-glass-pill rounded-full px-3 py-2 text-xs text-stone-600 cursor-pointer"
+                  onClick={() => {
+                    setPlannedEventsState(plannedEventsState.filter((_: any, j: number) => j !== i));
+                  }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {confirmEntry && (
         <div className="liquid-glass-card rounded-[26px] p-6 space-y-5 border border-white/95 shadow-md animate-in fade-in">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
@@ -474,14 +568,15 @@ export function VoiceFlowPage() {
                 onChange={(e) => setConfirmEntry({ ...confirmEntry, date: e.target.value })}
                 className="w-full liquid-glass-input rounded-xl p-2.5 text-xs font-sans text-stone-900"
               />
-              {confirmEntry.landmarkName && (
-                <span className="text-[11px] text-violet-700 font-medium block">
-                  Resolved landmark: {confirmEntry.landmarkName}
+              {confirmEntry.dateExplanation ? (
+                <span className="text-[11px] text-violet-700 font-medium block" data-testid="date-explanation">
+                  {confirmEntry.dateExplanation}
                 </span>
-              )}
-              {confirmEntry.dateExplanation && (
-                <span className="text-[11px] text-stone-500 block" data-testid="date-explanation">{confirmEntry.dateExplanation}</span>
-              )}
+              ) : confirmEntry.landmarkName ? (
+                <span className="text-[11px] text-violet-700 font-medium block">
+                  Landmark: {confirmEntry.landmarkName} → Resolved date: {confirmEntry.date}
+                </span>
+              ) : null}
             </div>
 
             {/* Flow Selector */}

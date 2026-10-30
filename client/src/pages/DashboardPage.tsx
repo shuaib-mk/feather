@@ -54,7 +54,18 @@ export function DashboardPage() {
         }
       />
 
-      <div className="liquid-glass-card rounded-[24px] p-5 flex flex-wrap gap-3 items-center justify-between"><div><h2 className="font-serif text-lg font-semibold">New here?</h2><p className="text-xs text-stone-600">Try fictional demo data, or start with your own empty vault.</p></div><div className="flex gap-2"><button type="button" onClick={loadDemo} className="liquid-glass-button rounded-full px-5 min-h-[44px] text-xs font-semibold">Try Demo</button><Link to="/voice" className="liquid-glass-pill rounded-full px-5 min-h-[44px] text-xs inline-flex items-center">Start fresh</Link></div></div>
+      {!isDemoActive && (
+        <div className="liquid-glass-card rounded-[24px] p-5 flex flex-wrap gap-3 items-center justify-between">
+          <div>
+            <h2 className="font-serif text-lg font-semibold">New here?</h2>
+            <p className="text-xs text-stone-600">Try fictional demo data, or start with your own empty vault.</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={loadDemo} className="liquid-glass-button rounded-full px-5 min-h-[44px] text-xs font-semibold">Try Demo</button>
+            <Link to="/voice" className="liquid-glass-pill rounded-full px-5 min-h-[44px] text-xs inline-flex items-center">Start fresh</Link>
+          </div>
+        </div>
+      )}
       {/* Primary Action Hero Card: Compact & Inviting */}
       <div className="liquid-glass-card rounded-[24px] p-5 sm:p-6 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -262,11 +273,15 @@ export function DashboardPage() {
                           {prettyDate(log.logDate)}
                         </span>
                         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                          {log.flow && (
+                          {log.flow ? (
                             <span className="text-[11px] font-sans px-2.5 py-0.5 rounded-full bg-rose-50/90 text-rose-700 font-medium border border-rose-200/80">
-                              {log.flow} flow
+                              {log.flow === "spotting" ? "spotting" : `${log.flow} flow`}
                             </span>
-                          )}
+                          ) : log.kind === "period_started" ? (
+                            <span className="text-[11px] font-sans px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium border border-stone-200">
+                              flow not noted
+                            </span>
+                          ) : null}
                           {log.symptoms && log.symptoms.slice(0, 2).map((s) => (
                             <span key={s} className="text-[11px] text-stone-600">
                               · {s}

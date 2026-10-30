@@ -238,7 +238,7 @@ function lastBleedingDay(period: Period, logs: DayLog[], periodsAsc: Period[]): 
   const nextStart = idx >= 0 ? periodsAsc[idx + 1]?.startDate : undefined;
   let last = period.endDate || period.startDate;
   for (const log of logs) {
-    if (!isBleedingFlow(log.flow)) continue;
+    if (!isBleedingFlow(log.flow) && log.kind !== "period_started") continue;
     if (log.logDate < period.startDate) continue;
     if (nextStart && log.logDate >= nextStart) continue;
     if (log.logDate > last) last = log.logDate;
@@ -479,7 +479,7 @@ export function computeCycleStats(periods: Period[], logs: DayLog[] = []): Cycle
   const records = toPeriodRecords(periods);
   const observations = (logs || []).map((l) => ({
     date: l.logDate,
-    bleeding: isBleedingFlow(l.flow),
+    bleeding: isBleedingFlow(l.flow) || l.kind === "period_started",
     flow: l.flow || undefined,
     symptoms: l.symptoms,
     mood: l.mood,

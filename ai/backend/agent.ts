@@ -89,6 +89,7 @@ export interface AgentContext {
   currentDate?: string; // YYYY-MM-DD
   provider?: "meta" | "baseten";
   pendingEntry?: StructuredEntry | null;
+  recentEntry?: StructuredEntry | null;
   locale?: string;
   matchedEvents?: Array<{ title: string; date: string }>;
   cycleStatsIsDefault?: boolean;
@@ -363,9 +364,25 @@ export async function runLavenderAgent(
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser — Meta model not used (Meta API key not configured)" };
   }
 
+  const targetEntry = context.pendingEntry || context.recentEntry;
+  let livePlannedEvents: Array<{ title: string; date: string }> = [];
+
+  const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
+  if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
+    return {
+      message: "I couldn't find a recent entry to correct.",
+      entry: null,
+      needsClarification: false,
+      activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
+      toolCalls: [],
+      mode: "live",
+      modeReason: null,
+    };
+  }
+
   // OpenAI-compatible Chat Completions API with Tool Calling
   const messages: any[] = [
-    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${context.pendingEntry ? `\nPending entry to correct if asked: ${JSON.stringify(context.pendingEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `\nClient-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
+    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${targetEntry ? `\nPending or recent entry to correct if asked: ${JSON.stringify(targetEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `\nClient-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
     ...conversationHistory,
     { role: "user", content: userPrompt },
   ];
@@ -492,6 +509,8 @@ export async function runLavenderAgent(
           if (badEvent) { toolResultObj = { error: "Invalid event date: expected YYYY-MM-DD." }; toolResponseContent = JSON.stringify(toolResultObj); }
           const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
+          const rawEvents = (fnArgs.events || []).filter((e: any) => e && typeof e.date === "string" && isValidDateKey(e.date));
+          livePlannedEvents = rawEvents.map((e: any) => ({ title: e.name || e.title || "Event", date: e.date }));
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
@@ -510,10 +529,11 @@ export async function runLavenderAgent(
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          if (!context.pendingEntry) {
+          const entryToPatch = context.pendingEntry || context.recentEntry;
+          if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
-            const patched = applyModelPatch(context.pendingEntry, fnArgs, today);
+            const patched = applyModelPatch(entryToPatch, fnArgs, today);
             if (patched.error) toolResultObj = { error: patched.error };
             else { structuredEntry = patched.entry!; toolResultObj = { success: true, entry: structuredEntry }; }
           }
@@ -567,6 +587,7 @@ export async function runLavenderAgent(
       activityTrail,
       toolCalls: toolCallsRecorded,
       planOverlaps,
+      plannedEvents: livePlannedEvents.length > 0 ? livePlannedEvents : (planOverlaps?.length ? planOverlaps.map((o: any) => ({ title: o.name, date: o.eventDate })) : undefined),
       mode: "live",
       modeReason: null,
       usedPersonalAnchor: usedPersonalAnchorLive,
@@ -712,9 +733,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
 
-  // Offline-only regex corrections on a pending slip (live path lets the model patch).
-  if (context.pendingEntry) {
-    const correctionRes = applySlipCorrections(context.pendingEntry, text);
+  // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
+  const targetSlip = context.pendingEntry || context.recentEntry;
+  if (targetSlip) {
+    const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
@@ -722,7 +744,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     }
   }
 
-  const intent = classifyIntent(text, !!context.pendingEntry);
+  const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(text);
+  if (!targetSlip && isCorrectionAttempt && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+    return {
+      message: "I couldn't find a recent entry to correct.",
+      entry: null,
+      needsClarification: false,
+      activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
+      toolCalls: [],
+      ...offline,
+    };
+  }
+
+  const intent = classifyIntent(text, !!targetSlip);
   const extraction = extractWithLexicon(text);
   const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
   const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
