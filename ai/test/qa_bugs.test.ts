@@ -13,7 +13,7 @@ let passed = 0;
   const recentEntry = {
     date: "2026-10-27",
     flow: "heavy" as const,
-    symptoms: ["cramps"],
+    symptoms: ["cramps" as const],
     mood: "Okay" as const,
     energy: 3,
     sleep: 7,
@@ -56,7 +56,7 @@ let passed = 0;
 
   // Save log entry with flow = null and kind = "period_started"
   const saveResult = saveLogEntry(
-    { logDate: parsed.entry!.date, flow: null, symptoms: [] },
+    { logDate: parsed.entry!.date, flow: null, symptoms: [], mood: null, energy: null, sleepHours: null, notes: null },
     { kind: "period_started" }
   );
   assert(saveResult.period, "A period record must be created");
@@ -127,3 +127,4 @@ let passed = 0;
 }
 
 console.log(`\nQA Regression Suite: All ${passed} test groups passed!`);
+

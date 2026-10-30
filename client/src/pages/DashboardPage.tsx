@@ -8,7 +8,7 @@ import { EmptyState } from "../components/EmptyState";
 import { diffDays, prettyDate, todayStr } from "../cycleStorage";
 
 export function DashboardPage() {
-  const { data, stats, loadDemo } = useCycle();
+  const { data, stats, loadDemo, isDemoActive } = useCycle();
   const navigate = useNavigate();
 
   const periods = data.periods;

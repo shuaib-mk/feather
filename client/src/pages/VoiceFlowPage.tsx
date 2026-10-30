@@ -121,7 +121,7 @@ export function VoiceFlowPage() {
       ? {
           date: recentLog.logDate,
           flow: recentLog.flow || null,
-          symptoms: recentLog.symptoms || [],
+          symptoms: (recentLog.symptoms || []) as ValidSymptom[],
           mood: recentLog.mood || null,
           energy: recentLog.energy || null,
           sleep: recentLog.sleepHours || null,
