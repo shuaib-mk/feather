@@ -25,28 +25,57 @@ function getConfig() {
 }
 
 // ai/backend/transcribe.ts
+var GENERIC_TRANSCRIBE_ERROR = "Couldn't hear that \u2014 try again or type it";
+var MAX_AUDIO_SECONDS = 600;
+var SUPPORTED_VOICE_LANGUAGES = {
+  en: "English",
+  hi: "Hindi",
+  bn: "Bengali",
+  kn: "Kannada",
+  mr: "Marathi",
+  ta: "Tamil",
+  te: "Telugu"
+};
+function buildTranscribeRequest(model, languageHint) {
+  const bias = [];
+  const hinted = languageHint ? SUPPORTED_VOICE_LANGUAGES[languageHint.toLowerCase()] : void 0;
+  if (hinted) bias.push(hinted);
+  for (const name of ["English", "Hindi"]) if (!bias.includes(name)) bias.push(name);
+  return {
+    mode: "PUSH_TO_TALK",
+    model,
+    audioEncoding: "WAV",
+    languageBias: bias,
+    keywords: ["period", "cramps", "flow"]
+  };
+}
+function wavDurationSeconds(audioBuffer) {
+  if (audioBuffer.length < 44 || audioBuffer.subarray(0, 4).toString("ascii") !== "RIFF" || audioBuffer.subarray(8, 12).toString("ascii") !== "WAVE") return null;
+  const byteRate = audioBuffer.readUInt32LE(28);
+  if (byteRate <= 0) return null;
+  return (audioBuffer.length - 44) / byteRate;
+}
 async function transcribeAudio(audioBuffer, mimeType = "audio/wav", languageHint) {
   if (!audioBuffer || audioBuffer.length === 0) {
-    return { text: "" };
+    return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
   }
   if (audioBuffer.length < 1e3) {
-    return { text: "" };
+    return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
+  }
+  const duration = wavDurationSeconds(audioBuffer);
+  if (duration !== null && duration > MAX_AUDIO_SECONDS) {
+    return { text: "", error: GENERIC_TRANSCRIBE_ERROR, statusCode: 413 };
   }
   const config = getConfig();
   const apiKey = config.metaApiKey || config.basetenApiKey;
   if (!apiKey) {
-    return { text: "", error: "Couldn't hear that \u2014 try again or type it" };
+    return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
   }
-  const isWav = audioBuffer.length >= 12 && audioBuffer.subarray(0, 4).toString("ascii") === "RIFF" && audioBuffer.subarray(8, 12).toString("ascii") === "WAVE";
   try {
     const isMetaAi = config.metaBaseUrl.includes("api.meta.ai");
     let response;
     if (isMetaAi) {
-      const requestJson = {
-        model: config.museVoiceModel || "muse-voice-transcribe-1.0",
-        audioEncoding: "WAV",
-        ...languageHint && languageHint !== "auto" ? { language: languageHint } : {}
-      };
+      const requestJson = buildTranscribeRequest(config.museVoiceModel, languageHint);
       const formData = new FormData();
       formData.append(
         "request",
@@ -54,44 +83,35 @@ async function transcribeAudio(audioBuffer, mimeType = "audio/wav", languageHint
         "request.json"
       );
       formData.append("audio", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
-      response = await fetch(`${config.metaBaseUrl}/asr/transcribe`, {
+      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/asr/transcribe`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`
-        },
+        headers: { Authorization: `Bearer ${apiKey}` },
         body: formData
       });
     } else {
       const formData = new FormData();
       const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("wav") ? "wav" : "webm";
-      const fileBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
-      formData.append("file", fileBlob, `recording.${extension}`);
-      formData.append("model", config.museVoiceModel || "muse-voice-transcribe-1.0");
-      if (languageHint && languageHint !== "auto") {
-        formData.append("language", languageHint);
-      }
-      response = await fetch(`${config.metaBaseUrl}/audio/transcriptions`, {
+      formData.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), `recording.${extension}`);
+      formData.append("model", config.museVoiceModel);
+      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/audio/transcriptions`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`
-        },
+        headers: { Authorization: `Bearer ${apiKey}` },
         body: formData
       });
     }
     if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[Muse Voice] ASR returned ${response.status}:`, errText);
-      throw new Error(`ASR service error (${response.status}): ${errText}`);
+      const errText = await response.text().catch(() => "");
+      console.error(`[transcribe] ASR upstream ${response.status}: ${errText}`);
+      const statusCode = [400, 413, 429, 500].includes(response.status) ? response.status : 500;
+      return { text: "", error: GENERIC_TRANSCRIBE_ERROR, statusCode };
     }
     const data = await response.json();
     const text = (data.transcript || data.text || "").trim();
-    return {
-      text,
-      language: data.language
-    };
+    if (!text) return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
+    return { text, language: data.language };
   } catch (error) {
-    console.error("[Lavender Voice] Error in transcribeAudio:", error);
-    throw error;
+    console.error("[transcribe] ASR request failed:", error?.message || error);
+    return { text: "", error: GENERIC_TRANSCRIBE_ERROR, statusCode: 500 };
   }
 }
 
@@ -360,7 +380,8 @@ async function handler(req, res) {
   }
   const protection = checkStatelessProtection(req, {
     endpointName: "transcribe",
-    maxBodyBytes: 4 * 1024 * 1024
+    maxBodyBytes: 40 * 1024 * 1024
+    // 10 min of 24 kHz mono WAV (~29 MB) plus base64 overhead,
   });
   if (!protection.allowed) {
     const status = protection.statusCode || 429;
@@ -393,7 +414,7 @@ async function handler(req, res) {
         };
       }
       const buffer = Buffer.from(audioBase64, "base64");
-      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 30);
+      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
       if (!audioCheck.valid) {
         return {
           statusCode: 400,
@@ -402,6 +423,13 @@ async function handler(req, res) {
         };
       }
       const result = await transcribeAudio(buffer, mimeType || "audio/wav", languageHint);
+      if (result.error) {
+        return {
+          statusCode: result.statusCode || 500,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null" },
+          body: JSON.stringify({ error: "Couldn't hear that \u2014 try again or type it" })
+        };
+      }
       return {
         statusCode: 200,
         headers: {
@@ -429,11 +457,12 @@ async function handler(req, res) {
       return sendResponse(res, 400, { error: "Missing audioBase64 data" });
     }
     const buffer = Buffer.from(audioBase64, "base64");
-    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 30);
+    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
     if (!audioCheck.valid) {
       return sendResponse(res, 400, { error: audioCheck.error, code: "AUDIO_TOO_LONG" });
     }
     const result = await transcribeAudio(buffer, mimeType || "audio/wav", languageHint);
+    if (result.error) return sendResponse(res, result.statusCode || 500, { error: "Couldn't hear that \u2014 try again or type it" });
     return sendResponse(res, 200, result);
   } catch (err) {
     console.error("[transcribe] upstream error:", err?.message || err);

@@ -1,6 +1,7 @@
-// Web Audio 16kHz Mono WAV Recorder with throttled waveform & zero-lag mobile audio capture
-// Produces native RIFF WAV audio compatible with Meta Muse Voice Transcribe across iOS Safari, Android Chrome & Desktop.
+// Web Audio recorder: captures mono PCM via AudioContext, resamples to 24 kHz
+// mono and encodes 16-bit PCM WAV for Meta Muse Voice Transcribe (docs spec).
 import { useCallback, useEffect, useRef, useState } from "react";
+import { encodeRecordingToWav, pcmDurationSeconds, MAX_AUDIO_SECONDS } from "./wavEncode";
 
 export interface AudioRecorderState {
   isRecording: boolean;
@@ -10,71 +11,6 @@ export interface AudioRecorderState {
   audioUrl: string | null;
   waveformLevels: number[];
   permissionError: string | null;
-}
-
-function downsampleAndEncodeWAV(
-  pcmChunks: Float32Array[],
-  inputSampleRate: number,
-  targetSampleRate: number = 16000,
-): Blob {
-  const totalLength = pcmChunks.reduce((acc, c) => acc + c.length, 0);
-  const merged = new Float32Array(totalLength);
-  let offset = 0;
-  for (const chunk of pcmChunks) {
-    merged.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  // Linear interpolation downsampling
-  let samples: Float32Array;
-  if (inputSampleRate === targetSampleRate) {
-    samples = merged;
-  } else {
-    const ratio = inputSampleRate / targetSampleRate;
-    const newLength = Math.max(1, Math.round(totalLength / ratio));
-    samples = new Float32Array(newLength);
-    for (let i = 0; i < newLength; i++) {
-      const srcIdx = i * ratio;
-      const idx = Math.floor(srcIdx);
-      const frac = srcIdx - idx;
-      const s0 = merged[idx] || 0;
-      const s1 = merged[idx + 1] || s0;
-      samples[i] = s0 + frac * (s1 - s0);
-    }
-  }
-
-  // 16-bit mono PCM WAV
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const dataSize = samples.length * 2;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  // RIFF identifier
-  view.setUint32(0, 0x52494646, false); // "RIFF"
-  view.setUint32(4, 36 + dataSize, true);
-  view.setUint32(8, 0x57415645, false); // "WAVE"
-  // fmt chunk
-  view.setUint32(12, 0x666d7420, false); // "fmt "
-  view.setUint32(16, 16, true); // Subchunk1Size
-  view.setUint16(20, 1, true); // PCM format
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, targetSampleRate, true);
-  view.setUint32(28, targetSampleRate * numChannels * 2, true);
-  view.setUint16(32, numChannels * 2, true);
-  view.setUint16(34, bitsPerSample, true);
-  // data chunk
-  view.setUint32(36, 0x64617461, false); // "data"
-  view.setUint32(40, dataSize, true);
-
-  let p = 44;
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    p += 2;
-  }
-
-  return new Blob([buffer], { type: "audio/wav" });
 }
 
 export function useAudioRecorder() {
@@ -236,8 +172,19 @@ export function useAudioRecorder() {
 
     cleanupAudioPipeline();
 
-    // Downsample and encode into standard 16kHz mono PCM WAV
-    const wavBlob = downsampleAndEncodeWAV(chunks, sampleRate, 16000);
+    // Reject audio over 10 minutes (Meta ASR limit in the owner-provided docs)
+    if (pcmDurationSeconds(chunks, sampleRate) > MAX_AUDIO_SECONDS) {
+      setState((prev) => ({
+        ...prev,
+        isRecording: false,
+        audioBlob: null,
+        audioUrl: null,
+        permissionError: "That recording is over 10 minutes. Please record a shorter clip, or type your entry instead.",
+      }));
+      return;
+    }
+    // Resample to 24 kHz mono and encode 16-bit PCM WAV
+    const wavBlob = encodeRecordingToWav(chunks, sampleRate);
     const url = URL.createObjectURL(wavBlob);
 
     setState((prev) => ({
