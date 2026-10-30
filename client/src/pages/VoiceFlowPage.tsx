@@ -119,6 +119,7 @@ export function VoiceFlowPage() {
           periods: data.periods,
           currentDate: todayStr(),
           pendingEntry: pending,
+          locale: typeof navigator !== "undefined" ? navigator.language : "en",
         },
         conversationHistory,
       );
@@ -462,6 +463,9 @@ export function VoiceFlowPage() {
                   Resolved landmark: {confirmEntry.landmarkName}
                 </span>
               )}
+              {confirmEntry.dateExplanation && (
+                <span className="text-[11px] text-stone-500 block" data-testid="date-explanation">{confirmEntry.dateExplanation}</span>
+              )}
             </div>
 
             {/* Flow Selector */}
@@ -600,7 +604,7 @@ export function VoiceFlowPage() {
                     </span>
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full font-bold">{call.latencyMs} ms</span>
-                      <span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.model}</span>
+                      <span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.model}</span><span className="liquid-glass-pill px-2 py-0.5 text-stone-600">{call.executedBy || call.model}</span>
                     </div>
                   </div>
                   <pre className="bg-stone-50 p-2.5 rounded-lg text-stone-800 text-[10px] overflow-x-auto max-w-full break-all whitespace-pre-wrap font-mono">
