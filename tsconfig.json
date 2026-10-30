@@ -7,8 +7,20 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": false,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "node"
+    ]
   },
-  "include": ["api-src/**/*", "ai/**/*", "client/src/**/*"],
-  "exclude": ["api", "server", "node_modules", "dist"]
+  "include": [
+    "api-src/**/*",
+    "ai/**/*",
+    "client/src/**/*"
+  ],
+  "exclude": [
+    "api",
+    "server",
+    "node_modules",
+    "dist"
+  ]
 }
