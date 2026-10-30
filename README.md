@@ -311,5 +311,15 @@ Cycle data is stored on this device in localStorage. It is not encrypted unless 
 - Meta Muse Spark (`MUSE_SPARK_MODEL`, server-side via `ai/backend/agent.ts`, `ai/backend/vision.ts` -> `api/agent.ts`, `api/vision.ts`)
 - Exact bundled files: `api/agent.ts`, `api/transcribe.ts`, `api/vision.ts`, `api/health.ts` (sources in `api-src/`, bundled by `scripts/bundle-api.mjs`)
 
+## Which feature calls which endpoint
+
+| Feature | Endpoint called | Model (from env) | Fully offline? |
+|---|---|---|---|
+| Voice transcription | `POST {META_BASE_URL}/asr/transcribe` (default `https://api.meta.ai/v1/asr/transcribe`) | `MUSE_VOICE_MODEL` (default `muse-voice-transcribe-1.0`) | No — needs `META_API_KEY` on the server. Recordings are capped at 60 seconds because Vercel serverless functions reject request bodies over ~4.5 MB before the handler runs; 60s of 24 kHz mono WAV is ~3.9 MB as base64 JSON. Transcription is Meta-only; there is no Baseten fallback. |
+| Text agent (logging, planning, corrections) | `POST {META_BASE_URL}/chat/completions` | `MUSE_SPARK_MODEL` (default `muse-spark-1.3`) | No — but on failure it falls back to the offline parser and visibly says so |
+| Diary Scanner (optional, secondary) | `POST {META_BASE_URL}/chat/completions` | `MUSE_SPARK_MODEL` (default `muse-spark-1.3`) | No |
+| Offline parser, calendar, cycle stats, Plan Around It, ICS import/export, App Lock, Demo Mode | None — runs in the browser | — | Yes |
+
+
 ## Known limitations
 Live Meta results are Not measured until run with a real key (`npx tsx ai/eval/run-live-meta.ts`). Languages in the internal regression suite: en, hi, ml, ta, kn and code-mixed. Rate limits are best-effort in-memory per serverless instance. Storage is localStorage (device/browser bound, size-limited). Landmark dates are limited to verified entries in `ai/backend/landmarks.json`; unverifiable dates are omitted rather than invented.

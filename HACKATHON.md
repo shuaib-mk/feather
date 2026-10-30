@@ -43,7 +43,7 @@ Most menstrual trackers assume women remember calendar dates (*"my cycle started
 All code in this repository was engineered specifically for the hackathon event:
 
 ### A. Speech-to-Text Pipeline (`ai/backend/transcribe.ts`, `ai/frontend/useAudioRecorder.ts`)
-- Implemented real-time audio resampling to 24 kHz mono 16-bit PCM WAV (rejects audio over 10 minutes).
+- Implemented real-time audio resampling to 24 kHz mono 16-bit PCM WAV (rejects audio over 60 seconds; Vercel's ~4.5 MB request-body limit is why the cap is 60s, not longer).
 - Formats the multipart HTTP request payload from the owner-provided Meta docs: `request` JSON ({mode:"PUSH_TO_TALK", model from MUSE_VOICE_MODEL, audioEncoding:"WAV", languageBias, keywords}) as application/json + `audio` WAV binary to Meta's `/asr/transcribe` endpoint; reads the `transcript` response field. Meta voice supports Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported (typed Malayalam uses the offline parser).
 - Zero audio retention: audio is processed in-memory and discarded immediately after transcription.
 - 10-second timeout via `AbortController` with automatic 1-retry fallback.
