@@ -24,6 +24,17 @@ function getConfig() {
   };
 }
 
+// client/src/lib/localDate.ts
+function formatDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function toLocalKey(date) {
+  return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+function todayLocal(now = /* @__PURE__ */ new Date()) {
+  return toLocalKey(now);
+}
+
 // ai/backend/vision.ts
 async function extractDiaryDates(imageBase64, mimeType = "image/jpeg") {
   const config = getConfig();
@@ -31,7 +42,7 @@ async function extractDiaryDates(imageBase64, mimeType = "image/jpeg") {
   const baseUrl = config.useBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
   const model = config.useBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
   if (!apiKey) {
-    const curYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const curYear = Number(todayLocal().slice(0, 4));
     return {
       periods: [
         { startDate: `${curYear}-09-02`, endDate: `${curYear}-09-07`, confidence: 0.95, notes: "Circled in red ink" },
@@ -102,12 +113,12 @@ If month or year is visible, use it; otherwise assume the current year. Do not p
 // ai/backend/protection.ts
 var minuteHits = /* @__PURE__ */ new Map();
 var dailyHits = /* @__PURE__ */ new Map();
-var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var globalDailyTracker = { count: 0, day: todayLocal() };
 var LIMIT_PER_MINUTE = 20;
 var LIMIT_PER_DAY_IP = 150;
 var DEFAULT_GLOBAL_DAILY_CAP = 500;
 function getTodayString() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return todayLocal();
 }
 function extractClientIp(req) {
   if (!req) return "127.0.0.1";

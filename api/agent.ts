@@ -87,6 +87,324 @@ function checkMedicalAdviceGuardrail(input) {
   return { isRefusal: false, refusalMessage: null };
 }
 
+// client/src/lib/localDate.ts
+var MONTH_NAMES = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12
+};
+function isValidDateKey(key) {
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  try {
+    parseDateKey(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function parseDateKey(key) {
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    throw new Error(`Invalid date format: ${key}`);
+  }
+  const [year = 1970, month = 1, day = 1] = key.split("-").map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) {
+    throw new Error(`Invalid calendar date: ${key}`);
+  }
+  return { year, month, day };
+}
+function formatDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function dateKeyToUTCDate(key) {
+  const { year, month, day } = parseDateKey(key);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+function utcDateToDateKey(date) {
+  return formatDateKey(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+function toLocalKey(date) {
+  return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+function todayLocal(now = /* @__PURE__ */ new Date()) {
+  return toLocalKey(now);
+}
+function addDaysToKey(key, amount) {
+  if (!Number.isInteger(amount)) throw new Error("Day offset must be an integer");
+  const date = dateKeyToUTCDate(key);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return utcDateToDateKey(date);
+}
+function weekdayOfKey(key) {
+  return dateKeyToUTCDate(key).getUTCDay();
+}
+function parseMonthDay(text, year) {
+  if (!Number.isInteger(year)) return null;
+  const cleaned = text.trim().toLowerCase().replace(/,/g, " ").replace(/\s+/g, " ");
+  const monthFirst = cleaned.match(/^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?$/);
+  const dayFirst = cleaned.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)$/);
+  let month;
+  let day;
+  if (monthFirst) {
+    month = MONTH_NAMES[monthFirst[1]];
+    day = Number(monthFirst[2]);
+  } else if (dayFirst) {
+    day = Number(dayFirst[1]);
+    month = MONTH_NAMES[dayFirst[2]];
+  } else {
+    return null;
+  }
+  if (!month || !day) return null;
+  const key = formatDateKey(year, month, day);
+  return isValidDateKey(key) ? key : null;
+}
+
+// client/src/lib/periodEngine.ts
+function isBleedingFlow(flow) {
+  return flow === "light" || flow === "medium" || flow === "heavy";
+}
+function lastBleedingDayForPeriod(record, observations, nextStartDate) {
+  let last = record.endDate ?? null;
+  for (const obs of observations) {
+    if (obs.date < record.startDate) continue;
+    if (nextStartDate && obs.date >= nextStartDate) continue;
+    const bleeding = obs.flow ? isBleedingFlow(obs.flow) : obs.bleeding;
+    if (bleeding && (!last || obs.date > last)) last = obs.date;
+  }
+  return last;
+}
+function effectivePeriodEnd(record, observations, asOfDate, nextStartDate) {
+  if (record.endDate) return record.endDate;
+  const lastBleeding = lastBleedingDayForPeriod(record, observations, nextStartDate);
+  if (!lastBleeding) return null;
+  if (nextStartDate) return lastBleeding;
+  if (asOfDate && dayDifference(lastBleeding, asOfDate) >= 3) return lastBleeding;
+  return null;
+}
+var DEFAULT_SETTINGS = {
+  defaultCycleLength: 28,
+  defaultPeriodDuration: 5,
+  historyWindow: 6
+};
+var DAY_MS = 864e5;
+function toDate(key) {
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    throw new Error(`Invalid date format: ${key}`);
+  }
+  parseDateKey(key);
+  return dateKeyToUTCDate(key);
+}
+function dateKey(date) {
+  return utcDateToDateKey(date);
+}
+function addDays(key, amount) {
+  if (!Number.isInteger(amount)) {
+    throw new Error("Day offset must be an integer");
+  }
+  const date = toDate(key);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return dateKey(date);
+}
+function dayDifference(from, to) {
+  return Math.round((toDate(to).getTime() - toDate(from).getTime()) / DAY_MS);
+}
+function median(values) {
+  if (!values.length) {
+    throw new Error("Cannot calculate median of empty data");
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+function roundDay(value) {
+  return Math.round(value);
+}
+function validateRecords(records) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const record of records) {
+    if (!record || typeof record.id !== "string" || !record.id.trim()) {
+      throw new Error(`Missing or invalid record ID: ${record?.id}`);
+    }
+    if (ids.has(record.id)) {
+      throw new Error(`Duplicate record ID: ${record.id}`);
+    }
+    ids.add(record.id);
+    toDate(record.startDate);
+    if (record.endDate) {
+      toDate(record.endDate);
+      if (record.endDate < record.startDate) {
+        throw new Error(`End date precedes start date: ${record.id}`);
+      }
+    }
+  }
+  const sorted = [...records].sort((a, b) => {
+    const cmp = a.startDate.localeCompare(b.startDate);
+    return cmp !== 0 ? cmp : a.id.localeCompare(b.id);
+  });
+  const confirmed = sorted.filter((r) => r.confirmed);
+  for (let i = 1; i < confirmed.length; i++) {
+    const previous = confirmed[i - 1];
+    const current = confirmed[i];
+    if (previous.startDate === current.startDate) {
+      throw new Error(`Duplicate period start date: ${current.startDate}`);
+    }
+    if (previous.endDate && current.startDate <= previous.endDate) {
+      throw new Error(
+        `Overlapping period records: ${previous.id} (${previous.startDate}..${previous.endDate}) and ${current.id} (${current.startDate})`
+      );
+    }
+  }
+  return sorted;
+}
+function reconstructCycles(records) {
+  const sorted = validateRecords(records);
+  const confirmed = sorted.filter((r) => r.confirmed);
+  return confirmed.map((record, index) => {
+    const next = confirmed[index + 1];
+    const length = next ? dayDifference(record.startDate, next.startDate) : null;
+    let quality = "incomplete";
+    if (length !== null) {
+      if (length < 15 || length > 90) {
+        quality = "anomalous";
+      } else if (length < 21) {
+        quality = "short";
+      } else if (length > 38) {
+        quality = "long";
+      } else {
+        quality = "valid";
+      }
+    }
+    return {
+      startDate: record.startDate,
+      nextStartDate: next?.startDate ?? null,
+      lengthDays: length,
+      quality
+    };
+  });
+}
+function getCycleStatistics(records, settings = DEFAULT_SETTINGS, observations = [], asOfDate) {
+  const cycles = reconstructCycles(records);
+  const completed = cycles.filter((c) => c.lengthDays !== null);
+  const eligible = completed.filter(
+    (c) => c.lengthDays >= 15 && c.lengthDays <= 90
+  );
+  const recent = eligible.slice(-settings.historyWindow).map((c) => c.lengthDays);
+  const allLengths = completed.map((c) => c.lengthDays);
+  const sorted = validateRecords(records);
+  const confirmed = sorted.filter((r) => r.confirmed);
+  const durations = confirmed.map((r, i) => {
+    const end = effectivePeriodEnd(r, observations, asOfDate, confirmed[i + 1]?.startDate ?? null);
+    return end ? dayDifference(r.startDate, end) + 1 : null;
+  }).filter((d) => d !== null);
+  const hasUnknownEndDates = confirmed.some((r) => !r.endDate);
+  const averageBleedingDuration = durations.length ? roundDay(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+  return {
+    cycles,
+    completedCycleCount: completed.length,
+    eligibleCycleCount: eligible.length,
+    excludedForEstimationCount: completed.length - eligible.length,
+    averageCycleLength: allLengths.length ? roundDay(allLengths.reduce((a, b) => a + b, 0) / allLengths.length) : null,
+    medianCycleLength: allLengths.length ? roundDay(median(allLengths)) : null,
+    shortestCycle: allLengths.length ? Math.min(...allLengths) : null,
+    longestCycle: allLengths.length ? Math.max(...allLengths) : null,
+    allCycleLengths: allLengths,
+    recentCycleLengths: recent,
+    averageBleedingDuration,
+    hasUnknownEndDates
+  };
+}
+function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETTINGS) {
+  toDate(eventDate);
+  toDate(today);
+  const sorted = validateRecords(records);
+  const confirmed = sorted.filter((r) => r.confirmed);
+  for (const r of confirmed) {
+    const end = r.endDate ?? r.startDate;
+    if (eventDate >= r.startDate && eventDate <= end) {
+      return {
+        status: "logged",
+        window: { start: r.startDate, end },
+        note: "This date falls inside a period you have already logged."
+      };
+    }
+  }
+  if (eventDate < today) {
+    return {
+      status: "past",
+      window: { start: eventDate, end: eventDate },
+      note: "This date has already passed."
+    };
+  }
+  const stats = getCycleStatistics(confirmed, settings);
+  if (stats.completedCycleCount < 2 || !stats.medianCycleLength) {
+    return {
+      status: "unknown",
+      window: null,
+      note: "Not enough data yet: log more cycles to check overlap for this date."
+    };
+  }
+  const last = confirmed[confirmed.length - 1];
+  const cycleLength = stats.medianCycleLength;
+  const lengths = stats.recentCycleLengths.length ? stats.recentCycleLengths : stats.allCycleLengths;
+  const deviations = lengths.map((len) => Math.abs(len - cycleLength));
+  const variability = deviations.length ? median(deviations) : 0;
+  const bleedingDays = stats.averageBleedingDuration ?? settings.defaultPeriodDuration;
+  const approxHalfWidth = last.startEarliest && last.startLatest && last.startEarliest < last.startLatest ? Math.ceil(dayDifference(last.startEarliest, last.startLatest) / 2) : 0;
+  const anchorStart = approxHalfWidth ? addDays(last.startEarliest, Math.floor(dayDifference(last.startEarliest, last.startLatest) / 2)) : last.startDate;
+  const k = Math.max(1, Math.round(dayDifference(anchorStart, eventDate) / cycleLength));
+  const expectedStart = addDays(anchorStart, cycleLength * k);
+  const coreEnd = addDays(expectedStart, Math.max(0, bleedingDays - 1));
+  const baseHalf = Math.max(3, Math.ceil(1.5 * variability));
+  const halfWidth = Math.ceil(baseHalf * Math.sqrt(k)) + approxHalfWidth;
+  const window = { start: addDays(expectedStart, -halfWidth), end: addDays(coreEnd, halfWidth) };
+  if (eventDate >= expectedStart && eventDate <= coreEnd) {
+    return {
+      status: "likely",
+      window,
+      note: `Likely overlap: a period is estimated around ${expectedStart} to ${coreEnd}.`,
+      cyclesAhead: k,
+      expectedStart
+    };
+  }
+  if (eventDate >= window.start && eventDate <= window.end) {
+    return {
+      status: "possible",
+      window,
+      note: `Possible overlap: this date is inside the wider estimate window ${window.start} to ${window.end}.`,
+      cyclesAhead: k,
+      expectedStart
+    };
+  }
+  return {
+    status: "unlikely",
+    window,
+    note: `Unlikely to overlap (estimate): the estimated window for that cycle is ${window.start} to ${window.end}.`,
+    cyclesAhead: k,
+    expectedStart
+  };
+}
+
 // ai/backend/milestonesData.ts
 var MILESTONES_DATA = [
   {
@@ -344,15 +662,12 @@ var MILESTONES_DATA = [
 var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 function applyDayOffset(isoDate, offsetDays) {
   if (!offsetDays) return isoDate;
-  const d = /* @__PURE__ */ new Date(isoDate + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  return addDaysToKey(isoDate, offsetDays);
 }
 function findWeekdayOffset(baseIsoDate, targetWeekdayName, direction) {
   const targetDayIdx = WEEKDAYS.indexOf(targetWeekdayName.toLowerCase());
   if (targetDayIdx === -1) return baseIsoDate;
-  const baseDate = /* @__PURE__ */ new Date(baseIsoDate + "T12:00:00Z");
-  const baseDayIdx = baseDate.getUTCDay();
+  const baseDayIdx = weekdayOfKey(baseIsoDate);
   let diffDays = 0;
   if (direction === "before") {
     diffDays = (baseDayIdx - targetDayIdx + 7) % 7;
@@ -494,7 +809,7 @@ function applySlipCorrections(current, correctionText) {
   if (dayMatch) {
     const dayNum = parseInt(dayMatch[1], 10);
     if (dayNum >= 1 && dayNum <= 31) {
-      const parts = (updated.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)).split("-");
+      const parts = (updated.date || todayLocal()).split("-");
       const year = parts[0];
       const month = parts[1];
       const newDayStr = String(dayNum).padStart(2, "0");
@@ -725,6 +1040,31 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
 Tone: Warm, respectful, concise, neutral, non-medical.`;
+function recordsFromContext(context) {
+  const periods = context.periods && context.periods.length > 0 ? context.periods : context.cycleStats?.lastPeriodStart ? [{ startDate: context.cycleStats.lastPeriodStart, endDate: null }] : [];
+  return periods.map((per, i) => ({
+    id: `ctx-${i}`,
+    startDate: per.startDate,
+    endDate: per.endDate || void 0,
+    confirmed: true,
+    source: "manual",
+    createdAt: "",
+    updatedAt: ""
+  }));
+}
+function evaluateContextOverlaps(events, context, today) {
+  const records = recordsFromContext(context);
+  return events.map((ev) => {
+    const result = evaluateEventOverlap(ev.date, records, today);
+    return {
+      name: ev.name,
+      eventDate: ev.date,
+      overlap: result.status === "logged" ? "period-day" : result.status,
+      overlapNote: result.note,
+      window: result.window
+    };
+  });
+}
 async function runLavenderAgent(userPrompt, context = {}, conversationHistory = []) {
   const startTime = Date.now();
   const activityTrail = [];
@@ -743,7 +1083,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
       toolCalls: toolCallsRecorded
     };
   }
-  const today = context.currentDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const today = context.currentDate || todayLocal();
   if (context.pendingEntry) {
     const correctionRes = applySlipCorrections(context.pendingEntry, userPrompt);
     if (correctionRes.changes.length > 0) {
@@ -883,7 +1223,7 @@ Today's date is ${today}.` },
             detail: `Evaluating cycle overlap for ${fnArgs.events?.length || 0} events`,
             status: "done"
           });
-          const overlaps = evaluateOverlaps(fnArgs.events || [], context);
+          const overlaps = evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
@@ -1006,9 +1346,9 @@ function parseLocally(text, today, context) {
     const rawDate = match[1];
     let resolvedDate = rawDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      const parsed = /* @__PURE__ */ new Date(`${rawDate} ${currentYear}`);
-      if (!isNaN(parsed.getTime())) {
-        resolvedDate = parsed.toISOString().slice(0, 10);
+      const parsedKey = parseMonthDay(rawDate, currentYear);
+      if (parsedKey) {
+        resolvedDate = parsedKey;
       }
     }
     eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0] || "Event", date: resolvedDate });
@@ -1016,7 +1356,7 @@ function parseLocally(text, today, context) {
   let planOverlaps = void 0;
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
-    planOverlaps = evaluateOverlaps(eventMatches, context);
+    planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
     toolCalls.push({
       id: "call_overlap_" + Date.now(),
       toolName: "check_overlap",
@@ -1113,60 +1453,16 @@ function parseLocally(text, today, context) {
     planOverlaps
   };
 }
-function evaluateOverlaps(events, context) {
-  const avgCycle = context.cycleStats?.avgCycleLength || 28;
-  const avgPeriod = context.cycleStats?.avgPeriodLength || 5;
-  const lastStart = context.cycleStats?.lastPeriodStart;
-  const periods = context.periods || [];
-  return events.map((ev) => {
-    let overlap = "unknown";
-    let overlapNote = "Log a past period first so predictions can be checked against this date.";
-    const inActual = periods.some(
-      (p) => ev.date >= p.startDate && (p.endDate ? ev.date <= p.endDate : ev.date === p.startDate)
-    );
-    if (inActual) {
-      overlap = "period-day";
-      overlapNote = "This date falls inside a period you have already logged.";
-    } else if (lastStart) {
-      overlap = "unlikely";
-      overlapNote = "Based on your pattern, your period is not expected to overlap this date.";
-      const lastDate = new Date(lastStart);
-      for (let k = 1; k <= 12; k++) {
-        const predStart = new Date(lastDate.getTime() + avgCycle * k * 864e5);
-        const coreEnd = new Date(predStart.getTime() + (avgPeriod - 1) * 864e5);
-        const winStart = new Date(predStart.getTime() - 3 * 864e5);
-        const winEnd = new Date(coreEnd.getTime() + 3 * 864e5);
-        const evDate = new Date(ev.date);
-        if (evDate >= predStart && evDate <= coreEnd) {
-          overlap = "likely";
-          overlapNote = `Your period is predicted around ${predStart.toISOString().slice(0, 10)} to ${coreEnd.toISOString().slice(0, 10)}, so it will very likely overlap.`;
-          break;
-        }
-        if (evDate >= winStart && evDate <= winEnd) {
-          overlap = "possible";
-          overlapNote = `This date falls in your wider prediction window (${winStart.toISOString().slice(0, 10)} to ${winEnd.toISOString().slice(0, 10)}). Overlap is possible.`;
-          break;
-        }
-      }
-    }
-    return {
-      name: ev.name,
-      eventDate: ev.date,
-      overlap,
-      overlapNote
-    };
-  });
-}
 
 // ai/backend/protection.ts
 var minuteHits = /* @__PURE__ */ new Map();
 var dailyHits = /* @__PURE__ */ new Map();
-var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var globalDailyTracker = { count: 0, day: todayLocal() };
 var LIMIT_PER_MINUTE = 20;
 var LIMIT_PER_DAY_IP = 150;
 var DEFAULT_GLOBAL_DAILY_CAP = 500;
 function getTodayString() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return todayLocal();
 }
 function extractClientIp(req) {
   if (!req) return "127.0.0.1";

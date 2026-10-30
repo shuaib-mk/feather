@@ -278,6 +278,35 @@ var MILESTONES_DATA = [
 ];
 var milestonesData_default = MILESTONES_DATA;
 
+// client/src/lib/localDate.ts
+function parseDateKey(key) {
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    throw new Error(`Invalid date format: ${key}`);
+  }
+  const [year = 1970, month = 1, day = 1] = key.split("-").map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) {
+    throw new Error(`Invalid calendar date: ${key}`);
+  }
+  return { year, month, day };
+}
+function formatDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function dateKeyToUTCDate(key) {
+  const { year, month, day } = parseDateKey(key);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+function toLocalKey(date) {
+  return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+function todayLocal(now = /* @__PURE__ */ new Date()) {
+  return toLocalKey(now);
+}
+function diffDateKeys(from, to) {
+  return Math.round((dateKeyToUTCDate(to).getTime() - dateKeyToUTCDate(from).getTime()) / 864e5);
+}
+
 // ai/backend/synthesis.ts
 function projectPhaseAtDate(targetDateStr, lastPeriodStart, avgCycleLength, avgPeriodLength) {
   if (!lastPeriodStart) {
@@ -287,9 +316,7 @@ function projectPhaseAtDate(targetDateStr, lastPeriodStart, avgCycleLength, avgP
       note: "Baseline calibrating. Initial cycle tracking in progress."
     };
   }
-  const start = new Date(lastPeriodStart).getTime();
-  const target = new Date(targetDateStr).getTime();
-  const diffDays = Math.round((target - start) / (1e3 * 60 * 60 * 24));
+  const diffDays = diffDateKeys(lastPeriodStart, targetDateStr);
   const cycleDay = (diffDays % avgCycleLength + avgCycleLength) % avgCycleLength;
   if (cycleDay < avgPeriodLength) {
     return {
@@ -479,12 +506,12 @@ ${userContext}` }
 // ai/backend/protection.ts
 var minuteHits = /* @__PURE__ */ new Map();
 var dailyHits = /* @__PURE__ */ new Map();
-var globalDailyTracker = { count: 0, day: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) };
+var globalDailyTracker = { count: 0, day: todayLocal() };
 var LIMIT_PER_MINUTE = 20;
 var LIMIT_PER_DAY_IP = 150;
 var DEFAULT_GLOBAL_DAILY_CAP = 500;
 function getTodayString() {
-  return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return todayLocal();
 }
 function extractClientIp(req) {
   if (!req) return "127.0.0.1";
