@@ -16,7 +16,7 @@ export function PageHeader({ title, subtitle, badge, actions }: PageHeaderProps)
             {title}
           </h1>
           {badge && (
-            <span className="font-sans text-[11px] font-medium tracking-normal px-2.5 py-0.5 rounded-full bg-white/70 text-stone-600 border border-stone-200/80 shadow-2xs shrink-0">
+            <span className="liquid-glass-pill font-sans text-[11px] font-medium tracking-normal px-2.5 py-0.5 rounded-full text-stone-700 shrink-0 inline-flex items-center">
               {badge}
             </span>
           )}
