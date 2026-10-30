@@ -19,7 +19,7 @@ Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, 
 - Phrases that work offline (no key): "period started yesterday, heavy flow with cramps", "period started 2 days before New Year's Day", "exam on Nov 20", "exam on 3rd November", "Anu's wedding is on Nov 20", "dinner on Nov 3", "actually it was light, not heavy" (correction), "my period is late" (asks what to log).
 - Phrases that work live (Meta key configured server-side): the same phrases via Muse Spark tool-calling, plus voice input via Muse Voice Transcribe. Without a key the app honestly reports offline mode.
 
-> **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database.
+> **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap estimates using Meta Muse Voice & Spark. Cycle data is stored only on your device; voice and text are sent to Meta's API for processing when you use those features.
 
 ---
 
@@ -27,19 +27,6 @@ Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, 
 > **Track:** Indie Developer (*"Build for Your World"*)  
 > **Hackathon Window:** October 27 – November 4, 2026  
 > **Target Models:** Meta Muse Voice Transcribe (`muse-voice-transcribe-1.0`) & Meta Muse Spark (`muse-spark-1.3`)
-
----
-
-## Try It in 30 Seconds (Judge Quickstart)
-
-1. **One-Tap Synthetic History:** Tap the **"✨ Try Judge Demo"** button on the home screen. This instantly loads 4 realistic past cycles and 5 symptom logs into your local device vault, immediately activating the Plan Around It forecast and 12-Month Foresight matrix with zero typing or speech needed. *(You can clear it anytime with one click).*
-2. **One-Tap Multilingual Speech Pipeline:** Click or speak natural phrases under the voice console:
-   - **English:** *"Period started 2 days before New Year's, medium flow with cramps"*
-   - **Español (Spanish):** *"El periodo empezó dos días antes de vacaciones, flujo moderado"*
-   - **Universal Landmark:** *"Flow started the Monday before the marathon, light flow"*
-3. **Accession Slip Preview & Multi-Turn Corrections:** Watch the Accession Slip resolve the calendar date and symptoms. Test conversational corrections: speak or type *"no, make it the 3rd"* or click **"+ Add Headache"** to see multi-turn slip editing in action.
-4. **Inspect Under the Hood:** Click **"UNDER THE HOOD — Meta AI Tool Trace"** to inspect live tool calls (`milestone_lookup`, `log_entry`, `update_entry`, `check_overlap`), arguments, returned results, and millisecond latencies.
-5. **Explore Overlap Forecasts:** Check the **Plan Around It** section and **Plate 02 12-Month Foresight Matrix** to see honest, non-medical cycle scheduling forecasts against major life events.
 
 ---
 
@@ -66,7 +53,7 @@ flowchart TD
     Tools --> SlipPreview["Accession Slip Preview Card (Interactive Confirmation & Multi-Turn Corrections)"]
     SlipPreview --> Confirm[User Confirmation]
     Confirm --> LocalVault[("On-Device Local Vault (localStorage)\nZero Server DB · Zero Tracking")]
-    LocalVault --> OverlapEngine[Plan Around It & 12-Month Foresight Engine]
+    LocalVault --> OverlapEngine[Plan Around It]
 ```
 
 ---
@@ -75,7 +62,7 @@ flowchart TD
 
 | Model Name | Endpoint Model ID | Exact Implementation Files | Purpose & Capabilities |
 | :--- | :--- | :--- | :--- |
-| **Meta Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | `api/transcribe.ts`<br>`api-src/transcribe.ts`<br>`ai/backend/transcribe.ts` | Real-time speech-to-text with 16kHz mono WAV streaming; multilingual ASR across English, Malayalam, Hindi, Spanish. Discarded immediately after transcription. |
+| **Meta Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | `api/transcribe.ts`<br>`api-src/transcribe.ts`<br>`ai/backend/transcribe.ts` | Speech-to-text via the Meta Model API. Audio is processed in-memory and discarded after transcription. |
 
 ---
 
@@ -144,8 +131,6 @@ npx tsx ai/eval/run-holdout.ts
 - **What Stays Local:**
   - All confirmed cycle entries, notes, symptoms, and dates are stored exclusively in your browser's `localStorage` (`feather_cycle_vault_v1`).
   - Feather contains **zero server-side databases** and **zero user tracking or analytics**.
-- **Browser Speech Service (Opt-In):**
-  - An optional parallel Web Speech API transcription path is available in Settings. It is **OFF by default** and clearly labelled. Meta Muse Voice Transcribe is the default path.
 - **Hackathon Disclosure:**
   > *"While using free hackathon API credits, content sent to the Meta Model API may be used by Meta for product improvement. Do not enter real personal health data in this demo."*
 
@@ -201,9 +186,9 @@ feather/
 │   │   ├── agent.ts          # Muse Spark tool-calling agent (log_entry, milestone_lookup, update_entry, check_overlap)
 │   │   ├── config.ts         # Meta Model API & Baseten configuration loader
 │   │   ├── dateArithmetic.ts # Deterministic temporal arithmetic & multilingual landmark parser
-│   │   ├── festivals.json    # Cultural landmark dates (Diwali, Onam, Vishu, Holi, Eid, Christmas)
+│   │   ├── landmarks.json    # Verified landmark dates (2025-2027) with per-entry source URLs
 │   │   ├── guardrail.ts      # Multilingual deterministic safety regex guardrail
-│   │   ├── milestonesData.ts # Universal & cultural landmark calendar database (2026-2027)
+│   │   ├── landmarks.ts      # Landmark loader and name aliases over landmarks.json
 │   │   ├── protection.ts     # Stateless in-memory rate limiting & payload size protection
 │   │   ├── server.ts         # Lightweight Node HTTP API server for local development
 │   │   ├── transcribe.ts     # Meta Muse Voice Transcribe service
@@ -228,7 +213,7 @@ feather/
 │   ├── public/               # Public assets (icon.webp, manifest.json)
 │   ├── src/
 │   │   ├── components/       # Reusable UI (Sidebar, AppLayout, PageHeader, EmptyState, ConfirmDialog)
-│   │   ├── pages/            # Multi-page views (Dashboard, VoiceFlow, Vault, Chronicle, Insights, Scanner, Settings)
+│   │   ├── pages/            # Multi-page views (Dashboard, Calendar, VoiceFlow, Vault, Chronicle, Stats, DiaryScanner, Settings)
 │   │   ├── cycleStorage.ts   # Local vault engine (on-device localStorage, average cycle estimation)
 │   │   ├── App.tsx           # React Router route definitions
 │   │   ├── main.tsx          # React root entry point with ErrorBoundary & QueryClient
@@ -320,9 +305,6 @@ Google Calendar OAuth is future work and is not implemented. Feather supports lo
 
 ## Privacy (matches the app)
 Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features.
-
-## Judge quickstart
-Open the app, tap **Try Demo** on the first screen (or add ?demo=1). Demo Mode uses the separate `feather_demo_v1` namespace with fictional irregular cycles (lengths 26-38 days). Exit demo from the banner to return to your real vault untouched. Dev URL: http://localhost:3000
 
 ## Models manifest
 - Meta Muse Voice Transcribe (`MUSE_VOICE_MODEL`, server-side via `ai/backend/transcribe.ts` -> `api/transcribe.ts`)

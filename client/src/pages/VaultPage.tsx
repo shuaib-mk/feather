@@ -69,7 +69,7 @@ export function VaultPage() {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
           </div>
-          <span className="font-serif text-lg">Zero-Cloud Privacy Architecture</span>
+          <span className="font-serif text-lg">Stored on this device</span>
         </div>
         <p className="font-sans text-xs text-stone-700 leading-relaxed max-w-2xl">
           Feather never transmits your cycle data or personal health dates to remote databases. Audio recordings are sent in-memory over HTTPS solely for transcription and discarded immediately. All confirmed dates, notes, and symptoms remain in <code className="bg-white/80 px-1.5 py-0.5 rounded text-emerald-900 font-mono text-[11px]">feather_cycle_vault_v1</code> on this device.
