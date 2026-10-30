@@ -27,7 +27,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Calendar",
     shortLabel: "Calendar",
     icon: (active) => (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
     ),
   },
   {
@@ -104,7 +109,9 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-    const isActive = (path: string) => {
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+
+  const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
   };
@@ -112,27 +119,34 @@ export function Sidebar() {
   return (
     <>
       {/* ========================================================
-          DESKTOP LIQUID GLASS FLOATING DOCK (120Hz Hardware Composited)
+          DESKTOP LIQUID GLASS DYNAMIC DOCK (Smooth Hover Expansion)
           ======================================================== */}
       <aside
         data-slot="sidebar"
-        className="fixed z-40 left-4 md:left-6 hidden md:flex flex-col gap-2.5 select-none w-[220px]"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className="group/sidebar fixed z-40 left-3 md:left-5 hidden md:flex flex-col gap-2 select-none"
         style={{
-          top: "max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1.25rem))",
-          willChange: "transform",
+          top: "max(1.25rem, calc(env(safe-area-inset-top, 0px) + 1rem))",
+          willChange: "transform, width",
           transform: "translateZ(0)",
         }}
       >
         <div
           data-slot="sidebar-card"
-          className="liquid-glass-lens flex flex-col p-2.5 w-[220px] rounded-[24px]"
+          className={`liquid-glass-lens flex flex-col p-1.5 transition-all duration-200 ease-out shadow-lg ${
+            isHovered ? "w-[216px] rounded-[24px]" : "w-[58px] rounded-[24px]"
+          }`}
         >
           {/* Top Brand Bar */}
           <Link
             to="/"
-            className="flex w-full items-center gap-2.5 rounded-[18px] p-2 text-left relative overflow-hidden cursor-pointer hover:bg-white/[0.12] transition-colors"
+            className={`flex items-center gap-2.5 rounded-[18px] p-2 text-left relative overflow-hidden cursor-pointer transition-colors ${
+              isHovered ? "justify-start" : "justify-center"
+            }`}
+            aria-label="Feather Home"
           >
-            <div className="size-5 shrink-0 flex items-center justify-center">
+            <div className="size-5 shrink-0 flex items-center justify-center text-stone-900">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="size-5 text-stone-900">
                 <line x1="3" y1="17" x2="3" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 <line x1="3" y1="7" x2="3" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -146,59 +160,72 @@ export function Sidebar() {
               </svg>
             </div>
 
-            <div className="flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5">
-                <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
-                  Feather
+            {isHovered && (
+              <div className="flex flex-col overflow-hidden animate-in fade-in duration-150">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
+                    Feather
+                  </span>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
+                <span className="font-sans text-[11px] text-stone-500 font-medium whitespace-nowrap">
+                  Cycle Companion
                 </span>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-              <span className="font-sans text-[11px] text-stone-500 font-medium">
-                Cycle Companion
-              </span>
-            </div>
+            )}
           </Link>
 
           {/* Quick Action: Voice Record CTA */}
           <div className="my-1 px-0.5">
             <Link
               to="/voice"
-              className="flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer liquid-glass-nav-cta justify-start font-semibold text-stone-900"
+              className={`flex items-center gap-2.5 rounded-[16px] transition-all cursor-pointer liquid-glass-nav-cta font-semibold text-stone-900 ${
+                isHovered ? "p-2 justify-start w-full" : "size-10 justify-center mx-auto"
+              }`}
+              aria-label="Record Log"
+              title="Record Log"
             >
               <div className="size-5 shrink-0 flex items-center justify-center">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                   <line x1="12" y1="19" x2="12" y2="22" />
                 </svg>
               </div>
-              <span className="font-sans text-[13px] font-medium truncate">
-                Record Log
-              </span>
+              {isHovered && (
+                <span className="font-sans text-[13px] font-semibold truncate animate-in fade-in duration-150 whitespace-nowrap">
+                  Record Log
+                </span>
+              )}
             </Link>
           </div>
 
           {/* Core Routes Navigation */}
-          <nav aria-label="Desktop Navigation" className="flex flex-col gap-0.5 mt-1 border-t border-black/[0.04] pt-1">
+          <nav aria-label="Desktop Navigation" className="flex flex-col gap-1 mt-1 border-t border-black/[0.04] pt-1">
             {NAV_ITEMS.map((item) => {
               const active = isActive(item.path);
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`group/item flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer ${
+                  className={`group/item flex items-center gap-2.5 rounded-[16px] transition-all cursor-pointer ${
+                    isHovered ? "p-2 justify-start w-full" : "size-10 justify-center mx-auto"
+                  } ${
                     active
-                      ? "liquid-glass-nav-active shadow-xs font-semibold text-stone-950"
-                      : "liquid-glass-nav-item text-stone-700 hover:text-stone-950"
+                      ? "liquid-glass-nav-active font-bold text-stone-950 shadow-xs"
+                      : "liquid-glass-nav-item font-medium"
                   }`}
                   aria-label={item.label}
+                  title={item.label}
                 >
-                  <div className="size-5 shrink-0 flex items-center justify-center text-stone-800">
+                  <div className={`size-5 shrink-0 flex items-center justify-center transition-transform ${active ? "scale-105 text-stone-950" : "group-hover/item:scale-105 text-stone-800"}`}>
                     {item.icon(active)}
                   </div>
-                  <span className="font-sans text-[13px] truncate">
-                    {item.label}
-                  </span>
+                  {isHovered && (
+                    <span className="font-sans text-[13px] truncate animate-in fade-in duration-150 whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -208,7 +235,10 @@ export function Sidebar() {
         {/* Local Vault Badge Pill */}
         <div
           data-slot="sidebar-badge"
-          className="liquid-glass-lens flex items-center gap-2.5 rounded-[20px] p-2.5 w-[220px] overflow-hidden"
+          className={`liquid-glass-lens flex items-center transition-all duration-200 ease-out overflow-hidden shadow-sm ${
+            isHovered ? "w-[216px] rounded-[20px] p-2.5 justify-start" : "w-[58px] h-11 rounded-[20px] justify-center p-0 mx-auto"
+          }`}
+          title="100% On-Device Zero Server Vault"
         >
           <div className="size-6 shrink-0 flex items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -216,14 +246,16 @@ export function Sidebar() {
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
           </div>
-          <div className="flex flex-col text-left pl-1">
-            <span className="font-sans text-[11px] font-semibold text-stone-800">
-              100% On-Device
-            </span>
-            <span className="font-sans text-[10px] text-stone-500 font-medium">
-              Zero Server Vault
-            </span>
-          </div>
+          {isHovered && (
+            <div className="flex flex-col text-left pl-2 animate-in fade-in duration-150 whitespace-nowrap">
+              <span className="font-sans text-[11px] font-semibold text-stone-800">
+                100% On-Device
+              </span>
+              <span className="font-sans text-[10px] text-stone-500 font-medium">
+                Zero Server Vault
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -257,15 +289,15 @@ export function Sidebar() {
         <div className="flex items-center gap-1.5">
           <Link
             to="/voice"
-            className="bg-white/[0.14] hover:bg-white/[0.24] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7)] px-3 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer rounded-full"
+            className="liquid-glass-button px-3.5 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer rounded-full"
             aria-label="Voice Capture"
           >
-            <span className="size-1.5 rounded-full bg-rose-500" />
+            <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
             <span>Voice</span>
           </Link>
           <Link
             to="/settings"
-            className="bg-white/[0.14] hover:bg-white/[0.24] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7)] p-2 text-stone-700 hover:text-stone-950 cursor-pointer rounded-full"
+            className="liquid-glass-tile p-2 text-stone-700 hover:text-stone-950 cursor-pointer rounded-full flex items-center justify-center"
             aria-label="Settings"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -292,14 +324,14 @@ export function Sidebar() {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-all cursor-pointer ${
+              className={`flex flex-col items-center gap-1 rounded-full px-3 py-1 text-xs transition-all cursor-pointer ${
                 active
-                  ? "liquid-glass-nav-active !py-0.5 text-stone-950 font-bold"
-                  : "text-stone-600 hover:text-stone-900 font-medium"
+                  ? "liquid-glass-nav-active !py-0.5 text-stone-950 font-bold shadow-xs scale-105"
+                  : "liquid-glass-nav-item text-stone-700 hover:text-stone-900 font-medium"
               }`}
               aria-label={item.shortLabel}
             >
-              <div className={active ? "text-stone-950" : "text-stone-600"}>
+              <div className={active ? "text-stone-950" : "text-stone-700"}>
                 {item.icon(active)}
               </div>
               <span className="font-sans text-[10px] font-medium tracking-normal">

@@ -61,7 +61,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main Spacious Canvas (Accessible Main Landmark) */}
       <main
         id="main-content"
-        className="min-h-[85vh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-[252px] lg:pl-[260px] md:pr-8 space-y-5 overflow-x-hidden pb-24 md:pb-8"
+        className="min-h-[85vh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-24 lg:pl-28 md:pr-8 space-y-5 overflow-x-hidden pb-24 md:pb-8"
       >
         {/* Gentle 14-Day Export Overdue Reminder Banner */}
         {showOverdueBanner && (
