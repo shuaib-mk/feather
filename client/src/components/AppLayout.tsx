@@ -1,7 +1,6 @@
 import React, { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
-import { LiquidGlassFilter } from "./LiquidGlassFilter";
 import { useCycle } from "../context/CycleContext";
 
 interface AppLayoutProps {
@@ -53,9 +52,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           </button>
         </div>
       )}
-
-      {/* Tahoe 26 refraction filter (Chromium only; no-op elsewhere) */}
-      <LiquidGlassFilter />
 
       {/* Navigation Sidebar & Mobile Bar */}
       <Sidebar />
