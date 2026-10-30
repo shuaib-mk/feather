@@ -69,6 +69,8 @@ export const OVERLAP_DISCLAIMER =
   "Estimates based on your logged cycles. Cycles vary, so this is not a guarantee and not contraception or medical advice.";
 
 const STORAGE_KEY = "feather_cycle_vault_v1";
+export const DEMO_STORAGE_KEY = "feather_demo_v1";
+export function activeVaultKey(): string { try { const ls = (globalThis as any).localStorage; if (ls && ls.getItem("feather_demo_active")==="1") return DEMO_STORAGE_KEY; } catch {} return STORAGE_KEY; }
 const LAST_EXPORT_KEY = "feather_last_export_ts";
 const ENTRIES_SINCE_EXPORT_KEY = "feather_entries_since_export";
 
@@ -188,7 +190,7 @@ const INITIAL_DATA: { periods: Period[]; logs: DayLog[] } = {
 
 export function loadCycleData(): { periods: Period[]; logs: DayLog[] } {
   try {
-    const raw = safeGetItem(STORAGE_KEY);
+    const raw = safeGetItem(activeVaultKey());
     if (!raw) {
       return { periods: [], logs: [] };
     }
@@ -200,7 +202,9 @@ export function loadCycleData(): { periods: Period[]; logs: DayLog[] } {
 
 export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): void {
   try {
-    safeSetItem(STORAGE_KEY, JSON.stringify(data));
+    const key = activeVaultKey();
+    if (key === DEMO_STORAGE_KEY) { let prev:any={}; try { prev = JSON.parse(safeGetItem(key) || "{}"); } catch {} safeSetItem(key, JSON.stringify({ ...prev, periods: data.periods, logs: data.logs, events: prev.events || [] })); }
+    else safeSetItem(key, JSON.stringify(data));
   } catch (err) {
     console.error("Failed to save cycle data:", err);
   }
@@ -573,6 +577,7 @@ export function exportCycleDataJSON(): string {
       exportedAt: new Date().toISOString(),
       periods: data.periods,
       logs: data.logs,
+      events: (() => { try { return JSON.parse(localStorage.getItem("feather_events_v1") || "[]"); } catch { return []; } })(),
     },
     null,
     2,
@@ -633,6 +638,7 @@ export function importCycleDataJSON(jsonStr: string): { success: boolean; count:
       }
     }
 
+    try { if (Array.isArray((parsed as any).events)) localStorage.setItem("feather_events_v1", JSON.stringify((parsed as any).events)); } catch {}
     saveCycleData({ periods: validPeriods, logs: validLogs });
     recordExportTimestamp();
     return { success: true, count: validPeriods.length + validLogs.length };
@@ -641,104 +647,3 @@ export function importCycleDataJSON(jsonStr: string): { success: boolean; count:
   }
 }
 
-const DEMO_FLAG_KEY = "feather_is_synthetic_demo";
-
-export function isDemoDataLoaded(): boolean {
-  return safeGetItem(DEMO_FLAG_KEY) === "true";
-}
-
-/**
- * Loads realistic, clearly-labelled synthetic cycle history for Hackathon judges
- * so the Plan Around It forecast and Foresight matrix light up instantly with zero mic or typing.
- */
-export function loadSyntheticDemoData(): { periods: Period[]; logs: DayLog[] } {
-  const syntheticPeriods: Period[] = [
-    {
-      id: 101,
-      startDate: "2026-07-28",
-      endDate: "2026-08-01",
-      landmarkName: "Late Summer Vacation",
-    },
-    {
-      id: 102,
-      startDate: "2026-08-25",
-      endDate: "2026-08-29",
-      landmarkName: "Late August Bank Holiday",
-    },
-    {
-      id: 103,
-      startDate: "2026-09-22",
-      endDate: "2026-09-26",
-      landmarkName: "Autumn Equinox",
-    },
-    {
-      id: 104,
-      startDate: "2026-10-20",
-      endDate: "2026-10-24",
-      landmarkName: "Global Marathon Window",
-    },
-  ];
-
-  const syntheticLogs: DayLog[] = [
-    {
-      id: 201,
-      logDate: "2026-10-20",
-      flow: "heavy",
-      symptoms: ["cramps", "fatigue", "headache"],
-      mood: "Low",
-      energy: 2,
-      sleepHours: 7,
-      notes: "[Synthetic Judge Demo] Cycle day 1 with cramps",
-    },
-    {
-      id: 202,
-      logDate: "2026-10-21",
-      flow: "heavy",
-      symptoms: ["cramps", "backache"],
-      mood: "Okay",
-      energy: 3,
-      sleepHours: 7.5,
-      notes: "[Synthetic Judge Demo] Cycle day 2 flow medium-heavy",
-    },
-    {
-      id: 203,
-      logDate: "2026-10-22",
-      flow: "medium",
-      symptoms: ["bloating"],
-      mood: "Good",
-      energy: 3,
-      sleepHours: 8,
-      notes: "[Synthetic Judge Demo] Energy recovering",
-    },
-    {
-      id: 204,
-      logDate: "2026-10-23",
-      flow: "light",
-      symptoms: [],
-      mood: "Great",
-      energy: 4,
-      sleepHours: 8,
-      notes: "[Synthetic Judge Demo] Light flow, feeling good",
-    },
-    {
-      id: 205,
-      logDate: "2026-10-24",
-      flow: "spotting",
-      symptoms: [],
-      mood: "Calm",
-      energy: 5,
-      sleepHours: 8.5,
-      notes: "[Synthetic Judge Demo] Final spotting day",
-    },
-  ];
-
-  const syntheticData = { periods: syntheticPeriods, logs: syntheticLogs };
-  saveCycleData(syntheticData);
-  safeSetItem(DEMO_FLAG_KEY, "true");
-  return syntheticData;
-}
-
-export function clearSyntheticDemoData(): void {
-  saveCycleData({ periods: [], logs: [] });
-  safeSetItem(DEMO_FLAG_KEY, "false");
-}

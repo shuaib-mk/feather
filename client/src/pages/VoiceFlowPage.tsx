@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { loadEvents, fuzzyMatchEvents, upsertEvent } from "../lib/events";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
@@ -30,6 +31,11 @@ const COMMON_SYMPTOMS: Array<{ key: ValidSymptom; label: string }> = [
 export function VoiceFlowPage() {
   const { data, stats, savePeriod, saveLog } = useCycle();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetDate = searchParams.get("date");
+  const [plannedEventsState, setPlannedEventsState] = useState<any[]>([]);
+  const [agentMode, setAgentMode] = useState<any>(null);
+  const [usedAnchor, setUsedAnchor] = useState(false);
 
   // Voice recording hook
   const {
@@ -87,12 +93,12 @@ export function VoiceFlowPage() {
         setActivityTrail([{ step: "Voice Recognition", detail: `Transcribed (${res.language || "multilingual"}): "${res.text}"`, status: "done" }]);
         await runAgentPipeline(res.text);
       } else {
-        setAgentMessage(res.error || "No clear speech detected in recording.");
+        setAgentMessage(res.error || "Couldn't hear that — try again or type it");
         setActivityTrail([{ step: "Voice Recognition", detail: res.error || "Acoustic detection ended without text", status: "done" }]);
       }
     } catch (err: any) {
       console.error("Transcription error:", err);
-      setAgentMessage("Could not transcribe audio. Please verify your microphone or type below.");
+      setAgentMessage("Couldn't hear that — try again or type it");
       setActivityTrail([{ step: "Voice Recognition", detail: "Audio stream error", status: "clarify" }]);
     } finally {
       setIsProcessing(false);
@@ -120,6 +126,7 @@ export function VoiceFlowPage() {
           currentDate: todayStr(),
           pendingEntry: pending,
           locale: typeof navigator !== "undefined" ? navigator.language : "en",
+          matchedEvents: (()=>{ try { if (localStorage.getItem("feather_allow_matched_events")!=="true") return []; return fuzzyMatchEvents(promptText, loadEvents()).map((e)=>({title:e.title,date:e.date})); } catch { return []; } })(),
         },
         conversationHistory,
       );
@@ -130,6 +137,9 @@ export function VoiceFlowPage() {
         setToolCalls(res.toolCalls);
       }
       setIsOfflineFallback(Boolean(res.isOfflineFallback));
+      setAgentMode(res);
+      setUsedAnchor(Boolean((res as any).usedPersonalAnchor));
+      if ((res as any).plannedEvents?.length) setPlannedEventsState((res as any).plannedEvents);
 
       if (res.rateLimited) {
         setRateLimitNotice(res.message);
@@ -348,7 +358,7 @@ export function VoiceFlowPage() {
               </div>
             )}
 
-            {permissionError && (
+            {typeof navigator !== "undefined" && !navigator.onLine && (<span role="alert" className="text-xs text-rose-600 block">No network — check your connection. You can still type a log.</span>)}{typeof window !== "undefined" && !("MediaRecorder" in window) && (<span role="alert" className="text-xs text-rose-600 block">Voice recording is not supported in this browser — type your log instead.</span>)}{agentMessage && /429|rate limit/i.test(agentMessage) && (<span role="alert" className="text-xs text-rose-600 block">Rate limit (429) — please wait and try again.</span>)}{agentMessage && /too large|413/i.test(agentMessage) && (<span role="alert" className="text-xs text-rose-600 block">That recording or file is too large — try a shorter clip.</span>)}{permissionError && (
               <span className="text-xs text-rose-600 block">{permissionError}</span>
             )}
           </div>
@@ -430,6 +440,9 @@ export function VoiceFlowPage() {
       )}
 
       {/* Accession Slip — Confirmed Entry Preview (Editable) */}
+      {presetDate && <p className="text-xs liquid-glass-card rounded-[16px] p-3">Logging for {presetDate} (chosen on the calendar). Mention the date, or confirm the slip date after parsing.</p>}
+      {(agentMode || isOfflineFallback) && <p role="status" className="text-xs liquid-glass-pill inline-block px-3 py-1.5">{isOfflineFallback || agentMode?.mode==="offline" ? `Offline parser — Meta model not used (${agentMode?.modeReason || "offline fallback"})` : "Live: Meta Muse Spark"}{usedAnchor ? " · Personal calendar anchor used" : ""}</p>}
+      {plannedEventsState.length>0 && <div className="liquid-glass-card rounded-[24px] p-5 space-y-2"><h3 className="font-semibold text-sm">Event to save</h3>{plannedEventsState.map((e:any,i:number)=><div key={i} className="flex justify-between text-xs"><span>{e.title} — {e.date}</span><button type="button" className="liquid-glass-button rounded-full px-3 py-1.5" onClick={()=>{ upsertEvent({title:e.title, date:e.date, source:"voice"}); setPlannedEventsState(plannedEventsState.filter((_:any,j:number)=>j!==i)); }}>Confirm event</button></div>)}</div>}
       {confirmEntry && (
         <div className="liquid-glass-card rounded-[26px] p-6 space-y-5 border border-white/95 shadow-md animate-in fade-in">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
