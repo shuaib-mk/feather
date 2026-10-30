@@ -6,6 +6,7 @@
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
 import milestonesData from "./milestonesData";
+import { diffDateKeys } from "../../client/src/lib/localDate";
 
 export interface SynthesisTelemetry {
   model: string;
@@ -61,9 +62,7 @@ function projectPhaseAtDate(
     };
   }
 
-  const start = new Date(lastPeriodStart).getTime();
-  const target = new Date(targetDateStr).getTime();
-  const diffDays = Math.round((target - start) / (1000 * 60 * 60 * 24));
+  const diffDays = diffDateKeys(lastPeriodStart, targetDateStr);
   const cycleDay = ((diffDays % avgCycleLength) + avgCycleLength) % avgCycleLength;
 
   if (cycleDay < avgPeriodLength) {

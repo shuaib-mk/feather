@@ -12,7 +12,8 @@
  * 5. Estimates are informational planning guides, never medical diagnoses or contraceptive advice.
  */
 
-export type DateKey = string;
+import { parseDateKey, dateKeyToUTCDate, utcDateToDateKey, type DateKey } from "./localDate";
+export type { DateKey };
 
 export type PeriodRecord = {
   id: string;
@@ -123,25 +124,17 @@ export function toDate(key: DateKey): Date {
     throw new Error(`Invalid date format: ${key}`);
   }
 
-  const [y = 1970, m = 1, d = 1] = key.split("-").map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-
-  if (
-    date.getUTCFullYear() !== y ||
-    date.getUTCMonth() !== m - 1 ||
-    date.getUTCDate() !== d
-  ) {
-    throw new Error(`Invalid calendar date: ${key}`);
-  }
-
-  return date;
+  parseDateKey(key);
+  return dateKeyToUTCDate(key);
 }
 
 /**
- * Converts a UTC Date into local-calendar DateKey string (YYYY-MM-DD).
+ * INTERNAL ONLY: converts a UTC-constructed Date (e.g. from toDate/addDays)
+ * to its DateKey. Never use this for "today" or a local instant -- use
+ * todayLocal()/toLocalKey() from ./localDate instead.
  */
-export function dateKey(date: Date): DateKey {
-  return date.toISOString().slice(0, 10);
+export function dateKey(date: Date): string {
+  return utcDateToDateKey(date);
 }
 
 /**

@@ -8,6 +8,7 @@ import { MILESTONES_DATA } from "./milestonesData";
 import type { MilestoneItem } from "./milestonesData";
 import type { StructuredEntry, ValidSymptom } from "./agent";
 import { VALID_SYMPTOMS } from "./agent";
+import { addDaysToKey, weekdayOfKey, todayLocal } from "../../client/src/lib/localDate";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -17,9 +18,7 @@ export function isLeapYear(year: number): boolean {
 
 export function applyDayOffset(isoDate: string, offsetDays: number): string {
   if (!offsetDays) return isoDate;
-  const d = new Date(isoDate + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  return addDaysToKey(isoDate, offsetDays);
 }
 
 /**
@@ -35,8 +34,7 @@ export function findWeekdayOffset(
   const targetDayIdx = WEEKDAYS.indexOf(targetWeekdayName.toLowerCase());
   if (targetDayIdx === -1) return baseIsoDate;
 
-  const baseDate = new Date(baseIsoDate + "T12:00:00Z");
-  const baseDayIdx = baseDate.getUTCDay();
+  const baseDayIdx = weekdayOfKey(baseIsoDate);
 
   let diffDays = 0;
   if (direction === "before") {
@@ -248,7 +246,7 @@ export function applySlipCorrections(
   if (dayMatch) {
     const dayNum = parseInt(dayMatch[1], 10);
     if (dayNum >= 1 && dayNum <= 31) {
-      const parts = (updated.date || new Date().toISOString().slice(0, 10)).split("-");
+      const parts = (updated.date || todayLocal()).split("-");
       const year = parts[0];
       const month = parts[1];
       const newDayStr = String(dayNum).padStart(2, "0");

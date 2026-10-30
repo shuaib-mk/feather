@@ -1,6 +1,7 @@
 import { parseLocally } from "../backend/agent";
 import type { AgentResult, StructuredEntry } from "../backend/agent";
 import type { VisionDiaryResult } from "../backend/vision";
+import { todayLocal } from "../../client/src/lib/localDate";
 
 export interface TranscribeResponse {
   text: string;
@@ -163,7 +164,7 @@ export async function sendAgentMessage(
   }
 
   // Pure on-device deterministic rules fallback
-  const today = context?.currentDate || new Date().toISOString().split("T")[0];
+  const today = context?.currentDate || todayLocal();
   const localResult = parseLocally(message, today, { ...context, provider });
   return {
     ...localResult,

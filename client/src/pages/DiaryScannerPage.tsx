@@ -4,6 +4,7 @@ import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { analyzeDiaryPhoto } from "../../../ai/frontend/aiClient";
 import type { ExtractedPeriod } from "../../../ai/backend/vision";
+import { todayLocal } from "../lib/localDate";
 
 export function DiaryScannerPage() {
   const { savePeriod } = useCycle();
@@ -60,7 +61,7 @@ export function DiaryScannerPage() {
   const handleAddManualRow = () => {
     setExtractedPeriods([
       ...extractedPeriods,
-      { startDate: new Date().toISOString().slice(0, 10), endDate: undefined, confidence: 1 },
+      { startDate: todayLocal(), endDate: undefined, confidence: 1 },
     ]);
   };
 

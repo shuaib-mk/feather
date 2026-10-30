@@ -19,6 +19,7 @@ import {
   type CycleStats,
 } from "../cycleStorage";
 import { getBaselineSynthesis, type DeepCycleSynthesis } from "../../../ai/backend/synthesis";
+import { todayLocal } from "../lib/localDate";
 import { fetchDeepCycleSynthesis } from "../../../ai/frontend/aiClient";
 
 interface CycleContextValue {
@@ -168,7 +169,7 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `feather-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `feather-backup-${todayLocal()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setBackupToast(false);

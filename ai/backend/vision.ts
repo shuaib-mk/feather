@@ -2,6 +2,7 @@
 // Extracts circled or marked period start/end dates from photos into an editable preview table.
 
 import { getConfig } from "./config";
+import { todayLocal } from "../../client/src/lib/localDate";
 
 export interface ExtractedPeriod {
   startDate: string; // YYYY-MM-DD
@@ -29,7 +30,7 @@ export async function extractDiaryDates(
 
   // Fallback demo mock if no API key is provided
   if (!apiKey) {
-    const curYear = new Date().getFullYear();
+    const curYear = Number(todayLocal().slice(0, 4));
     return {
       periods: [
         { startDate: `${curYear}-09-02`, endDate: `${curYear}-09-07`, confidence: 0.95, notes: "Circled in red ink" },

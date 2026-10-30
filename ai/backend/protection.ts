@@ -1,4 +1,5 @@
 // Stateless in-memory rate limiting and request protection for serverless functions
+import { todayLocal } from "../../client/src/lib/localDate";
 // Protects API credits and infrastructure against abuse, crawlers, and runaway loops.
 
 export interface ProtectionOptions {
@@ -19,14 +20,14 @@ export interface ProtectionCheckResult {
 // In-memory per-instance tracker
 const minuteHits = new Map<string, number[]>(); // ip -> timestamps
 const dailyHits = new Map<string, { count: number; day: string }>(); // ip -> { count, day }
-let globalDailyTracker = { count: 0, day: new Date().toISOString().slice(0, 10) };
+let globalDailyTracker = { count: 0, day: todayLocal() };
 
 const LIMIT_PER_MINUTE = 20;
 const LIMIT_PER_DAY_IP = 150;
 const DEFAULT_GLOBAL_DAILY_CAP = 500;
 
 function getTodayString(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayLocal();
 }
 
 export function extractClientIp(req: any): string {

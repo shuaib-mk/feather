@@ -8,6 +8,7 @@
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
 import festivalsData from "./milestonesData";
+import { todayLocal, parseMonthDay } from "../../client/src/lib/localDate";
 import {
   resolveLandmarkExpression,
   applySlipCorrections,
@@ -269,7 +270,7 @@ export async function runLavenderAgent(
     };
   }
 
-  const today = context.currentDate || new Date().toISOString().slice(0, 10);
+  const today = context.currentDate || todayLocal();
 
   // Check if this is an interactive correction on an active pending Accession Slip
   if (context.pendingEntry) {
@@ -580,9 +581,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     const rawDate = match[1];
     let resolvedDate = rawDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      const parsed = new Date(`${rawDate} ${currentYear}`);
-      if (!isNaN(parsed.getTime())) {
-        resolvedDate = parsed.toISOString().slice(0, 10);
+      const parsedKey = parseMonthDay(rawDate, currentYear);
+      if (parsedKey) {
+        resolvedDate = parsedKey;
       }
     }
     eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0] || "Event", date: resolvedDate });

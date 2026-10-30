@@ -7,7 +7,6 @@ import {
   getPrediction,
   getDailyStatus,
   toDate,
-  dateKey,
   addDays as engineAddDays,
   dayDifference,
   validateRecords,
@@ -15,6 +14,7 @@ import {
   type Prediction,
   type CycleStatistics,
 } from "./lib/periodEngine";
+import { todayLocal, toLocalKey } from "./lib/localDate";
 
 export interface Period {
   id: number;
@@ -107,7 +107,7 @@ export function parseDate(s: string): Date {
 }
 
 export function fmtDate(d: Date): string {
-  return dateKey(d);
+  return toLocalKey(d);
 }
 
 /**
@@ -125,7 +125,7 @@ export function diffDays(a: string, b: string): number {
 }
 
 export function todayStr(): string {
-  return dateKey(new Date());
+  return todayLocal();
 }
 
 export function prettyDate(s: string): string {
