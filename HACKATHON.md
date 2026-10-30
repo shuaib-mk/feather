@@ -60,7 +60,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - Dual-layer defense mechanism:
   - **Layer 1 (Regex)**: Intercepts diagnostic inquiries, medication advice, dosage questions, and pregnancy-risk queries across English, Spanish, Malayalam, and Hindi.
   - **Layer 2 (Model Refusal)**: Enforces fixed refusal message: *"I can only help with logging and planning. For health questions, please talk to a doctor."*
-- 100% precision and 100% recall across 105 internal regression suite samples with zero false-positives on valid cycle logs.
+- 100% precision and 100% recall across 105 samples in the author's own internal regression set (not an independent benchmark) with zero false-positives on valid cycle logs.
 
 ### D. User Interface & Judge Experience (`client/src/`)
 - Responsive React 19 + TypeScript + Tailwind v4 client with Liquid Glass design tokens (specular borders, convex lighting, backdrop blur).
@@ -104,8 +104,8 @@ All code in this repository was engineered specifically for the hackathon event:
 
 ### Evaluation Harness (`npm run eval`)
 - **Total Labelled Samples**: **170 samples**
-- **Landmark Recall Accuracy**: **100% (65/65)** across English, Malayalam, Hindi, and Code-Mixed
-- **Medical Guardrail F1**: **100%** (53/53 medical queries blocked, 52/52 valid logs permitted)
+- **Landmark Recall Accuracy**: **100% (65/65, author's own internal regression set, not an independent benchmark)** across English, Malayalam, Hindi, and Code-Mixed
+- **Medical Guardrail F1**: **100%** (53/53 medical queries blocked, 52/52 valid logs permitted; author's own internal regression set, not an independent benchmark)
 - **False Positives / False Negatives**: **0 FP / 0 FN**
 - **Profiling Latency**: Median (p50) < 1ms | p95 = 1ms
 
@@ -119,3 +119,6 @@ Work dated 2026-10-30 in git log was built during this hackathon working session
 
 ## Judge quickstart
 Tap **Try Demo** on the first screen. Demo Mode is isolated in `feather_demo_v1`; exiting returns to the real vault untouched.
+
+## Known limitations
+The offline parser is rule-based; Meta API request shapes are not verified against a live key; Malayalam is not in Meta's validated transcription languages; festival dates are limited to verified ones; estimates are not medical advice; data is unencrypted unless App Lock is on; Diary Scanner is secondary and optional. Live evaluation results are "Not measured" until run with the owner's key. See README "Known limitations" and PROVENANCE.md.

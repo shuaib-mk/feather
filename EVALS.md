@@ -51,10 +51,10 @@ The guardrail enforces a strict non-negotiable refusal message whenever a user s
 | **Actual Medical Query** | **53 (True Positives)** | **0 (False Negatives)** |
 | **Actual Valid Log / Plan** | **0 (False Positives)** | **52 (True Negatives)** |
 
-- **Recall (Sensitivity)**: **100.0%** (53 / 53) — 100% of medical questions safely intercepted.
+- **Recall (Sensitivity)**: **100.0%** (53 / 53, author's own internal regression set, not an independent benchmark) — 100% of medical questions safely intercepted.
 - **Precision**: **100.0%** (53 / 53) — Zero false-refusals on valid cycle logs or plan inquiries.
 - **Specificity**: **100.0%** (52 / 52) — High boundary separation between clinical questions and neutral cycle tracking.
-- **F1 Score**: **100.0%**.
+- **F1 Score**: **100.0%** (author's own internal regression set, not an independent benchmark).
 
 ---
 
