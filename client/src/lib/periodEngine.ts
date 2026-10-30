@@ -66,7 +66,10 @@ export function effectivePeriodEnd(
   nextStartDate?: DateKey | null,
 ): DateKey | null {
   if (record.endDate) return record.endDate;
-  const lastBleeding = lastBleedingDayForPeriod(record, observations, nextStartDate) ?? record.startDate;
+  // No recorded end and no observed bleeding day -> duration stays unknown;
+  // never fabricate an end from the start date alone.
+  const lastBleeding = lastBleedingDayForPeriod(record, observations, nextStartDate);
+  if (!lastBleeding) return null;
   if (nextStartDate) return lastBleeding;
   if (asOfDate && dayDifference(lastBleeding, asOfDate) >= 3) return lastBleeding;
   return null;
