@@ -28,16 +28,8 @@ export async function extractDiaryDates(
   const baseUrl = config.useBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
   const model = config.useBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
 
-  // Fallback demo mock if no API key is provided
   if (!apiKey) {
-    const curYear = Number(todayLocal().slice(0, 4));
-    return {
-      periods: [
-        { startDate: `${curYear}-09-02`, endDate: `${curYear}-09-07`, confidence: 0.95, notes: "Circled in red ink" },
-        { startDate: `${curYear}-10-01`, endDate: `${curYear}-10-05`, confidence: 0.92, notes: "Marked with dot" },
-      ],
-      summary: "Detected 2 marked period cycles from calendar photo.",
-    };
+    return { periods: [], summary: "Vision is unavailable because no model API key is configured. No dates were extracted." };
   }
 
   const prompt = `You are analyzing a photo of a handwritten paper diary or wall calendar to extract marked or circled period dates.

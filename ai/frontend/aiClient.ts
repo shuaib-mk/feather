@@ -104,17 +104,12 @@ export async function transcribeAudioBlob(
   } catch (err: any) {
     console.warn("Backend /api/transcribe unavailable or timed out, running in client-only mode.");
     if (err.name === "AbortError") {
-      return {
-        text: "Period started today, heavy flow with cramps and fatigue.",
-        error: "Transcription timed out. Fallback speech transcription applied.",
-      };
+      return { text: "", error: "Couldn't hear that — try again or type it" };
     }
   }
 
-  // Fallback for purely static hosting or offline demo
-  return {
-    text: "Period started today, heavy flow with cramps and fatigue.",
-  };
+  // No fabricated transcript: transcription requires the server endpoint.
+  return { text: "", error: "Couldn't hear that — try again or type it" };
 }
 
 export async function sendAgentMessage(
@@ -201,29 +196,4 @@ export async function analyzeDiaryPhoto(
   }
 
   return res.json();
-}
-
-export async function fetchDeepCycleSynthesis(
-  periods: any[],
-  logs: any[],
-  cycleStats: any,
-  targetYear: number = 2026,
-) {
-  try {
-    const res = await fetchWithTimeoutAndRetry("/api/synthesis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ periods, logs, cycleStats, targetYear }),
-    });
-
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn("Backend /api/synthesis unavailable, falling back to client synthesis.");
-  }
-
-  // Client-side fallback for static host / offline resilience
-  const { runDeepCycleSynthesis } = await import("../backend/synthesis");
-  return runDeepCycleSynthesis(periods, logs, cycleStats, targetYear);
 }

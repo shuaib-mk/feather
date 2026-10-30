@@ -6,6 +6,7 @@ import { getConfig } from "./config";
 
 export interface TranscribeResult {
   text: string;
+  error?: string;
   language?: string;
   duration?: number;
   confidence?: number;
@@ -32,13 +33,8 @@ export async function transcribeAudio(
   const config = getConfig();
   const apiKey = config.metaApiKey || config.basetenApiKey;
 
-  // Offline / demo fallback if no API key is configured
   if (!apiKey) {
-    console.warn("[Lavender Voice] No META_API_KEY set. Returning offline fallback transcription.");
-    return {
-      text: "Period started today, heavy flow with cramps and fatigue.",
-      language: "en",
-    };
+    return { text: "", error: "Couldn't hear that — try again or type it" } as TranscribeResult;
   }
 
   const isWav =
