@@ -8,7 +8,7 @@ import { MILESTONES_DATA } from "./milestonesData";
 import type { MilestoneItem } from "./milestonesData";
 import type { StructuredEntry, ValidSymptom } from "./agent";
 import { VALID_SYMPTOMS } from "./agent";
-import { addDaysToKey, weekdayOfKey, todayLocal } from "../../client/src/lib/localDate";
+import { addDaysToKey, diffDateKeys, weekdayOfKey, todayLocal, parseMonthDay, isValidDateKey } from "../../client/src/lib/localDate";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -321,3 +321,197 @@ export function applySlipCorrections(
 
   return { updated, changes };
 }
+
+export interface ResolvedDate {
+  date: string | null;
+  confidence: "high" | "medium" | "low" | "none";
+  window?: { start: string; end: string };
+  explanation: string;
+  needsClarification?: boolean;
+  clarificationQuestion?: string;
+}
+
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, twenty: 20,
+  "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5, "छह": 6, "सात": 7,
+  "ഒന്ന്": 1, "രണ്ട്": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5, "ആറ്": 6,
+  "ஒன்று": 1, "இரண்டு": 2, "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5, "ஆறு": 6,
+  "ಒಂದು": 1, "ಎರಡು": 2, "ಮೂರು": 3, "ನಾಲ್ಕು": 4, "ஐದು": 5, "ಆರು": 6,
+};
+
+function numberValue(token: string): number | null {
+  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  return NUMBER_WORDS[token.toLowerCase()] ?? null;
+}
+
+function explain(key: string): string {
+  const d = new Date(key + "T12:00:00Z");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Rewritten date resolver on the local-date helper (Batch 2.3).
+ * Log dates default to the PAST: most recent occurrence <= today.
+ * Never resolves a future log date; asks instead.
+ */
+export function resolveDateExpression(text: string, today: string): ResolvedDate {
+  const lower = ` ${text.toLowerCase()} `;
+  const none: ResolvedDate = { date: null, confidence: "none", explanation: "" };
+
+  // Landmark offsets & ranges need the landmark; handle "after X" with no number first.
+  const landmarkRes = resolveLandmarkExpression(text, today);
+  const hasAfterWithoutNumber = /\bafter\b/.test(lower) && !/\d|one|two|three|four|five|six|seven|day after|week after/.test(lower);
+
+  // Explicit range: "from the 3rd to the 7th" (optionally with a month name)
+  const rangeMatch = lower.match(/(?:from\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|-|–)\s*(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s*([a-z]+)?/);
+  if (rangeMatch && /(from|to the|to \d)/.test(lower)) {
+    const monthName = rangeMatch[3];
+    const year = parseInt(today.slice(0, 4), 10);
+    let start = monthName ? parseMonthDay(`${rangeMatch[1]} ${monthName}`, year) : null;
+    let end = monthName ? parseMonthDay(`${rangeMatch[2]} ${monthName}`, year) : null;
+    if (!start) {
+      const base = `${today.slice(0, 7)}-${String(rangeMatch[1]).padStart(2, "0")}`;
+      const baseEnd = `${today.slice(0, 7)}-${String(rangeMatch[2]).padStart(2, "0")}`;
+      if (isValidDateKey(base) && isValidDateKey(baseEnd)) { start = base; end = baseEnd; }
+    }
+    if (start && end) {
+      if (start > today) { start = addDaysToKey(start, -365); end = addDaysToKey(end!, -365); }
+      return { date: start, confidence: "medium", window: { start, end }, explanation: `${explain(start)} to ${explain(end)}` };
+    }
+  }
+
+  // Today-ish
+  if (/\b(today|this morning|now|tonight)\b/.test(lower)) {
+    return { date: today, confidence: "high", explanation: `today = ${explain(today)}` };
+  }
+  if (/\blast night\b/.test(lower)) {
+    const d = addDaysToKey(today, -1);
+    return { date: d, confidence: "medium", explanation: `last night = ${explain(d)}` };
+  }
+  if (/\bday before yesterday\b/.test(lower)) {
+    const d = addDaysToKey(today, -2);
+    return { date: d, confidence: "high", explanation: `day before yesterday = ${explain(d)}` };
+  }
+  if (/\byesterday\b/.test(lower)) {
+    const d = addDaysToKey(today, -1);
+    return { date: d, confidence: "high", explanation: `yesterday = ${explain(d)}` };
+  }
+
+  // N days/weeks ago, digits or number words (en/hi/ml/ta/kn)
+  const agoMatch = lower.match(/([a-z\u0900-\u0D7F]+|\d+)\s*(days?|weeks?)\s+ago\b/) || lower.match(/(\d+)\s*(days?|weeks?)\s+ago\b/);
+  if (agoMatch) {
+    const n = numberValue(agoMatch[1]);
+    if (n !== null) {
+      const days = agoMatch[2].startsWith("week") ? n * 7 : n;
+      const d = addDaysToKey(today, -days);
+      return { date: d, confidence: "high", explanation: `${n} ${agoMatch[2]} ago = ${explain(d)}` };
+    }
+  }
+  // Number-word ago without the word "ago" handled by patterns above; also "3 days back"
+  const backMatch = lower.match(/(\d+)\s*(days?|weeks?)\s+back\b/);
+  if (backMatch) {
+    const n = parseInt(backMatch[1], 10);
+    const d = addDaysToKey(today, backMatch[2].startsWith("week") ? -n * 7 : -n);
+    return { date: d, confidence: "high", explanation: `${n} ${backMatch[2]} back = ${explain(d)}` };
+  }
+
+  // last / this <weekday>
+  const weekdayMatch = lower.match(/\b(last|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (weekdayMatch) {
+    const target = WEEKDAYS.indexOf(weekdayMatch[2]);
+    const todayIdx = weekdayOfKey(today);
+    let diff = (todayIdx - target + 7) % 7;
+    if (weekdayMatch[1] === "last" && diff === 0) diff = 7;
+    const d = addDaysToKey(today, -diff);
+    return { date: d, confidence: "high", explanation: `${weekdayMatch[1]} ${weekdayMatch[2]} = ${explain(d)}` };
+  }
+
+  // Numeric dates: D/M vs M/D
+  const numericMatch = lower.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+  if (numericMatch) {
+    const a = parseInt(numericMatch[1], 10);
+    const b = parseInt(numericMatch[2], 10);
+    const yr = numericMatch[3] ? (numericMatch[3].length === 2 ? 2000 + parseInt(numericMatch[3], 10) : parseInt(numericMatch[3], 10)) : parseInt(today.slice(0, 4), 10);
+    let day: number, month: number;
+    if (a > 12 && b <= 12) { day = a; month = b; }
+    else if (b > 12 && a <= 12) { month = a; day = b; }
+    else {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Is ${numericMatch[1]}/${numericMatch[2]} day/month or month/day?` };
+    }
+    const key = `${yr}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isValidDateKey(key)) return { ...none, needsClarification: true, clarificationQuestion: "That date does not exist. Which date did you mean?" };
+    if (key > today) {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${explain(key)}?` };
+    }
+    return { date: key, confidence: "high", explanation: `${numericMatch[0]} = ${explain(key)}` };
+  }
+
+  // "the Monday before/after X" is handled by landmark resolution below via weekday check
+  // Month/day ordinals: "3rd November", "3 Nov", "Nov 3"
+  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) ||
+    lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  if (ordinalMatch && !landmarkRes.found) {
+    const year = parseInt(today.slice(0, 4), 10);
+    let key = parseMonthDay(ordinalMatch[0].trim(), year);
+    if (key) {
+      const explicitYear = lower.match(/\b(20\d{2})\b/);
+      if (explicitYear) {
+        key = parseMonthDay(ordinalMatch[0].trim(), parseInt(explicitYear[1], 10));
+        if (key && key > today) {
+          return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${explain(key)}?` };
+        }
+      } else if (key > today) {
+        key = parseMonthDay(ordinalMatch[0].trim(), year - 1);
+      }
+      if (key) return { date: key, confidence: "high", explanation: `${ordinalMatch[0].trim()} = ${explain(key)}` };
+    }
+  }
+
+  // Landmarks (past occurrence by default for logs)
+  if (landmarkRes.found && landmarkRes.landmarkName) {
+    if (hasAfterWithoutNumber && /\bafter\b/.test(lower) && !/weekday/.test(lower) && !/days? after/.test(lower)) {
+      // resolveLandmarkExpression already applies "day after" (=1); only bare "after X" asks
+      if (/\bafter\s+[a-z]/.test(lower) && !/\d\s*days?\s+after|day after|week after/.test(lower)) {
+        return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `How many days after ${landmarkRes.landmarkName}?` };
+      }
+    }
+    // Choose most recent occurrence <= today for log dates, unless explicitly future/next
+    let base = landmarkRes.baseDate;
+    let resolved = landmarkRes.resolvedDate;
+    // Recompute base as past occurrence when the chosen date is in the future and no explicit future intent
+    if (resolved && resolved > today && !/next|upcoming|planning/.test(lower)) {
+      // step back a year at a time using landmark dates table via resolve with "last"
+      const lastRes = resolveLandmarkExpression(`last ${landmarkRes.landmarkName}`, today);
+      if (lastRes.found && lastRes.resolvedDate) {
+        // Preserve offsets relative to base: difference between resolved and its base
+        const offset = base && resolved ? diffDateKeys(base, resolved) : 0;
+        base = lastRes.baseDate;
+        resolved = lastRes.resolvedDate ? addDaysToKey(lastRes.resolvedDate, offset - (lastRes.baseDate && lastRes.resolvedDate ? diffDateKeys(lastRes.baseDate, lastRes.resolvedDate) : 0)) : resolved;
+        // Simpler: resolved = past base + original offset from base
+        if (base && lastRes.baseDate) {
+          const origOffset = landmarkRes.baseDate && landmarkRes.resolvedDate ? diffDateKeys(landmarkRes.baseDate, landmarkRes.resolvedDate) : 0;
+          resolved = addDaysToKey(lastRes.baseDate, origOffset);
+        }
+      }
+    }
+    if (resolved && resolved > today && !/next|upcoming|planning/.test(lower)) {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${landmarkRes.landmarkName}?` };
+    }
+    if (resolved) {
+      const around = /\baround\b|\bnear\b/.test(lower);
+      const weekOf = /\bweek of\b/.test(lower);
+      const window = around ? { start: addDaysToKey(resolved, -3), end: addDaysToKey(resolved, 3) }
+        : weekOf ? { start: resolved, end: addDaysToKey(resolved, 6) } : undefined;
+      return {
+        date: resolved,
+        confidence: around || weekOf ? "medium" : "high",
+        window,
+        explanation: `${landmarkRes.landmarkName} = ${explain(resolved)}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`,
+      };
+    }
+  }
+
+  return none;
+}
+
