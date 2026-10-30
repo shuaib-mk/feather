@@ -1,12 +1,14 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCycle } from "../context/CycleContext";
+import { NextThirtyDaysStrip } from "./CalendarPage";
+import { PlanAroundIt } from "../components/PlanAroundIt";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { diffDays, prettyDate, todayStr } from "../cycleStorage";
 
 export function DashboardPage() {
-  const { data, stats, isDemoActive, loadDemo } = useCycle();
+  const { data, stats, loadDemo } = useCycle();
   const navigate = useNavigate();
 
   const periods = data.periods;
@@ -36,15 +38,7 @@ export function DashboardPage() {
         badge={hasHistory ? "Active Vault" : "New Setup"}
         actions={
           <div className="flex items-center gap-2">
-            {!hasHistory && !isDemoActive && (
-              <button
-                type="button"
-                onClick={loadDemo}
-                className="liquid-glass-pill px-3 py-1.5 font-sans text-xs font-medium text-violet-700 hover:text-violet-900 border border-violet-200/80 cursor-pointer shadow-2xs"
-              >
-                Load Demo Data
-              </button>
-            )}
+            
             <Link
               to="/voice"
               className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
@@ -60,6 +54,7 @@ export function DashboardPage() {
         }
       />
 
+      <div className="liquid-glass-card rounded-[24px] p-5 flex flex-wrap gap-3 items-center justify-between"><div><h2 className="font-serif text-lg font-semibold">New here?</h2><p className="text-xs text-stone-600">Try fictional demo data, or start with your own empty vault.</p></div><div className="flex gap-2"><button type="button" onClick={loadDemo} className="liquid-glass-button rounded-full px-5 min-h-[44px] text-xs font-semibold">Try Demo</button><Link to="/voice" className="liquid-glass-pill rounded-full px-5 min-h-[44px] text-xs inline-flex items-center">Start fresh</Link></div></div>
       {/* Primary Action Hero Card: Compact & Inviting */}
       <div className="liquid-glass-card rounded-[24px] p-5 sm:p-6 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -71,7 +66,7 @@ export function DashboardPage() {
               "Period started 2 days before New Year's..."
             </h2>
             <p className="font-sans text-xs text-stone-600 leading-relaxed">
-              Feather accurately maps calendar landmarks like New Year's, vacations, flights, and marathons to precise dates across any language.
+              Understands dates like 'two days before New Year's'.
             </p>
           </div>
 
@@ -113,13 +108,7 @@ export function DashboardPage() {
               >
                 Record First Entry
               </Link>
-              <button
-                type="button"
-                onClick={loadDemo}
-                className="liquid-glass-pill px-4 py-2 font-sans text-xs font-medium text-stone-700 hover:text-stone-900 cursor-pointer shadow-2xs"
-              >
-                Load Judge Demo Data
-              </button>
+
             </div>
           }
         />
@@ -299,29 +288,10 @@ export function DashboardPage() {
             </div>
           </div>
 
-          {/* Quick Foresight Banner */}
-          <div className="liquid-glass-card rounded-[22px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="space-y-0.5">
-              <span className="font-sans text-[11px] font-semibold tracking-wide text-violet-700 uppercase block">
-                12-Month Foresight Matrix
-              </span>
-              <span className="font-serif text-base sm:text-lg font-semibold text-stone-900 block">
-                Plan trips, marathons, and exams around your biological rhythm
-              </span>
-              <span className="text-stone-500 text-[11px] block">
-                Deterministic biological phase projections across 2026-2027 calendar landmarks.
-              </span>
-            </div>
-
-            <Link
-              to="/insights"
-              className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold text-stone-900 transition-all shrink-0 text-center cursor-pointer shadow-xs"
-            >
-              Open Foresight Matrix →
-            </Link>
-          </div>
         </>
       )}
+    <NextThirtyDaysStrip />
+      <PlanAroundIt />
     </div>
   );
 }

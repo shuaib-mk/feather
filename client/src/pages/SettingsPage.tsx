@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
+import { PrivacySettings } from "../components/PrivacySettings";
 
 export function SettingsPage() {
-  const { useBrowserSpeech, setUseBrowserSpeech } = useCycle();
 
   const [useBaseten, setUseBaseten] = useState<boolean>(() => {
     try {
@@ -14,6 +14,11 @@ export function SettingsPage() {
   });
 
   const [activeDocTab, setActiveDocTab] = useState<"models" | "guardrail" | "landmarks" | "privacy">("models");
+  const [landmarkPacks, setLandmarkPacks] = useState<{global:boolean; india:boolean}>(() => {
+    try { const raw = localStorage.getItem("feather_landmark_packs"); if (raw) return JSON.parse(raw); } catch {}
+    return { global: true, india: typeof navigator !== "undefined" && navigator.language.endsWith("-IN") };
+  });
+  const toggleLandmarkPack = (pack: "global"|"india", enabled: boolean) => { const next = { ...landmarkPacks, [pack]: enabled }; setLandmarkPacks(next); try { localStorage.setItem("feather_landmark_packs", JSON.stringify(next)); } catch {} };
 
   const handleToggleBaseten = (enabled: boolean) => {
     setUseBaseten(enabled);
@@ -49,30 +54,36 @@ export function SettingsPage() {
               Default: Meta Muse Voice Transcribe 1.0 (Cloud API)
             </span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
-              Transcribes audio clips over HTTPS in memory with universal multilingual support for all languages. Audio is immediately discarded post-transcription.
+              Transcribes audio clips over HTTPS via the Meta Model API. Audio leaves this device for transcription (see Privacy).
             </p>
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer self-start sm:self-auto shrink-0">
-            <input
-              type="checkbox"
-              checked={useBrowserSpeech}
-              onChange={(e) => setUseBrowserSpeech(e.target.checked)}
-              className="size-4 rounded accent-violet-600 cursor-pointer"
-            />
-            <span className="font-sans text-xs text-stone-700 font-medium">
-              Use Web Speech API (Client-Only)
-            </span>
-          </label>
+
         </div>
 
-        {useBrowserSpeech && (
-          <div className="p-3 rounded-xl bg-violet-50 text-violet-900 text-[11px] border border-violet-200 font-sans">
-            Web Speech API is active. Voice is transcribed entirely on-device by your browser's speech recognition engine without hitting <code>/api/transcribe</code>.
-          </div>
-        )}
+
       </div>
 
+      <PrivacySettings />
+      <DiagnosticsPanel />
+      <DemoModePanel />
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 shadow-sm">
+        <h3 className="font-serif text-lg font-semibold text-stone-900">Landmark packs</h3>
+        <p className="text-xs text-stone-600">Landmarks used for date recall. Only dates verified against a published source are included.</p>
+        {(["global","india"] as const).map((pack) => (
+          <label key={pack} className="flex items-center justify-between gap-3 text-xs capitalize">
+            <span>{pack} landmarks</span>
+            <input type="checkbox" checked={landmarkPacks[pack]} onChange={(e)=>toggleLandmarkPack(pack, e.target.checked)} className="size-5" />
+          </label>
+        ))}
+      </div>
+
+      <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm">
+        <h3 className="font-serif text-lg font-semibold text-stone-900">Calendar assistant consent</h3>
+        <label className="flex items-center justify-between gap-3 text-xs"><span>Let the assistant see matching calendar events (off by default; only matching events are sent, never your full calendar)</span><input type="checkbox" className="size-5" defaultChecked={typeof localStorage!=="undefined" && localStorage.getItem("feather_allow_matched_events")==="true"} onChange={(e)=>{ try{ localStorage.setItem("feather_allow_matched_events", e.target.checked?"true":"false"); }catch{} e.target.checked=e.target.checked; }} /></label>
+        <button type="button" className="liquid-glass-button rounded-full px-4 py-2 min-h-[44px] text-xs" onClick={async ()=>{ const { loadEvents } = await import("../lib/events"); const { buildICS } = await import("../lib/ics"); const blob=new Blob([buildICS(loadEvents(),{title:"Private"})],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); }}>Download my cycle calendar (.ics)</button>
+        <p className="text-[11px] text-stone-500">Warning: calendar apps may sync these titles to other people or devices. Default title is “Private”.</p>
+      </div>
       {/* AI Model Provider Configuration */}
       <div className="liquid-glass-card rounded-[24px] p-6 space-y-4 shadow-sm">
         <div className="border-b border-stone-200/50 pb-3">
@@ -212,9 +223,9 @@ export function SettingsPage() {
             <div className="space-y-2">
               <h4 className="font-bold text-stone-900">Two-Stage AI Pipeline:</h4>
               <ol className="list-decimal list-inside space-y-1 pl-1 text-[11px] leading-relaxed">
-                <li><strong>Voice Acoustic Processing:</strong> Audio captured in browser at 16kHz WAV is sent to <code>/api/transcribe</code> (Meta Muse Voice Transcribe 1.0) with automatic multilingual detection.</li>
+                <li><strong>Voice Acoustic Processing:</strong> Audio captured in the browser is sent to <code>/api/transcribe</code> (Meta Muse Voice Transcribe 1.0) with automatic multilingual detection.</li>
                 <li><strong>Agentic Landmark Resolution:</strong> Extracted transcript text is sent to <code>/api/agent</code> (Muse Spark 1.3) with tools: <code>milestone_lookup</code>, <code>log_entry</code>, and <code>check_overlap</code>.</li>
-                <li><strong>Zero-Cloud Deterministic Fallback:</strong> If API credits expire or user is offline, an on-device rules engine processes landmarks with 0ms latency.</li>
+                <li><strong>Zero-Cloud Deterministic Fallback:</strong> If API credits expire or user is offline, a deterministic rules engine processes the text without the Meta model.</li>
               </ol>
             </div>
           )}
@@ -235,7 +246,7 @@ export function SettingsPage() {
             <div className="space-y-2">
               <h4 className="font-bold text-stone-900">Deterministic Landmark Arithmetic:</h4>
               <p className="text-[11px] leading-relaxed">
-                Universal calendar milestones (New Year's, Valentine's Day, International Women's Day, Summer Solstice, Earth Day, Global Marathon Season, Winter Holidays) are resolved with exact date arithmetic across 2025-2027. Supports natural relative offsets ("2 days before New Year's", "the Monday before Summer Solstice", "3 days after vacation").
+                Universal calendar milestones (New Year's, Valentine's Day, International Women's Day, Earth Day, Winter Holidays) are resolved with exact date arithmetic across 2025-2027. Supports natural relative offsets ("2 days before New Year's", "the Monday before Women's Day", "3 days after vacation").
               </p>
             </div>
           )}
@@ -252,4 +263,15 @@ export function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function DiagnosticsPanel() {
+  const [health, setHealth] = useState<any>(null); const [test, setTest] = useState("");
+  const load = async () => { try { const r = await fetch("/api/health"); setHealth(await r.json()); } catch { setHealth({ error: "No network or API unavailable" }); } };
+  const testMeta = async () => { const t0 = performance.now(); setTest("Testing..."); try { const r = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "hello", context: { currentDate: new Date().toLocaleDateString("en-CA") } }) }); setTest(r.ok ? `Success (${Math.round(performance.now()-t0)} ms)` : r.status === 429 ? "Rate limit (429) — try again later" : `Error ${r.status} (${Math.round(performance.now()-t0)} ms)`); } catch { setTest("No network — check your connection and try again"); } };
+  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}</div>;
+}
+function DemoModePanel() {
+  const { isDemoActive, loadDemo, clearDemo } = useCycle();
+  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Demo Mode</h3><p className="text-xs text-stone-600">Uses a separate fictional data namespace (feather_demo_v1). Your real vault is untouched.</p>{isDemoActive ? <button type="button" onClick={clearDemo} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Exit demo</button> : <button type="button" onClick={loadDemo} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Try Demo</button>}</div>;
 }

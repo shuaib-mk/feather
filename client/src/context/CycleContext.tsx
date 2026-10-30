@@ -11,18 +11,15 @@ import {
   computeCycleStats,
   exportCycleDataJSON,
   importCycleDataJSON,
-  loadSyntheticDemoData,
-  clearSyntheticDemoData,
-  isDemoDataLoaded,
+
   isExportOverdue,
   getEntriesSinceExport,
   type Period,
   type DayLog,
   type CycleStats,
 } from "../cycleStorage";
-import { getBaselineSynthesis, type DeepCycleSynthesis } from "../../../ai/backend/synthesis";
 import { todayLocal } from "../lib/localDate";
-import { fetchDeepCycleSynthesis } from "../../../ai/frontend/aiClient";
+import { enterDemoMode, exitDemoMode, isDemoActive as isDemoModeActive } from "../lib/demoMode";
 
 interface CycleContextValue {
   data: { periods: Period[]; logs: DayLog[] };
@@ -41,11 +38,6 @@ interface CycleContextValue {
   loadDemo: () => void;
   clearDemo: () => void;
 
-  // Synthesis & Chronobiology
-  synthesisResult: DeepCycleSynthesis;
-  isSynthesizing: boolean;
-  runSynthesis: () => Promise<void>;
-
   // Export & Backup
   exportBackup: () => void;
   importBackup: (jsonContent: string) => { success: boolean; message: string };
@@ -55,9 +47,6 @@ interface CycleContextValue {
   dismissBackupToast: () => void;
   triggerBackupToast: () => void;
 
-  // Speech Preference
-  useBrowserSpeech: boolean;
-  setUseBrowserSpeech: (enabled: boolean) => void;
 }
 
 const CycleContext = createContext<CycleContextValue | null>(null);
@@ -65,39 +54,25 @@ const CycleContext = createContext<CycleContextValue | null>(null);
 export function CycleProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<{ periods: Period[]; logs: DayLog[] }>(() => loadCycleData());
   const [stats, setStats] = useState<CycleStats>(() => computeCycleStats(data.periods, data.logs));
-  const [isDemoActive, setIsDemoActive] = useState<boolean>(() => isDemoDataLoaded());
+  const [isDemoActive, setIsDemoActive] = useState<boolean>(() => isDemoModeActive());
 
   // Backup & Privacy Notifications
   const [overdueDismissed, setOverdueDismissed] = useState<boolean>(false);
   const [backupToast, setBackupToast] = useState<boolean>(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [useBrowserSpeech, setUseBrowserSpeechState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("feather_use_web_speech") === "true";
-    } catch {
-      return false;
-    }
-  });
 
-  // Deep Synthesis State
-  const [synthesisResult, setSynthesisResult] = useState<DeepCycleSynthesis>(() =>
-    getBaselineSynthesis(data.periods, stats, 2026),
-  );
-  const [isSynthesizing, setIsSynthesizing] = useState<boolean>(false);
 
   const refreshData = useCallback(() => {
     const loaded = loadCycleData();
     setData(loaded);
     const newStats = computeCycleStats(loaded.periods, loaded.logs);
     setStats(newStats);
-    setIsDemoActive(isDemoDataLoaded());
-    setSynthesisResult(getBaselineSynthesis(loaded.periods, newStats, 2026));
+    setIsDemoActive(isDemoModeActive());
   }, []);
 
   useEffect(() => {
     const newStats = computeCycleStats(data.periods, data.logs);
     setStats(newStats);
-    setSynthesisResult(getBaselineSynthesis(data.periods, newStats, 2026));
   }, [data.periods.length, data.logs.length]);
 
   const savePeriod = useCallback((p: Omit<Period, "id"> & { id?: number }): Period | null => {
@@ -145,40 +120,9 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     refreshData();
   }, [refreshData]);
 
-  const loadDemo = useCallback(() => {
-    const demo = loadSyntheticDemoData();
-    setData(demo);
-    setIsDemoActive(true);
-    const newStats = computeCycleStats(demo.periods, demo.logs);
-    setStats(newStats);
-    setSynthesisResult(getBaselineSynthesis(demo.periods, newStats, 2026));
-  }, []);
+  const loadDemo = useCallback(() => { enterDemoMode(); refreshData(); }, [refreshData]);
 
-  const clearDemo = useCallback(() => {
-    clearSyntheticDemoData();
-    refreshData();
-  }, [refreshData]);
-
-  const runSynthesis = useCallback(async () => {
-    setIsSynthesizing(true);
-    try {
-      const res = await fetchDeepCycleSynthesis(
-        data.periods,
-        data.logs,
-        {
-          avgCycleLength: stats.avgCycleLength,
-          avgPeriodLength: stats.avgPeriodLength,
-          lastPeriodStart: stats.lastPeriodStart,
-        },
-        2026,
-      );
-      setSynthesisResult(res);
-    } catch (err) {
-      console.error("Synthesis error:", err);
-    } finally {
-      setIsSynthesizing(false);
-    }
-  }, [data.periods, data.logs, stats]);
+  const clearDemo = useCallback(() => { exitDemoMode(); refreshData(); }, [refreshData]);
 
   const exportBackup = useCallback(() => {
     const jsonStr = exportCycleDataJSON();
@@ -204,15 +148,6 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     return { success: false, message: result.error || "Failed to import JSON backup.", count: 0 };
   }, [refreshData]);
 
-  const setUseBrowserSpeech = useCallback((enabled: boolean) => {
-    setUseBrowserSpeechState(enabled);
-    try {
-      localStorage.setItem("feather_use_web_speech", enabled ? "true" : "false");
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const showOverdueBanner = !overdueDismissed && isExportOverdue(14) && data.periods.length > 0;
 
   return (
@@ -229,9 +164,6 @@ export function CycleProvider({ children }: { children: ReactNode }) {
         isDemoActive,
         loadDemo,
         clearDemo,
-        synthesisResult,
-        isSynthesizing,
-        runSynthesis,
         exportBackup,
         importBackup,
         showOverdueBanner,
@@ -239,8 +171,6 @@ export function CycleProvider({ children }: { children: ReactNode }) {
         backupToast,
         dismissBackupToast: () => setBackupToast(false),
         triggerBackupToast: () => setBackupToast(true),
-        useBrowserSpeech,
-        setUseBrowserSpeech,
         errorToast,
         dismissErrorToast: () => setErrorToast(null),
       }}

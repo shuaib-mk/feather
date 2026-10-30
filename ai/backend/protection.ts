@@ -3,7 +3,7 @@ import { todayLocal } from "../../client/src/lib/localDate";
 // Protects API credits and infrastructure against abuse, crawlers, and runaway loops.
 
 export interface ProtectionOptions {
-  endpointName: "agent" | "transcribe" | "synthesis" | "vision";
+  endpointName: "agent" | "transcribe" | "vision" | "health";
   maxBodyBytes?: number;
   maxTextChars?: number;
   maxAudioSeconds?: number;
@@ -53,36 +53,26 @@ export function extractClientIp(req: any): string {
   return "127.0.0.1";
 }
 
-export function isOriginAllowed(originOrReferer: string | undefined): boolean {
-  if (!originOrReferer) return true; // Direct / same-origin / non-browser dev calls allowed
-  try {
-    const url = new URL(originOrReferer);
-    const host = url.hostname.toLowerCase();
-
-    // Localhost
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      return true;
-    }
-
-    // Vercel preview and production deployments
-    if (host.endsWith(".vercel.app")) {
-      return true;
-    }
-
-    // Configured custom allowed origin
-    const configuredAllowed = process.env.ALLOWED_ORIGIN;
-    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
-      return true;
-    }
-
-    return false;
-  } catch {
-    // If invalid URL, check string match
-    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
-      return true;
-    }
-    return false;
-  }
+export function requestHost(req: any): string {
+  const h = (req && req.headers) || {};
+  const raw = h["x-forwarded-host"] || h["host"] || "";
+  return String(Array.isArray(raw) ? raw[0] : raw).split(",")[0].trim().toLowerCase();
+}
+export function configuredAllowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+export function isOriginAllowed(originOrReferer: string | undefined, reqOrHost?: any): boolean {
+  if (!originOrReferer) return true;
+  let originHost = "";
+  try { originHost = new URL(originOrReferer).host.toLowerCase(); } catch { return false; }
+  const ownHost = typeof reqOrHost === "string" ? reqOrHost.toLowerCase() : reqOrHost ? requestHost(reqOrHost) : "";
+  if (ownHost && originHost === ownHost) return true;
+  return configuredAllowedOrigins().some((entry) => { try { return new URL(entry.includes("://") ? entry : `https://${entry}`).host.toLowerCase() === originHost; } catch { return entry === originHost; } });
+}
+export function corsAllowOrigin(req: any): string | undefined {
+  const origin = req?.headers?.origin;
+  if (!origin) return undefined;
+  return isOriginAllowed(origin, req) ? origin : undefined;
 }
 
 /**
@@ -93,7 +83,7 @@ export function checkStatelessProtection(req: any, options: ProtectionOptions): 
   const origin = headers["origin"] || headers["referer"];
 
   // 1. Allowed Origin Check
-  if (!isOriginAllowed(origin)) {
+  if (!isOriginAllowed(origin, req)) {
     return {
       allowed: false,
       statusCode: 403,

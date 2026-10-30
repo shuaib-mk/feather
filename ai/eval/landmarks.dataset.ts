@@ -22,8 +22,8 @@ export const LANDMARK_DATASET: LandmarkEvalSample[] = [
   { id: "en-08", phrase: "Two days after Women's Day", language: "en", expectedDate: "2026-03-10", landmarkName: "International Women's Day" },
   { id: "en-09", phrase: "Spring Equinox cycle start", language: "en", expectedDate: "2026-03-20", landmarkName: "Spring Equinox (Rejuvenation Window)" },
   { id: "en-10", phrase: "Earth Day spotting", language: "en", expectedDate: "2026-04-22", landmarkName: "Earth Day" },
-  { id: "en-11", phrase: "Summer Solstice flow was heavy", language: "en", expectedDate: "2026-06-21", landmarkName: "Summer Solstice (Peak Travel Season)" },
-  { id: "en-12", phrase: "Summer Solstice next year", language: "en", expectedDate: "2027-06-21", landmarkName: "Summer Solstice (Peak Travel Season)" },
+  { id: "en-11", phrase: "Earth Day flow was heavy", language: "en", expectedDate: "2026-04-22", landmarkName: "Earth Day (Peak Travel Season)" },
+  { id: "en-12", phrase: "Christmas next year", language: "en", expectedDate: "2027-12-25", landmarkName: "Christmas (Peak Travel Season)" },
   { id: "en-13", phrase: "Midsummer vacation break", language: "en", expectedDate: "2026-07-15", landmarkName: "Midsummer Vacation Season" },
   { id: "en-14", phrase: "Late summer getaway trip", language: "en", expectedDate: "2026-08-20", landmarkName: "Late Summer Getaway" },
   { id: "en-15", phrase: "Autumn Equinox period", language: "en", expectedDate: "2026-09-22", landmarkName: "Autumn Equinox (Focus Season)" },
@@ -81,6 +81,6 @@ export const LANDMARK_DATASET: LandmarkEvalSample[] = [
   { id: "cm-08", phrase: "Valentine's Day nu munpe medium flow", language: "code-mixed", expectedDate: "2026-02-13", landmarkName: "Valentine's Day" },
   { id: "cm-09", phrase: "Marathon season ke time cycle", language: "code-mixed", expectedDate: "2026-10-18", landmarkName: "Global Marathon Season" },
   { id: "cm-10", phrase: "Diwali kazhinjittu 3 days after", language: "code-mixed", expectedDate: "2026-11-11", landmarkName: "Diwali (Festival of Lights)" },
-  { id: "cm-11", phrase: "Summer solstice time trip plan und", language: "code-mixed", expectedDate: "2026-06-21", landmarkName: "Summer Solstice (Peak Travel Season)" },
+  { id: "cm-11", phrase: "Christmas time trip plan und", language: "code-mixed", expectedDate: "2026-12-25", landmarkName: "Christmas" },
   { id: "cm-12", phrase: "Winter break ke time light spotting", language: "code-mixed", expectedDate: "2026-12-24", landmarkName: "Winter Holiday Break" },
 ];

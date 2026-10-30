@@ -7,7 +7,8 @@ import { getConfig } from "./config";
 import { transcribeAudio } from "./transcribe";
 import { runLavenderAgent } from "./agent";
 import { extractDiaryDates } from "./vision";
-import { runDeepCycleSynthesis } from "./synthesis";
+import { corsAllowOrigin } from "./protection";
+import { healthPayload } from "../../api-src/health";
 
 const config = getConfig();
 
@@ -29,9 +30,10 @@ function isRateLimited(ip: string): boolean {
 
 function sendJson(res: http.ServerResponse, statusCode: number, data: any) {
   const body = JSON.stringify(data);
+  const _aco = corsAllowOrigin((res as any).req);
   res.writeHead(statusCode, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    ...(_aco ? { "Access-Control-Allow-Origin": _aco } : {}),
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
@@ -63,7 +65,7 @@ export function createAiServer() {
     // CORS Preflight
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": corsAllowOrigin(req) || "null",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       });
@@ -80,17 +82,7 @@ export function createAiServer() {
 
     try {
       // 1. Health check
-      if (req.method === "GET" && pathname === "/api/health") {
-        return sendJson(res, 200, {
-          status: "healthy",
-          name: "Lavender Voice Backend",
-          models: {
-            voice: config.museVoiceModel,
-            agent: config.museSparkModel,
-            provider: config.useBaseten ? "Baseten" : "Meta Model API",
-          },
-        });
-      }
+      if (req.method === "GET" && pathname === "/api/health") { return sendJson(res, 200, healthPayload()); }
 
       // 2. Audio transcription endpoint (/api/transcribe)
       if (req.method === "POST" && pathname === "/api/transcribe") {
@@ -138,19 +130,7 @@ export function createAiServer() {
         return sendJson(res, 200, result);
       }
 
-      // 5. Deep Chronobiology Synthesis (/api/synthesis)
-      if (req.method === "POST" && pathname === "/api/synthesis") {
-        const { json } = await parseBody(req);
-        const { periods, logs, cycleStats, targetYear } = json;
-
-        const result = await runDeepCycleSynthesis(
-          periods || [],
-          logs || [],
-          cycleStats || { avgCycleLength: 28, avgPeriodLength: 5 },
-          targetYear || 2025,
-        );
-        return sendJson(res, 200, result);
-      }
+      
 
       // 404 for unknown routes
       return sendJson(res, 404, { error: "Endpoint not found." });

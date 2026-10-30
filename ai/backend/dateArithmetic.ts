@@ -4,8 +4,8 @@
 // 2. Leap years, year boundaries, and relative landmark offsets (e.g. "last Diwali",
 //    "the Monday before Women's Day", "two days before New Year's") are guaranteed exact.
 
-import { MILESTONES_DATA } from "./milestonesData";
-import type { MilestoneItem } from "./milestonesData";
+import { MILESTONES_DATA } from "./landmarks";
+import type { MilestoneItem } from "./landmarks";
 import type { StructuredEntry, ValidSymptom } from "./agent";
 import { VALID_SYMPTOMS } from "./agent";
 import { addDaysToKey, diffDateKeys, weekdayOfKey, todayLocal, parseMonthDay, isValidDateKey } from "../../client/src/lib/localDate";
@@ -141,7 +141,7 @@ export function parseRelativeExpression(text: string): RelativeOffsetResult {
 
 /**
  * Resolves calendar landmark fuzzy recall deterministically across 2025-2027.
- * Handles "last Diwali", "Summer Solstice next year", explicit years, and relative offsets.
+ * Handles "last Diwali", "Christmas next year", explicit years, and relative offsets.
  */
 export function resolveLandmarkExpression(
   text: string,

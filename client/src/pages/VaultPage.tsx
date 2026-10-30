@@ -56,7 +56,7 @@ export function VaultPage() {
     <div className="space-y-6">
       <PageHeader
         title="Local Vault &amp; Privacy"
-        subtitle="Your cycle history lives exclusively in your browser's encrypted localStorage. Zero tracking, zero cloud databases."
+        subtitle="Stored on this device. Not encrypted unless App Lock is on."
         badge="100% On-Device"
       />
 
@@ -112,7 +112,7 @@ export function VaultPage() {
             {isDemoActive ? "Active" : "Normal"}
           </div>
           <span className="text-[11px] text-stone-500 font-sans">
-            {isDemoActive ? "Synthetic test data" : "Personal vault"}
+            {isDemoActive ? "Fictional demo data" : "Personal vault"}
           </span>
         </div>
       </div>
@@ -197,7 +197,7 @@ export function VaultPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
           {/* Hackathon Reviewer Demo State */}
           <div className="p-4 rounded-[18px] bg-white/70 border border-stone-200/70 space-y-2">
-            <span className="font-bold text-stone-900 block">Reviewer Synthetic Demo</span>
+            <span className="font-bold text-stone-900 block">Demo Mode (fictional data, separate namespace)</span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
               Load 4 historical cycles and 5 symptom logs to test landmark recalls, overlap forecasts, and foresight matrices immediately.
             </p>
@@ -207,7 +207,7 @@ export function VaultPage() {
                 onClick={clearDemo}
                 className="liquid-glass-pill px-4 py-2 font-sans text-xs text-amber-800 border border-amber-300 font-semibold hover:bg-amber-50 cursor-pointer"
               >
-                Clear Demo Data
+                Exit demo
               </button>
             ) : (
               <button
@@ -215,7 +215,7 @@ export function VaultPage() {
                 onClick={loadDemo}
                 className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
               >
-                Load Synthetic Demo
+                Try Demo
               </button>
             )}
           </div>

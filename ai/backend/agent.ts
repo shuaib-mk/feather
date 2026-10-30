@@ -7,7 +7,7 @@
 
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
-import festivalsData from "./milestonesData";
+
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
 import {
@@ -198,13 +198,13 @@ const TOOLS = [
     type: "function",
     function: {
       name: "milestone_lookup",
-      description: "Looks up dates for global calendar and seasonal milestones in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, Valentine's Day, International Women's Day, Spring Equinox, Summer Solstice, Global Marathon Season, Autumn Equinox, Winter Holiday Break, New Year's Eve).",
+      description: "Looks up dates for verified calendar landmarks in 2025, 2026, and 2027 for landmark date recall (e.g. New Year's Day, Valentine's Day, International Women's Day, New Year's Eve).",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description: "Name of milestone (e.g. New Year's Day, International Women's Day, Summer Solstice, Winter Holiday Break, New Year's Eve).",
+            description: "Name of milestone (e.g. New Year's Day, International Women's Day, New Year's Eve).",
           },
           year: {
             type: "integer",

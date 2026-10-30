@@ -1,0 +1,163 @@
+[
+  {
+    "id": "new-years-day",
+    "names": {
+      "en": "New Year's Day",
+      "hi": "नए साल",
+      "ml": "പുതുവത്സരം",
+      "ta": "New Year's Day",
+      "kn": "New Year's Day"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-01-01",
+      "2026": "2026-01-01",
+      "2027": "2027-01-01"
+    },
+    "source": "https://www.timeanddate.com/holidays/common/new-year-day",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "valentines-day",
+    "names": {
+      "en": "Valentine's Day",
+      "hi": "वैलेंटाइन डे",
+      "ml": "വാലന്റൈൻസ്",
+      "ta": "Valentine's Day",
+      "kn": "Valentine's Day"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-02-14",
+      "2026": "2026-02-14",
+      "2027": "2027-02-14"
+    },
+    "source": "https://www.timeanddate.com/holidays/fun/valentines-day",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "international-womens-day",
+    "names": {
+      "en": "International Women's Day",
+      "hi": "महिला दिवस",
+      "ml": "വനിതാ ദിനം",
+      "ta": "International Women's Day",
+      "kn": "International Women's Day"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-03-08",
+      "2026": "2026-03-08",
+      "2027": "2027-03-08"
+    },
+    "source": "https://www.un.org/en/observances/womens-day",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "earth-day",
+    "names": {
+      "en": "Earth Day",
+      "hi": "पृथ्वी दिवस",
+      "ml": "ഭൂമി ദിനം",
+      "ta": "Earth Day",
+      "kn": "Earth Day"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-04-22",
+      "2026": "2026-04-22",
+      "2027": "2027-04-22"
+    },
+    "source": "https://www.earthday.org/earth-day-2026/",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "christmas",
+    "names": {
+      "en": "Christmas",
+      "hi": "क्रिसमस",
+      "ml": "ക്രിസ്മസ്",
+      "ta": "Christmas",
+      "kn": "Christmas"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-12-25",
+      "2026": "2026-12-25",
+      "2027": "2027-12-25"
+    },
+    "source": "https://www.timeanddate.com/holidays/common/christmas-day",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "new-years-eve",
+    "names": {
+      "en": "New Year's Eve",
+      "hi": "न्यू ईयर ईव",
+      "ml": "ന്യൂ ഇയർ ഈവ്",
+      "ta": "New Year's Eve",
+      "kn": "New Year's Eve"
+    },
+    "pack": "global",
+    "dates": {
+      "2025": "2025-12-31",
+      "2026": "2026-12-31",
+      "2027": "2027-12-31"
+    },
+    "source": "https://www.timeanddate.com/holidays/common/new-year-eve",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "diwali",
+    "names": {
+      "en": "Diwali",
+      "hi": "दीवाली",
+      "ml": "ദീപാവലി",
+      "ta": "Diwali",
+      "kn": "Diwali"
+    },
+    "pack": "india",
+    "dates": {
+      "2025": "2025-10-20",
+      "2026": "2026-11-08",
+      "2027": "2027-10-29"
+    },
+    "source": "https://www.timeanddate.com/holidays/india/diwali",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "onam",
+    "names": {
+      "en": "Onam",
+      "hi": "ओणम",
+      "ml": "ഓണം",
+      "ta": "Onam",
+      "kn": "Onam"
+    },
+    "pack": "india",
+    "dates": {
+      "2025": "2025-09-05",
+      "2026": "2026-08-26"
+    },
+    "source": "https://www.timeanddate.com/holidays/india/onam",
+    "verifiedOn": "2026-10-30"
+  },
+  {
+    "id": "vishu",
+    "names": {
+      "en": "Vishu",
+      "hi": "विशु",
+      "ml": "വിഷു",
+      "ta": "Vishu",
+      "kn": "Vishu"
+    },
+    "pack": "india",
+    "dates": {
+      "2025": "2025-04-14",
+      "2026": "2026-04-14",
+      "2027": "2027-04-14"
+    },
+    "source": "https://www.timeanddate.com/holidays/india/vishu",
+    "verifiedOn": "2026-10-30"
+  }
+]

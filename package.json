@@ -10,9 +10,8 @@
     "test": "npm run test:ai",
     "test:guardrail": "npx tsx ai/test/guardrail.test.ts",
     "test:dates": "npx tsx ai/test/date_resolution.test.ts",
-    "test:synthesis": "npx tsx ai/test/synthesis.test.ts",
     "test:engine": "npx tsx ai/test/periodEngine.test.ts",
-    "test:ai": "npx tsx ai/test/guardrail.test.ts && npx tsx ai/test/date_resolution.test.ts && npx tsx ai/test/synthesis.test.ts && npx tsx ai/test/periodEngine.test.ts && npm run test:localdate && npx tsx ai/test/batch1.test.ts && npx tsx ai/test/batch2.test.ts",
+    "test:ai": "npx tsx ai/test/guardrail.test.ts && npx tsx ai/test/date_resolution.test.ts && npx tsx ai/test/periodEngine.test.ts && npm run test:localdate && npx tsx ai/test/batch1.test.ts && npx tsx ai/test/batch2.test.ts && npx tsx ai/test/batch3.test.ts && npx tsx ai/test/batch4.test.ts && npx tsx ai/test/batch5.test.ts && npx tsx ai/test/batch6.test.ts && npx tsx ai/test/batch7.test.ts && npx tsx ai/test/batch8.test.ts",
     "eval": "npx tsx ai/eval/runner.ts",
     "test:localdate": "node scripts/with-tz.mjs Asia/Kolkata npx tsx ai/test/localDate.test.ts && node scripts/with-tz.mjs America/Los_Angeles npx tsx ai/test/localDate.test.ts"
   },
