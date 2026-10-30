@@ -1,0 +1,30 @@
+﻿import type { LanguageLexicon } from "./en";
+export const ta: LanguageLexicon = {
+  symptoms: {
+    cramps: ["அடிவயிற்று வலி", "வயிற்று வலி"],
+    headache: ["தலைவலி"],
+    backache: ["முதுகு வலி"],
+    bloating: ["வயிறு வீக்கம்"],
+    breast_tenderness: ["மார்பு வலி"],
+    acne: ["முகப்பரு"],
+    fatigue: ["சோர்வு", "சோர்வாக"],
+    cravings: ["சாப்பிட ஆசை"],
+    nausea: ["வாந்தி", "குமட்டல்"],
+    mood_swings: ["மனநிலை மாற்றம்"],
+    anxiety: ["கவலை", "பதற்றம்"],
+    insomnia: ["தூக்கமின்மை"],
+    dizziness: ["தலைச்சுற்றல்"],
+    appetite_change: ["பசி மாற்றம்"],
+  },
+  flow: {
+    heavy: ["அதிக இரத்தம்"],
+    medium: ["நடுத்தர"],
+    light: ["குறைந்த இரத்தம்", "குறைவு"],
+    spotting: ["ஸ்பாட்டிங்"],
+    none: ["ஃப்ளோ இல்லை"],
+  },
+  mood: { Low: ["சோகம்"], Calm: ["அமைதி"], Good: ["நல்லது"], Okay: ["சரி"] },
+  periodStart: ["மாதவிடாய் தொடங்கியது"],
+  periodEnd: ["மாதவிடாய் முடிந்தது"],
+  negations: ["இல்லை", "இல்லாமல்"],
+};

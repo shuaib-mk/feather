@@ -1,0 +1,30 @@
+﻿import type { LanguageLexicon } from "./en";
+export const hi: LanguageLexicon = {
+  symptoms: {
+    cramps: ["ऐंठन", "पेट दर्द"],
+    headache: ["सिरदर्द", "सिर दर्द"],
+    backache: ["कमर दर्द", "पीठ दर्द"],
+    bloating: ["पेट फूलना", "फूलना"],
+    breast_tenderness: ["स्तन दर्द"],
+    acne: ["मुंहासे"],
+    fatigue: ["थकान", "थकी", "थका"],
+    cravings: ["खाने की इच्छा"],
+    nausea: ["उल्टी", "जी मिचलाना", "मतली"],
+    mood_swings: ["मूड बदलना"],
+    anxiety: ["चिंता", "घबराहट"],
+    insomnia: ["नींद नहीं", "अनिद्रा"],
+    dizziness: ["चक्कर"],
+    appetite_change: ["भूख बदलना"],
+  },
+  flow: {
+    heavy: ["ज्यादा खून", "भारी"],
+    medium: ["मध्यम"],
+    light: ["कम खून", "हल्का"],
+    spotting: ["स्पॉटिंग"],
+    none: ["कोई खून नहीं", "फ्लो नहीं"],
+  },
+  mood: { Low: ["उदास"], Calm: ["शांत"], Good: ["अच्छा"], Okay: ["ठीक"] },
+  periodStart: ["पीरियड शुरू हुआ", "पीरियड आया"],
+  periodEnd: ["पीरियड खत्म हुआ", "पीरियड बंद हुआ"],
+  negations: ["नहीं", "बिना", "कोई नहीं"],
+};

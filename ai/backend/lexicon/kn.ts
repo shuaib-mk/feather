@@ -1,0 +1,30 @@
+﻿import type { LanguageLexicon } from "./en";
+export const kn: LanguageLexicon = {
+  symptoms: {
+    cramps: ["ಹೊಟ್ಟೆ ನೋವು"],
+    headache: ["ತಲೆನೋವು"],
+    backache: ["ಬೆನ್ನು ನೋವು"],
+    bloating: ["ಹೊಟ್ಟೆ ಊತ"],
+    breast_tenderness: ["ಸ್ತನ ನೋವು"],
+    acne: ["ಮೊಡವೆ"],
+    fatigue: ["ಆಯಾಸ", "ದಣಿವು"],
+    cravings: ["ತಿನ್ನಲು ಆಸೆ"],
+    nausea: ["ವಾಂತಿ", "ವಾಕರಿಕೆ"],
+    mood_swings: ["ಮನಸ್ಥಿತಿ ಬದಲಾವಣೆ"],
+    anxiety: ["ಆತಂಕ", "ಚಿಂತೆ"],
+    insomnia: ["ನಿದ್ರಾಹೀನತೆ"],
+    dizziness: ["ತಲೆಸುತ್ತು"],
+    appetite_change: ["ಹಸಿವು ಬದಲಾವಣೆ"],
+  },
+  flow: {
+    heavy: ["ಹೆಚ್ಚು ರಕ್ತ"],
+    medium: ["ಮಧ್ಯಮ"],
+    light: ["ಕಡಿಮೆ ರಕ್ತ", "ಕಡಿಮೆ"],
+    spotting: ["ಸ್ಪಾಟಿಂಗ್"],
+    none: ["ಫ್ಲೋ ಇಲ್ಲ"],
+  },
+  mood: { Low: ["ದುಃಖ"], Calm: ["ಶಾಂತ"], Good: ["ಒಳ್ಳೆಯದು"], Okay: ["ಸರಿ"] },
+  periodStart: ["ಮುಟ್ಟು ಪ್ರಾರಂಭವಾಯಿತು"],
+  periodEnd: ["ಮುಟ್ಟು ಮುಗಿಯಿತು"],
+  negations: ["ಇಲ್ಲ", "ಇಲ್ಲದೆ"],
+};
