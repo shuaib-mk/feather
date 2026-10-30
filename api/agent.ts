@@ -156,6 +156,9 @@ function addDaysToKey(key, amount) {
   date.setUTCDate(date.getUTCDate() + amount);
   return utcDateToDateKey(date);
 }
+function diffDateKeys(from, to) {
+  return Math.round((dateKeyToUTCDate(to).getTime() - dateKeyToUTCDate(from).getTime()) / 864e5);
+}
 function weekdayOfKey(key) {
   return dateKeyToUTCDate(key).getUTCDay();
 }
@@ -872,6 +875,381 @@ function applySlipCorrections(current, correctionText) {
   }
   return { updated, changes };
 }
+var NUMBER_WORDS = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  twenty: 20,
+  "\u090F\u0915": 1,
+  "\u0926\u094B": 2,
+  "\u0924\u0940\u0928": 3,
+  "\u091A\u093E\u0930": 4,
+  "\u092A\u093E\u0901\u091A": 5,
+  "\u091B\u0939": 6,
+  "\u0938\u093E\u0924": 7,
+  "\u0D12\u0D28\u0D4D\u0D28\u0D4D": 1,
+  "\u0D30\u0D23\u0D4D\u0D1F\u0D4D": 2,
+  "\u0D2E\u0D42\u0D28\u0D4D\u0D28\u0D4D": 3,
+  "\u0D28\u0D3E\u0D32\u0D4D": 4,
+  "\u0D05\u0D1E\u0D4D\u0D1A\u0D4D": 5,
+  "\u0D06\u0D31\u0D4D": 6,
+  "\u0B92\u0BA9\u0BCD\u0BB1\u0BC1": 1,
+  "\u0B87\u0BB0\u0BA3\u0BCD\u0B9F\u0BC1": 2,
+  "\u0BAE\u0BC2\u0BA9\u0BCD\u0BB1\u0BC1": 3,
+  "\u0BA8\u0BBE\u0BA9\u0BCD\u0B95\u0BC1": 4,
+  "\u0B90\u0BA8\u0BCD\u0BA4\u0BC1": 5,
+  "\u0B86\u0BB1\u0BC1": 6,
+  "\u0C92\u0C82\u0CA6\u0CC1": 1,
+  "\u0C8E\u0CB0\u0CA1\u0CC1": 2,
+  "\u0CAE\u0CC2\u0CB0\u0CC1": 3,
+  "\u0CA8\u0CBE\u0CB2\u0CCD\u0C95\u0CC1": 4,
+  "\u0B90\u0CA6\u0CC1": 5,
+  "\u0C86\u0CB0\u0CC1": 6
+};
+function numberValue(token) {
+  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  return NUMBER_WORDS[token.toLowerCase()] ?? null;
+}
+function explain(key) {
+  const d = /* @__PURE__ */ new Date(key + "T12:00:00Z");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+function resolveDateExpression(text, today) {
+  const lower = ` ${text.toLowerCase()} `;
+  const none = { date: null, confidence: "none", explanation: "" };
+  const landmarkRes = resolveLandmarkExpression(text, today);
+  const hasAfterWithoutNumber = /\bafter\b/.test(lower) && !/\d|one|two|three|four|five|six|seven|day after|week after/.test(lower);
+  const rangeMatch = lower.match(/(?:from\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s*(?:to|-|–)\s*(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s*([a-z]+)?/);
+  if (rangeMatch && /(from|to the|to \d)/.test(lower)) {
+    const monthName = rangeMatch[3];
+    const year = parseInt(today.slice(0, 4), 10);
+    let start = monthName ? parseMonthDay(`${rangeMatch[1]} ${monthName}`, year) : null;
+    let end = monthName ? parseMonthDay(`${rangeMatch[2]} ${monthName}`, year) : null;
+    if (!start) {
+      const base = `${today.slice(0, 7)}-${String(rangeMatch[1]).padStart(2, "0")}`;
+      const baseEnd = `${today.slice(0, 7)}-${String(rangeMatch[2]).padStart(2, "0")}`;
+      if (isValidDateKey(base) && isValidDateKey(baseEnd)) {
+        start = base;
+        end = baseEnd;
+      }
+    }
+    if (start && end) {
+      if (start > today) {
+        start = addDaysToKey(start, -365);
+        end = addDaysToKey(end, -365);
+      }
+      return { date: start, confidence: "medium", window: { start, end }, explanation: `${explain(start)} to ${explain(end)}` };
+    }
+  }
+  if (/\b(today|this morning|now|tonight)\b/.test(lower)) {
+    return { date: today, confidence: "high", explanation: `today = ${explain(today)}` };
+  }
+  if (/\blast night\b/.test(lower)) {
+    const d = addDaysToKey(today, -1);
+    return { date: d, confidence: "medium", explanation: `last night = ${explain(d)}` };
+  }
+  if (/\bday before yesterday\b/.test(lower)) {
+    const d = addDaysToKey(today, -2);
+    return { date: d, confidence: "high", explanation: `day before yesterday = ${explain(d)}` };
+  }
+  if (/\byesterday\b/.test(lower)) {
+    const d = addDaysToKey(today, -1);
+    return { date: d, confidence: "high", explanation: `yesterday = ${explain(d)}` };
+  }
+  const agoMatch = lower.match(/([a-z\u0900-\u0D7F]+|\d+)\s*(days?|weeks?)\s+ago\b/) || lower.match(/(\d+)\s*(days?|weeks?)\s+ago\b/);
+  if (agoMatch) {
+    const n = numberValue(agoMatch[1]);
+    if (n !== null) {
+      const days = agoMatch[2].startsWith("week") ? n * 7 : n;
+      const d = addDaysToKey(today, -days);
+      return { date: d, confidence: "high", explanation: `${n} ${agoMatch[2]} ago = ${explain(d)}` };
+    }
+  }
+  const backMatch = lower.match(/(\d+)\s*(days?|weeks?)\s+back\b/);
+  if (backMatch) {
+    const n = parseInt(backMatch[1], 10);
+    const d = addDaysToKey(today, backMatch[2].startsWith("week") ? -n * 7 : -n);
+    return { date: d, confidence: "high", explanation: `${n} ${backMatch[2]} back = ${explain(d)}` };
+  }
+  const weekdayMatch = lower.match(/\b(last|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (weekdayMatch) {
+    const target = WEEKDAYS.indexOf(weekdayMatch[2]);
+    const todayIdx = weekdayOfKey(today);
+    let diff = (todayIdx - target + 7) % 7;
+    if (weekdayMatch[1] === "last" && diff === 0) diff = 7;
+    const d = addDaysToKey(today, -diff);
+    return { date: d, confidence: "high", explanation: `${weekdayMatch[1]} ${weekdayMatch[2]} = ${explain(d)}` };
+  }
+  const numericMatch = lower.match(/\b(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+  if (numericMatch) {
+    const a = parseInt(numericMatch[1], 10);
+    const b = parseInt(numericMatch[2], 10);
+    const yr = numericMatch[3] ? numericMatch[3].length === 2 ? 2e3 + parseInt(numericMatch[3], 10) : parseInt(numericMatch[3], 10) : parseInt(today.slice(0, 4), 10);
+    let day, month;
+    if (a > 12 && b <= 12) {
+      day = a;
+      month = b;
+    } else if (b > 12 && a <= 12) {
+      month = a;
+      day = b;
+    } else {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Is ${numericMatch[1]}/${numericMatch[2]} day/month or month/day?` };
+    }
+    const key = `${yr}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isValidDateKey(key)) return { ...none, needsClarification: true, clarificationQuestion: "That date does not exist. Which date did you mean?" };
+    if (key > today) {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${explain(key)}?` };
+    }
+    return { date: key, confidence: "high", explanation: `${numericMatch[0]} = ${explain(key)}` };
+  }
+  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) || lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  if (ordinalMatch && !landmarkRes.found) {
+    const year = parseInt(today.slice(0, 4), 10);
+    let key = parseMonthDay(ordinalMatch[0].trim(), year);
+    if (key) {
+      const explicitYear = lower.match(/\b(20\d{2})\b/);
+      if (explicitYear) {
+        key = parseMonthDay(ordinalMatch[0].trim(), parseInt(explicitYear[1], 10));
+        if (key && key > today) {
+          return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${explain(key)}?` };
+        }
+      } else if (key > today) {
+        key = parseMonthDay(ordinalMatch[0].trim(), year - 1);
+      }
+      if (key) return { date: key, confidence: "high", explanation: `${ordinalMatch[0].trim()} = ${explain(key)}` };
+    }
+  }
+  if (landmarkRes.found && landmarkRes.landmarkName) {
+    if (hasAfterWithoutNumber && /\bafter\b/.test(lower) && !/weekday/.test(lower) && !/days? after/.test(lower)) {
+      if (/\bafter\s+[a-z]/.test(lower) && !/\d\s*days?\s+after|day after|week after/.test(lower)) {
+        return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `How many days after ${landmarkRes.landmarkName}?` };
+      }
+    }
+    let base = landmarkRes.baseDate;
+    let resolved = landmarkRes.resolvedDate;
+    if (resolved && resolved > today && !/next|upcoming|planning/.test(lower)) {
+      const lastRes = resolveLandmarkExpression(`last ${landmarkRes.landmarkName}`, today);
+      if (lastRes.found && lastRes.resolvedDate) {
+        const offset = base && resolved ? diffDateKeys(base, resolved) : 0;
+        base = lastRes.baseDate;
+        resolved = lastRes.resolvedDate ? addDaysToKey(lastRes.resolvedDate, offset - (lastRes.baseDate && lastRes.resolvedDate ? diffDateKeys(lastRes.baseDate, lastRes.resolvedDate) : 0)) : resolved;
+        if (base && lastRes.baseDate) {
+          const origOffset = landmarkRes.baseDate && landmarkRes.resolvedDate ? diffDateKeys(landmarkRes.baseDate, landmarkRes.resolvedDate) : 0;
+          resolved = addDaysToKey(lastRes.baseDate, origOffset);
+        }
+      }
+    }
+    if (resolved && resolved > today && !/next|upcoming|planning/.test(lower)) {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year's ${landmarkRes.landmarkName}?` };
+    }
+    if (resolved) {
+      const around = /\baround\b|\bnear\b/.test(lower);
+      const weekOf = /\bweek of\b/.test(lower);
+      const window = around ? { start: addDaysToKey(resolved, -3), end: addDaysToKey(resolved, 3) } : weekOf ? { start: resolved, end: addDaysToKey(resolved, 6) } : void 0;
+      return {
+        date: resolved,
+        confidence: around || weekOf ? "medium" : "high",
+        window,
+        explanation: `${landmarkRes.landmarkName} = ${explain(resolved)}${window ? ` (window ${explain(window.start)} to ${explain(window.end)})` : ""}`
+      };
+    }
+  }
+  return none;
+}
+
+// ai/backend/intent.ts
+var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel"];
+var LOG_WORDS = ["flow", "cramps", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
+function classifyIntent(text, hasPendingEntry = false) {
+  const lower = ` ${text.toLowerCase().trim()} `;
+  if (checkMedicalAdviceGuardrail(text).isRefusal) return "medical_question";
+  if (hasPendingEntry && /\b(change|make it|actually|remove|add|instead|no,|correction|update)\b/.test(lower)) return "correction";
+  if (/\bperiod\s+(is\s+)?late\b|\blate\s+period\b|\bmissed\s+(my\s+)?period\b/.test(lower) && !/started|flow|log/.test(lower)) return "other";
+  const hasEvent = EVENT_WORDS.some((w) => new RegExp(`\\b${w}\\b`, "i").test(lower));
+  const hasLog = LOG_WORDS.some((w) => lower.includes(w)) || /\benergy\s*[1-5]\b/.test(lower);
+  if (hasEvent && !hasLog) return "plan_event";
+  if (/\bperiod\s+(ended|stopped|finished)\b|\bflow\s+stopped\b/.test(lower)) return "period_end";
+  if (/\bperiod\s+(started|began|came)\b|\bstarted\s+my\s+period\b|\bgot\s+my\s+period\b/.test(lower)) return "period_start";
+  if (hasLog) return "daily_log";
+  if (hasEvent) return "plan_event";
+  return "other";
+}
+
+// ai/backend/lexicon/en.ts
+var en = {
+  symptoms: {
+    cramps: ["cramps", "cramp", "cramping"],
+    headache: ["headache", "head ache"],
+    backache: ["backache", "back ache", "back pain", "lower back pain"],
+    bloating: ["bloating", "bloated"],
+    breast_tenderness: ["breast tenderness", "tender breasts", "breast pain", "sore breasts"],
+    acne: ["acne", "breakout", "pimples"],
+    fatigue: ["fatigue", "tired", "exhausted", "low energy feeling"],
+    cravings: ["cravings", "craving"],
+    nausea: ["nausea", "nauseous", "queasy"],
+    mood_swings: ["mood swings", "mood swing"],
+    anxiety: ["anxiety", "anxious"],
+    insomnia: ["insomnia", "cannot sleep", "could not sleep", "sleepless"],
+    dizziness: ["dizziness", "dizzy"],
+    appetite_change: ["appetite change", "increased appetite", "no appetite"]
+  },
+  flow: {
+    heavy: ["heavy flow", "heavy bleeding", "heavy"],
+    medium: ["medium flow", "moderate flow", "normal flow", "medium"],
+    light: ["light flow", "light bleeding", "light"],
+    spotting: ["spotting"],
+    none: ["no flow", "no bleeding"]
+  },
+  mood: {
+    Great: ["great", "fantastic"],
+    Good: ["good"],
+    Okay: ["okay", "ok", "fine"],
+    Low: ["low mood", "feeling low", "sad"],
+    Irritable: ["irritable", "irritated"],
+    Anxious: ["anxious mood"],
+    Calm: ["calm"],
+    Emotional: ["emotional"]
+  },
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began"],
+  periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
+  negations: ["no", "not", "without", "never"]
+};
+
+// ai/backend/lexicon/hi.ts
+var hi = {
+  symptoms: {
+    cramps: ["\u0910\u0902\u0920\u0928", "\u092A\u0947\u091F \u0926\u0930\u094D\u0926"],
+    headache: ["\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0938\u093F\u0930 \u0926\u0930\u094D\u0926"],
+    backache: ["\u0915\u092E\u0930 \u0926\u0930\u094D\u0926", "\u092A\u0940\u0920 \u0926\u0930\u094D\u0926"],
+    bloating: ["\u092A\u0947\u091F \u092B\u0942\u0932\u0928\u093E", "\u092B\u0942\u0932\u0928\u093E"],
+    breast_tenderness: ["\u0938\u094D\u0924\u0928 \u0926\u0930\u094D\u0926"],
+    acne: ["\u092E\u0941\u0902\u0939\u093E\u0938\u0947"],
+    fatigue: ["\u0925\u0915\u093E\u0928", "\u0925\u0915\u0940", "\u0925\u0915\u093E"],
+    cravings: ["\u0916\u093E\u0928\u0947 \u0915\u0940 \u0907\u091A\u094D\u091B\u093E"],
+    nausea: ["\u0909\u0932\u094D\u091F\u0940", "\u091C\u0940 \u092E\u093F\u091A\u0932\u093E\u0928\u093E", "\u092E\u0924\u0932\u0940"],
+    mood_swings: ["\u092E\u0942\u0921 \u092C\u0926\u0932\u0928\u093E"],
+    anxiety: ["\u091A\u093F\u0902\u0924\u093E", "\u0918\u092C\u0930\u093E\u0939\u091F"],
+    insomnia: ["\u0928\u0940\u0902\u0926 \u0928\u0939\u0940\u0902", "\u0905\u0928\u093F\u0926\u094D\u0930\u093E"],
+    dizziness: ["\u091A\u0915\u094D\u0915\u0930"],
+    appetite_change: ["\u092D\u0942\u0916 \u092C\u0926\u0932\u0928\u093E"]
+  },
+  flow: {
+    heavy: ["\u091C\u094D\u092F\u093E\u0926\u093E \u0916\u0942\u0928", "\u092D\u093E\u0930\u0940"],
+    medium: ["\u092E\u0927\u094D\u092F\u092E"],
+    light: ["\u0915\u092E \u0916\u0942\u0928", "\u0939\u0932\u094D\u0915\u093E"],
+    spotting: ["\u0938\u094D\u092A\u0949\u091F\u093F\u0902\u0917"],
+    none: ["\u0915\u094B\u0908 \u0916\u0942\u0928 \u0928\u0939\u0940\u0902", "\u092B\u094D\u0932\u094B \u0928\u0939\u0940\u0902"]
+  },
+  mood: { Low: ["\u0909\u0926\u093E\u0938"], Calm: ["\u0936\u093E\u0902\u0924"], Good: ["\u0905\u091A\u094D\u091B\u093E"], Okay: ["\u0920\u0940\u0915"] },
+  periodStart: ["\u092A\u0940\u0930\u093F\u092F\u0921 \u0936\u0941\u0930\u0942 \u0939\u0941\u0906", "\u092A\u0940\u0930\u093F\u092F\u0921 \u0906\u092F\u093E"],
+  periodEnd: ["\u092A\u0940\u0930\u093F\u092F\u0921 \u0916\u0924\u094D\u092E \u0939\u0941\u0906", "\u092A\u0940\u0930\u093F\u092F\u0921 \u092C\u0902\u0926 \u0939\u0941\u0906"],
+  negations: ["\u0928\u0939\u0940\u0902", "\u092C\u093F\u0928\u093E", "\u0915\u094B\u0908 \u0928\u0939\u0940\u0902"]
+};
+
+// ai/backend/lexicon/ml.ts
+var ml = {
+  symptoms: {
+    cramps: ["\u0D35\u0D2F\u0D31\u0D41\u0D35\u0D47\u0D26\u0D28", "\u0D35\u0D2F\u0D31\u0D4D \u0D35\u0D47\u0D26\u0D28"],
+    headache: ["\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"],
+    backache: ["\u0D28\u0D1F\u0D41\u0D35\u0D47\u0D26\u0D28", "\u0D2A\u0D41\u0D31\u0D02 \u0D35\u0D47\u0D26\u0D28"],
+    bloating: ["\u0D35\u0D2F\u0D31\u0D4D \u0D35\u0D40\u0D7C\u0D24\u0D4D\u0D24\u0D41"],
+    breast_tenderness: ["\u0D38\u0D4D\u0D24\u0D28 \u0D35\u0D47\u0D26\u0D28"],
+    acne: ["\u0D2E\u0D41\u0D16\u0D15\u0D4D\u0D15\u0D41\u0D30\u0D41"],
+    fatigue: ["\u0D15\u0D4D\u0D37\u0D40\u0D23\u0D02", "\u0D15\u0D4D\u0D37\u0D40\u0D23\u0D3F\u0D1A\u0D4D\u0D1A\u0D41"],
+    cravings: ["\u0D2E\u0D27\u0D41\u0D30\u0D02 \u0D15\u0D34\u0D3F\u0D15\u0D4D\u0D15\u0D3E\u0D7B \u0D24\u0D4B\u0D28\u0D4D\u0D28\u0D41\u0D28\u0D4D\u0D28\u0D41"],
+    nausea: ["\u0D1B\u0D7C\u0D26\u0D4D\u0D26\u0D3F", "\u0D13\u0D15\u0D4D\u0D15\u0D3E\u0D28\u0D02"],
+    mood_swings: ["\u0D2E\u0D42\u0D21\u0D4D \u0D2E\u0D3E\u0D31\u0D4D\u0D31\u0D02"],
+    anxiety: ["\u0D06\u0D36\u0D19\u0D4D\u0D15", "\u0D09\u0D24\u0D4D\u0D15\u0D23\u0D4D\u0D20"],
+    insomnia: ["\u0D09\u0D31\u0D15\u0D4D\u0D15\u0D2E\u0D3F\u0D32\u0D4D\u0D32\u0D3E\u0D2F\u0D4D\u0D2E"],
+    dizziness: ["\u0D24\u0D32\u0D15\u0D31\u0D15\u0D4D\u0D15\u0D02"],
+    appetite_change: ["\u0D35\u0D3F\u0D36\u0D2A\u0D4D\u0D2A\u0D4D \u0D2E\u0D3E\u0D31\u0D4D\u0D31\u0D02"]
+  },
+  flow: {
+    heavy: ["\u0D15\u0D42\u0D1F\u0D41\u0D24\u0D7D \u0D30\u0D15\u0D4D\u0D24\u0D02", "\u0D15\u0D42\u0D1F\u0D41\u0D24\u0D7D"],
+    medium: ["\u0D38\u0D3E\u0D27\u0D3E\u0D30\u0D23"],
+    light: ["\u0D15\u0D41\u0D31\u0D35\u0D4D", "\u0D15\u0D41\u0D31\u0D1E\u0D4D\u0D1E"],
+    spotting: ["\u0D21\u0D4D\u0D30\u0D4B\u0D2A\u0D4D\u0D2A\u0D4D", "\u0D38\u0D4D\u0D2A\u0D4B\u0D1F\u0D4D\u0D1F\u0D3F\u0D02\u0D17\u0D4D"],
+    none: ["\u0D2B\u0D4D\u0D32\u0D4B \u0D07\u0D32\u0D4D\u0D32"]
+  },
+  mood: { Great: ["\u0D28\u0D32\u0D4D\u0D32 \u0D38\u0D28\u0D4D\u0D24\u0D4B\u0D37\u0D02"], Good: ["\u0D28\u0D32\u0D4D\u0D32\u0D24\u0D4D"], Low: ["\u0D38\u0D19\u0D4D\u0D15\u0D1F\u0D02"], Irritable: ["\u0D26\u0D47\u0D37\u0D4D\u0D2F\u0D02"], Calm: ["\u0D36\u0D3E\u0D28\u0D4D\u0D24\u0D02"], Okay: ["\u0D15\u0D41\u0D34\u0D2A\u0D4D\u0D2A\u0D2E\u0D3F\u0D32\u0D4D\u0D32"] },
+  periodStart: ["\u0D2A\u0D40\u0D30\u0D3F\u0D2F\u0D21\u0D4D \u0D24\u0D41\u0D1F\u0D19\u0D4D\u0D19\u0D3F"],
+  periodEnd: ["\u0D2A\u0D40\u0D30\u0D3F\u0D2F\u0D21\u0D4D \u0D15\u0D34\u0D3F\u0D1E\u0D4D\u0D1E\u0D41"],
+  negations: ["\u0D07\u0D32\u0D4D\u0D32", "\u0D07\u0D32\u0D4D\u0D32\u0D3E\u0D24\u0D46"]
+};
+
+// ai/backend/lexicon/ta.ts
+var ta = {
+  symptoms: {
+    cramps: ["\u0B85\u0B9F\u0BBF\u0BB5\u0BAF\u0BBF\u0BB1\u0BCD\u0BB1\u0BC1 \u0BB5\u0BB2\u0BBF", "\u0BB5\u0BAF\u0BBF\u0BB1\u0BCD\u0BB1\u0BC1 \u0BB5\u0BB2\u0BBF"],
+    headache: ["\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF"],
+    backache: ["\u0BAE\u0BC1\u0BA4\u0BC1\u0B95\u0BC1 \u0BB5\u0BB2\u0BBF"],
+    bloating: ["\u0BB5\u0BAF\u0BBF\u0BB1\u0BC1 \u0BB5\u0BC0\u0B95\u0BCD\u0B95\u0BAE\u0BCD"],
+    breast_tenderness: ["\u0BAE\u0BBE\u0BB0\u0BCD\u0BAA\u0BC1 \u0BB5\u0BB2\u0BBF"],
+    acne: ["\u0BAE\u0BC1\u0B95\u0BAA\u0BCD\u0BAA\u0BB0\u0BC1"],
+    fatigue: ["\u0B9A\u0BCB\u0BB0\u0BCD\u0BB5\u0BC1", "\u0B9A\u0BCB\u0BB0\u0BCD\u0BB5\u0BBE\u0B95"],
+    cravings: ["\u0B9A\u0BBE\u0BAA\u0BCD\u0BAA\u0BBF\u0B9F \u0B86\u0B9A\u0BC8"],
+    nausea: ["\u0BB5\u0BBE\u0BA8\u0BCD\u0BA4\u0BBF", "\u0B95\u0BC1\u0BAE\u0B9F\u0BCD\u0B9F\u0BB2\u0BCD"],
+    mood_swings: ["\u0BAE\u0BA9\u0BA8\u0BBF\u0BB2\u0BC8 \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD"],
+    anxiety: ["\u0B95\u0BB5\u0BB2\u0BC8", "\u0BAA\u0BA4\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD"],
+    insomnia: ["\u0BA4\u0BC2\u0B95\u0BCD\u0B95\u0BAE\u0BBF\u0BA9\u0BCD\u0BAE\u0BC8"],
+    dizziness: ["\u0BA4\u0BB2\u0BC8\u0B9A\u0BCD\u0B9A\u0BC1\u0BB1\u0BCD\u0BB1\u0BB2\u0BCD"],
+    appetite_change: ["\u0BAA\u0B9A\u0BBF \u0BAE\u0BBE\u0BB1\u0BCD\u0BB1\u0BAE\u0BCD"]
+  },
+  flow: {
+    heavy: ["\u0B85\u0BA4\u0BBF\u0B95 \u0B87\u0BB0\u0BA4\u0BCD\u0BA4\u0BAE\u0BCD"],
+    medium: ["\u0BA8\u0B9F\u0BC1\u0BA4\u0BCD\u0BA4\u0BB0"],
+    light: ["\u0B95\u0BC1\u0BB1\u0BC8\u0BA8\u0BCD\u0BA4 \u0B87\u0BB0\u0BA4\u0BCD\u0BA4\u0BAE\u0BCD", "\u0B95\u0BC1\u0BB1\u0BC8\u0BB5\u0BC1"],
+    spotting: ["\u0BB8\u0BCD\u0BAA\u0BBE\u0B9F\u0BCD\u0B9F\u0BBF\u0B99\u0BCD"],
+    none: ["\u0B83\u0BAA\u0BCD\u0BB3\u0BCB \u0B87\u0BB2\u0BCD\u0BB2\u0BC8"]
+  },
+  mood: { Low: ["\u0B9A\u0BCB\u0B95\u0BAE\u0BCD"], Calm: ["\u0B85\u0BAE\u0BC8\u0BA4\u0BBF"], Good: ["\u0BA8\u0BB2\u0BCD\u0BB2\u0BA4\u0BC1"], Okay: ["\u0B9A\u0BB0\u0BBF"] },
+  periodStart: ["\u0BAE\u0BBE\u0BA4\u0BB5\u0BBF\u0B9F\u0BBE\u0BAF\u0BCD \u0BA4\u0BCA\u0B9F\u0B99\u0BCD\u0B95\u0BBF\u0BAF\u0BA4\u0BC1"],
+  periodEnd: ["\u0BAE\u0BBE\u0BA4\u0BB5\u0BBF\u0B9F\u0BBE\u0BAF\u0BCD \u0BAE\u0BC1\u0B9F\u0BBF\u0BA8\u0BCD\u0BA4\u0BA4\u0BC1"],
+  negations: ["\u0B87\u0BB2\u0BCD\u0BB2\u0BC8", "\u0B87\u0BB2\u0BCD\u0BB2\u0BBE\u0BAE\u0BB2\u0BCD"]
+};
+
+// ai/backend/lexicon/kn.ts
+var kn = {
+  symptoms: {
+    cramps: ["\u0CB9\u0CCA\u0C9F\u0CCD\u0C9F\u0CC6 \u0CA8\u0CCB\u0CB5\u0CC1"],
+    headache: ["\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1"],
+    backache: ["\u0CAC\u0CC6\u0CA8\u0CCD\u0CA8\u0CC1 \u0CA8\u0CCB\u0CB5\u0CC1"],
+    bloating: ["\u0CB9\u0CCA\u0C9F\u0CCD\u0C9F\u0CC6 \u0C8A\u0CA4"],
+    breast_tenderness: ["\u0CB8\u0CCD\u0CA4\u0CA8 \u0CA8\u0CCB\u0CB5\u0CC1"],
+    acne: ["\u0CAE\u0CCA\u0CA1\u0CB5\u0CC6"],
+    fatigue: ["\u0C86\u0CAF\u0CBE\u0CB8", "\u0CA6\u0CA3\u0CBF\u0CB5\u0CC1"],
+    cravings: ["\u0CA4\u0CBF\u0CA8\u0CCD\u0CA8\u0CB2\u0CC1 \u0C86\u0CB8\u0CC6"],
+    nausea: ["\u0CB5\u0CBE\u0C82\u0CA4\u0CBF", "\u0CB5\u0CBE\u0C95\u0CB0\u0CBF\u0C95\u0CC6"],
+    mood_swings: ["\u0CAE\u0CA8\u0CB8\u0CCD\u0CA5\u0CBF\u0CA4\u0CBF \u0CAC\u0CA6\u0CB2\u0CBE\u0CB5\u0CA3\u0CC6"],
+    anxiety: ["\u0C86\u0CA4\u0C82\u0C95", "\u0C9A\u0CBF\u0C82\u0CA4\u0CC6"],
+    insomnia: ["\u0CA8\u0CBF\u0CA6\u0CCD\u0CB0\u0CBE\u0CB9\u0CC0\u0CA8\u0CA4\u0CC6"],
+    dizziness: ["\u0CA4\u0CB2\u0CC6\u0CB8\u0CC1\u0CA4\u0CCD\u0CA4\u0CC1"],
+    appetite_change: ["\u0CB9\u0CB8\u0CBF\u0CB5\u0CC1 \u0CAC\u0CA6\u0CB2\u0CBE\u0CB5\u0CA3\u0CC6"]
+  },
+  flow: {
+    heavy: ["\u0CB9\u0CC6\u0C9A\u0CCD\u0C9A\u0CC1 \u0CB0\u0C95\u0CCD\u0CA4"],
+    medium: ["\u0CAE\u0CA7\u0CCD\u0CAF\u0CAE"],
+    light: ["\u0C95\u0CA1\u0CBF\u0CAE\u0CC6 \u0CB0\u0C95\u0CCD\u0CA4", "\u0C95\u0CA1\u0CBF\u0CAE\u0CC6"],
+    spotting: ["\u0CB8\u0CCD\u0CAA\u0CBE\u0C9F\u0CBF\u0C82\u0C97\u0CCD"],
+    none: ["\u0CAB\u0CCD\u0CB2\u0CCB \u0C87\u0CB2\u0CCD\u0CB2"]
+  },
+  mood: { Low: ["\u0CA6\u0CC1\u0C83\u0C96"], Calm: ["\u0CB6\u0CBE\u0C82\u0CA4"], Good: ["\u0C92\u0CB3\u0CCD\u0CB3\u0CC6\u0CAF\u0CA6\u0CC1"], Okay: ["\u0CB8\u0CB0\u0CBF"] },
+  periodStart: ["\u0CAE\u0CC1\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAA\u0CCD\u0CB0\u0CBE\u0CB0\u0C82\u0CAD\u0CB5\u0CBE\u0CAF\u0CBF\u0CA4\u0CC1"],
+  periodEnd: ["\u0CAE\u0CC1\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAE\u0CC1\u0C97\u0CBF\u0CAF\u0CBF\u0CA4\u0CC1"],
+  negations: ["\u0C87\u0CB2\u0CCD\u0CB2", "\u0C87\u0CB2\u0CCD\u0CB2\u0CA6\u0CC6"]
+};
 
 // ai/backend/agent.ts
 var VALID_SYMPTOMS = [
@@ -941,7 +1319,8 @@ var TOOLS = [
           landmarkName: {
             type: "string",
             description: "Name of calendar landmark or life event if applicable (e.g. New Year's Day, Marathon, Flight)."
-          }
+          },
+          kind: { type: "string", enum: ["period_started", "period_ended", "daily_log"], description: "Entry kind." }
         },
         required: ["date"]
       }
@@ -957,10 +1336,14 @@ var TOOLS = [
         properties: {
           date: { type: "string", description: "YYYY-MM-DD" },
           flow: { type: "string", enum: ["none", "spotting", "light", "medium", "heavy"] },
+          symptoms_add: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          symptoms_remove: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           addSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           removeSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           mood: { type: "string" },
-          energy: { type: "integer", minimum: 1, maximum: 5 }
+          energy: { type: "integer", minimum: 1, maximum: 5 },
+          sleep: { type: "number" },
+          notes: { type: "string" }
         }
       }
     }
@@ -980,7 +1363,8 @@ var TOOLS = [
           year: {
             type: "integer",
             description: "Year (2025, 2026, or 2027). Defaults to current or most recent year."
-          }
+          },
+          offsetDays: { type: "integer", description: "Days to add to the landmark date (negative for before)." }
         },
         required: ["name"]
       }
@@ -1020,6 +1404,14 @@ var TOOLS = [
         required: ["events"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_calendar_events",
+      description: "Returns only the personal calendar events the client matched and consented to share in context.matchedEvents. Never invent events.",
+      parameters: { type: "object", properties: { query: { type: "string" } } }
+    }
   }
 ];
 var SYSTEM_PROMPT = `You are Feather, a voice-first menstrual logging and planning companion built for women globally.
@@ -1039,7 +1431,8 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before vacation"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
-Tone: Warm, respectful, concise, neutral, non-medical.`;
+Tone: Warm, respectful, concise, neutral, non-medical.
+Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
 function recordsFromContext(context) {
   const periods = context.periods && context.periods.length > 0 ? context.periods : context.cycleStats?.lastPeriodStart ? [{ startDate: context.cycleStats.lastPeriodStart, endDate: null }] : [];
   return periods.map((per, i) => ({
@@ -1084,31 +1477,6 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     };
   }
   const today = context.currentDate || todayLocal();
-  if (context.pendingEntry) {
-    const correctionRes = applySlipCorrections(context.pendingEntry, userPrompt);
-    if (correctionRes.changes.length > 0) {
-      toolCallsRecorded.push({
-        id: "call_update_" + Date.now(),
-        toolName: "update_entry",
-        args: { userCorrection: userPrompt },
-        result: { updated: correctionRes.updated, changes: correctionRes.changes },
-        latencyMs: Math.max(1, Date.now() - startTime),
-        model: context.provider === "baseten" ? "meta-models/muse-spark-open-1026" : "muse-spark-1.3"
-      });
-      activityTrail.push({
-        step: "Accession Slip Correction",
-        detail: correctionRes.changes.join("; "),
-        status: "done"
-      });
-      return {
-        message: "I've updated your Accession Slip with your corrections. Please review below.",
-        entry: correctionRes.updated,
-        needsClarification: false,
-        activityTrail,
-        toolCalls: toolCallsRecorded
-      };
-    }
-  }
   activityTrail.push({
     step: "Processing Speech",
     detail: "Parsing voice input with Muse Spark",
@@ -1122,14 +1490,17 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
   if (!apiKey) {
     activityTrail.forEach((a) => a.status = "done");
-    return fallbackResult;
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (Meta API key not configured)" };
   }
   const messages = [
     { role: "system", content: `${SYSTEM_PROMPT}
-Today's date is ${today}.` },
+Today's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${context.pendingEntry ? `
+Pending entry to correct if asked: ${JSON.stringify(context.pendingEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `
+Client-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
     ...conversationHistory,
     { role: "user", content: userPrompt }
   ];
+  let usedPersonalAnchorLive = false;
   let structuredEntry = null;
   let planOverlaps = void 0;
   let needsClarification = false;
@@ -1157,7 +1528,7 @@ Today's date is ${today}.` },
       if (!res.ok) {
         const errorText = await res.text();
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
-        return fallbackResult;
+        return { ...fallbackResult, mode: "offline", modeReason: `Offline parser \u2014 Meta model not used (Meta API error ${res.status})` };
       }
       const data = await res.json();
       const choice = data.choices?.[0];
@@ -1180,7 +1551,12 @@ Today's date is ${today}.` },
         }
         let toolResponseContent = "";
         let toolResultObj = {};
-        if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
+        if (fnName === "find_calendar_events") {
+          const events = context.matchedEvents || [];
+          toolResultObj = { events, source: "context.matchedEvents" };
+          if (events.length) usedPersonalAnchorLive = true;
+          toolResponseContent = JSON.stringify(toolResultObj);
+        } else if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
           const festName = (fnArgs.name || "").toLowerCase();
           let yr = fnArgs.year ? String(fnArgs.year) : void 0;
           activityTrail.push({
@@ -1190,10 +1566,14 @@ Today's date is ${today}.` },
           });
           const landmarkRes = resolveLandmarkExpression(fnArgs.name, today);
           if (landmarkRes.found) {
+            const baseDate = landmarkRes.resolvedDate;
+            const offsetDate = baseDate && fnArgs.offsetDays ? applyDayOffset(baseDate, Number(fnArgs.offsetDays) || 0) : baseDate;
             toolResultObj = {
               milestone: landmarkRes.landmarkName,
               year: yr || landmarkRes.resolvedDate?.slice(0, 4),
-              date: landmarkRes.resolvedDate,
+              date: offsetDate,
+              baseDate,
+              source: "landmarks data (verified dates in landmarks.json / milestones data)",
               found: true
             };
           } else {
@@ -1210,11 +1590,13 @@ Today's date is ${today}.` },
             status: "done"
           });
           toolResultObj = {
-            avgCycleLength: context.cycleStats?.avgCycleLength || 28,
-            avgPeriodLength: context.cycleStats?.avgPeriodLength || 5,
+            avgCycleLength: context.cycleStats?.avgCycleLength ?? null,
+            avgPeriodLength: context.cycleStats?.avgPeriodLength ?? null,
             lastPeriodStart: context.cycleStats?.lastPeriodStart || null,
             nextPeriodEarliest: context.cycleStats?.nextPeriodEarliest || null,
-            nextPeriodLatest: context.cycleStats?.nextPeriodLatest || null
+            nextPeriodLatest: context.cycleStats?.nextPeriodLatest || null,
+            isDefault: context.cycleStats?.isDefault ?? context.cycleStatsIsDefault ?? false,
+            note: context.cycleStats?.isDefault ?? context.cycleStatsIsDefault ? "Not enough data yet \u2014 these are defaults, not learned from logged cycles." : void 0
           };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "check_overlap") {
@@ -1223,36 +1605,46 @@ Today's date is ${today}.` },
             detail: `Evaluating cycle overlap for ${fnArgs.events?.length || 0} events`,
             status: "done"
           });
-          const overlaps = evaluateContextOverlaps(fnArgs.events || [], context, today);
+          const badEvent = (fnArgs.events || []).find((e) => !e || typeof e.date !== "string" || !isValidDateKey(e.date));
+          if (badEvent) {
+            toolResultObj = { error: "Invalid event date: expected YYYY-MM-DD." };
+            toolResponseContent = JSON.stringify(toolResultObj);
+          }
+          const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
-          activityTrail.push({
-            step: "Structured Entry",
-            detail: `Prepared log for ${fnArgs.date}`,
-            status: "done"
-          });
-          structuredEntry = {
-            date: fnArgs.date || today,
-            flow: fnArgs.flow || null,
-            symptoms: (fnArgs.symptoms || []).filter((s) => VALID_SYMPTOMS.includes(s)),
-            mood: fnArgs.mood || null,
-            energy: fnArgs.energy || null,
-            sleep: fnArgs.sleep || null,
-            notes: fnArgs.notes || null,
-            isApproximate: fnArgs.isApproximate || false,
-            landmarkName: fnArgs.landmarkName || null
-          };
-          toolResultObj = { success: true, entry: structuredEntry };
+          const validationError = validateEntryArgs(fnArgs, today);
+          if (validationError) {
+            toolResultObj = { error: validationError };
+          } else {
+            activityTrail.push({ step: "Structured Entry", detail: `Prepared log for ${fnArgs.date}`, status: "done" });
+            structuredEntry = {
+              date: fnArgs.date || today,
+              flow: fnArgs.flow || null,
+              symptoms: (fnArgs.symptoms || []).filter((s) => VALID_SYMPTOMS.includes(s)),
+              mood: fnArgs.mood || null,
+              energy: fnArgs.energy ?? null,
+              sleep: fnArgs.sleep ?? null,
+              notes: fnArgs.notes || null,
+              isApproximate: fnArgs.isApproximate || false,
+              landmarkName: fnArgs.landmarkName || null,
+              kind: fnArgs.kind || "daily_log"
+            };
+            toolResultObj = { success: true, entry: structuredEntry };
+          }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          if (context.pendingEntry) {
-            const slipRes = applySlipCorrections(context.pendingEntry, userPrompt);
-            structuredEntry = slipRes.updated;
-            toolResultObj = { success: true, entry: structuredEntry, changes: slipRes.changes };
-          } else {
+          if (!context.pendingEntry) {
             toolResultObj = { success: false, error: "No pending slip to update" };
+          } else {
+            const patched = applyModelPatch(context.pendingEntry, fnArgs, today);
+            if (patched.error) toolResultObj = { error: patched.error };
+            else {
+              structuredEntry = patched.entry;
+              toolResultObj = { success: true, entry: structuredEntry };
+            }
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         }
@@ -1262,7 +1654,8 @@ Today's date is ${today}.` },
           args: fnArgs,
           result: toolResultObj,
           latencyMs: Date.now() - toolCallStart,
-          model
+          model,
+          executedBy: "meta-model"
         });
         messages.push({
           role: "tool",
@@ -1285,18 +1678,153 @@ Today's date is ${today}.` },
       clarificationQuestion = finalMessage;
     }
     return {
-      message: finalMessage || fallbackResult.message,
-      entry: structuredEntry || fallbackResult.entry,
+      message: finalMessage,
+      entry: structuredEntry,
       needsClarification,
       clarificationQuestion,
       activityTrail,
-      toolCalls: toolCallsRecorded.length > 0 ? toolCallsRecorded : fallbackResult.toolCalls,
-      planOverlaps: planOverlaps || fallbackResult.planOverlaps
+      toolCalls: toolCallsRecorded,
+      planOverlaps,
+      mode: "live",
+      modeReason: null,
+      usedPersonalAnchor: usedPersonalAnchorLive
     };
   } catch (err) {
     console.error("[Lavender Agent] Error in runLavenderAgent:", err);
-    return fallbackResult;
+    return { ...fallbackResult, mode: "offline", modeReason: `Offline parser \u2014 Meta model not used (${err?.message || "Meta API request failed"})` };
   }
+}
+var VALID_MOODS = ["Great", "Good", "Okay", "Low", "Irritable", "Anxious", "Emotional", "Calm"];
+var LEXICONS = [en, hi, ml, ta, kn];
+function phraseIndex(lower, phrase) {
+  const p = phrase.toLowerCase().trim();
+  if (!p) return -1;
+  if (/^[a-z0-9\s'-]+$/i.test(p)) {
+    const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = new RegExp(`\\b${escaped}\\b`, "i").exec(lower);
+    return m ? m.index : -1;
+  }
+  return lower.indexOf(p);
+}
+function isNegatedAt(lower, idx) {
+  if (idx < 0) return false;
+  const before = lower.slice(Math.max(0, idx - 32), idx);
+  if (/\b(no|not|without|never)\s+([\p{L}0-9]+\s+){0,3}$/iu.test(before)) return true;
+  for (const lex of LEXICONS) for (const neg of lex.negations) {
+    if (neg && before.trimEnd().endsWith(neg)) return true;
+  }
+  return false;
+}
+function extractWithLexicon(text) {
+  const lower = text.toLowerCase();
+  const symptoms = [];
+  for (const key of VALID_SYMPTOMS) {
+    let found = false;
+    for (const lex of LEXICONS) {
+      for (const phrase of lex.symptoms[key] || []) {
+        const idx = phraseIndex(lower, phrase);
+        if (idx >= 0 && !isNegatedAt(lower, idx)) {
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+    if (found) symptoms.push(key);
+  }
+  let flow = null;
+  if (/\bno (flow|bleeding)\b/i.test(lower)) flow = "none";
+  else {
+    const order = ["heavy", "medium", "light", "spotting"];
+    outer: for (const level of order) {
+      for (const lex of LEXICONS) {
+        for (const phrase of lex.flow[level] || []) {
+          const idx = phraseIndex(lower, phrase);
+          if (idx >= 0 && !isNegatedAt(lower, idx)) {
+            flow = level;
+            break outer;
+          }
+        }
+      }
+    }
+    if (!flow) for (const lex of LEXICONS) for (const phrase of lex.flow.none || []) {
+      if (phraseIndex(lower, phrase) >= 0) {
+        flow = "none";
+        break;
+      }
+    }
+  }
+  let mood = null;
+  const moodCandidates = [];
+  for (const lex of LEXICONS) for (const [m, phrases] of Object.entries(lex.mood)) for (const phrase of phrases) moodCandidates.push({ mood: m, phrase });
+  moodCandidates.sort((a, b) => b.phrase.length - a.phrase.length);
+  for (const c of moodCandidates) {
+    const idx = phraseIndex(lower, c.phrase);
+    if (idx >= 0 && !isNegatedAt(lower, idx)) {
+      mood = c.mood;
+      break;
+    }
+  }
+  let periodStart = false, periodEnd = false;
+  for (const lex of LEXICONS) {
+    if (lex.periodStart.some((ph) => phraseIndex(lower, ph) >= 0)) periodStart = true;
+    if (lex.periodEnd.some((ph) => phraseIndex(lower, ph) >= 0)) periodEnd = true;
+  }
+  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b/i.test(lower)) periodStart = true;
+  if (/\bperiod\s+(ended|stopped|finished)\b|\bflow stopped\b/i.test(lower)) periodEnd = true;
+  return { symptoms, flow, mood, periodStart, periodEnd };
+}
+function validateEntryArgs(args, today) {
+  if (args.date !== void 0) {
+    if (typeof args.date !== "string" || !isValidDateKey(args.date)) return "Invalid date: expected YYYY-MM-DD calendar date.";
+    const min = addDaysToKey(today, -731);
+    if (args.date < min || args.date > today) return `Invalid date: must be between ${min} and ${today} (today).`;
+  }
+  if (args.flow !== void 0 && args.flow !== null && !["none", "spotting", "light", "medium", "heavy"].includes(args.flow)) return "Invalid flow value.";
+  if (args.kind !== void 0 && !["period_started", "period_ended", "daily_log"].includes(args.kind)) return "Invalid kind value.";
+  if (args.mood !== void 0 && args.mood !== null && !VALID_MOODS.includes(args.mood)) return "Invalid mood value.";
+  if (args.energy !== void 0 && args.energy !== null && (!Number.isInteger(args.energy) || args.energy < 1 || args.energy > 5)) return "Invalid energy: must be an integer 1-5.";
+  if (args.sleep !== void 0 && args.sleep !== null && (typeof args.sleep !== "number" || args.sleep < 0 || args.sleep > 24)) return "Invalid sleep: must be 0-24 hours.";
+  const symptomLists = [args.symptoms, args.symptoms_add, args.symptoms_remove, args.addSymptoms, args.removeSymptoms];
+  for (const list of symptomLists) if (list !== void 0 && (!Array.isArray(list) || list.some((s) => !VALID_SYMPTOMS.includes(s)))) return "Invalid symptoms: must be a subset of the supported symptoms.";
+  return null;
+}
+function applyModelPatch(pending, patch, today) {
+  const err = validateEntryArgs(patch, today);
+  if (err) return { error: err };
+  const updated = { ...pending, symptoms: [...pending.symptoms] };
+  if (patch.date) updated.date = patch.date;
+  if (patch.flow !== void 0) updated.flow = patch.flow;
+  if (patch.kind) updated.kind = patch.kind;
+  if (patch.mood !== void 0) updated.mood = patch.mood;
+  if (patch.energy !== void 0) updated.energy = patch.energy;
+  if (patch.sleep !== void 0) updated.sleep = patch.sleep;
+  if (patch.notes !== void 0) updated.notes = patch.notes;
+  const add = patch.symptoms_add || patch.addSymptoms || [];
+  const remove = patch.symptoms_remove || patch.removeSymptoms || [];
+  for (const s of add) if (!updated.symptoms.includes(s)) updated.symptoms.push(s);
+  updated.symptoms = updated.symptoms.filter((s) => !remove.includes(s));
+  return { entry: updated };
+}
+function entryDateMatchesLandmark(lm, date) {
+  if (!date) return false;
+  if (lm.resolvedDate === date) return true;
+  return Math.abs(diffDateKeys(lm.resolvedDate || date, date)) <= 370;
+}
+function findMatchedEvent(text, matched) {
+  if (!matched || matched.length === 0) return null;
+  const lower = text.toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  for (const ev of matched) {
+    const tokens = ev.title.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    const score = tokens.filter((w) => lower.includes(w)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = ev;
+    }
+  }
+  return bestScore > 0 ? best : null;
 }
 function parseLocally(text, today, context) {
   const startTime = Date.now();
@@ -1306,152 +1834,117 @@ function parseLocally(text, today, context) {
     { step: "Processing Speech", detail: "Extracted keywords from voice transcript", status: "done" }
   ];
   const toolCalls = [];
+  const offline = { mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (offline rule engine)" };
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    return {
-      message: MEDICAL_REFUSAL_MESSAGE,
-      needsClarification: false,
-      activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }],
-      toolCalls: []
-    };
+    return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
   if (context.pendingEntry) {
     const correctionRes = applySlipCorrections(context.pendingEntry, text);
     if (correctionRes.changes.length > 0) {
-      toolCalls.push({
-        id: "call_update_" + Date.now(),
-        toolName: "update_entry",
-        args: { correction: text },
-        result: { updated: correctionRes.updated, changes: correctionRes.changes },
-        latencyMs: Math.max(1, Date.now() - startTime),
-        model: "offline-rule-engine"
-      });
-      activityTrail.push({
-        step: "Accession Slip Correction",
-        detail: correctionRes.changes.join("; "),
-        status: "done"
-      });
-      return {
-        message: "I've updated your Accession Slip with your corrections. Please review below.",
-        entry: correctionRes.updated,
-        needsClarification: false,
-        activityTrail,
-        toolCalls
-      };
+      toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+      activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
+      return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
   }
+  const intent = classifyIntent(text, !!context.pendingEntry);
+  const extraction = extractWithLexicon(text);
+  const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
+  const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
+  const sleepMatch = lower.match(/\b(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/) || lower.match(/\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/);
+  const sleep = sleepMatch ? parseFloat(sleepMatch[1]) : null;
   const eventMatches = [];
-  const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}|\d{4}-\d{2}-\d{2})/gi;
+  const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}(?:,?\s+\d{4})?|\d{4}-\d{2}-\d{2})/gi;
   let match;
   while ((match = eventRegex.exec(text)) !== null) {
     const rawDate = match[1];
     let resolvedDate = rawDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      const parsedKey = parseMonthDay(rawDate, currentYear);
-      if (parsedKey) {
-        resolvedDate = parsedKey;
-      }
+      const yrMatch = rawDate.match(/(\d{4})\s*$/);
+      const parsedKey = parseMonthDay(rawDate, yrMatch ? parseInt(yrMatch[1], 10) : currentYear);
+      if (parsedKey) resolvedDate = parsedKey;
     }
-    eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0] || "Event", date: resolvedDate });
+    eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0].trim() || "Event", date: resolvedDate });
   }
   let planOverlaps = void 0;
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
     planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
-    toolCalls.push({
-      id: "call_overlap_" + Date.now(),
-      toolName: "check_overlap",
-      args: { events: eventMatches },
-      result: { overlaps: planOverlaps },
-      latencyMs: Math.max(1, Date.now() - startTime),
-      model: "offline-rule-engine"
-    });
+    toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   }
-  let landmarkDate = null;
-  let landmarkName = null;
-  let isApproximate = false;
-  const landmarkRes = resolveLandmarkExpression(text, today);
-  if (landmarkRes.found && landmarkRes.resolvedDate) {
-    landmarkName = landmarkRes.landmarkName;
-    landmarkDate = landmarkRes.resolvedDate;
+  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd;
+  const matchedEvent = findMatchedEvent(text, context.matchedEvents);
+  const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
+  const earlyLandmark = resolveLandmarkExpression(text, today);
+  if (intent === "other" || !hasLogContent && intent !== "plan_event") {
+    if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
+      const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
+      const q = late ? "What would you like to log \u2014 for example, that your period started, ended, or a symptom for a date?" : "What would you like to log?";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+    }
+  }
+  if ((intent === "plan_event" || eventMatches.length > 0) && !hasLogContent) {
+    const isBareLandmark = eventMatches.length === 0;
+    if (!isBareLandmark) {
+      return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+    }
+  }
+  const resolved = resolveDateExpression(text, today);
+  if (resolved.needsClarification) {
+    return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
+  }
+  let entryDate = resolved.date;
+  let dateExplanation = resolved.explanation || null;
+  let dateWindow = resolved.window || null;
+  let landmarkName = earlyLandmark.found && entryDateMatchesLandmark(earlyLandmark, resolved.date) ? earlyLandmark.landmarkName || null : null;
+  let isApproximate = !!resolved.window || (landmarkName ? /\baround\b|\bnear\b/.test(lower) : false);
+  if (!entryDate && matchedEvent && usedPersonalAnchor) {
+    const off = parseRelativeExpression(text);
+    entryDate = off.weekday ? matchedEvent.date : applyDayOffset(matchedEvent.date, off.days || 0);
+    landmarkName = matchedEvent.title;
+    dateExplanation = `${matchedEvent.title} = ${matchedEvent.date}`;
     isApproximate = true;
-    activityTrail.push({
-      step: "Landmark Recall",
-      detail: `Found calendar milestone: ${landmarkName} -> ${landmarkDate}`,
-      status: "done"
-    });
-    toolCalls.push({
-      id: "call_milestone_" + Date.now(),
-      toolName: "milestone_lookup",
-      args: { landmarkName, anchorDate: today },
-      result: { baseDate: landmarkRes.baseDate, resolvedDate: landmarkDate },
-      latencyMs: Math.max(1, Date.now() - startTime),
-      model: "offline-rule-engine"
-    });
   }
-  const detectedSymptoms = [];
-  if (lower.includes("cramp") || lower.includes("\u0D35\u0D2F\u0D31\u0D41\u0D35\u0D47\u0D26\u0D28") || lower.includes("\u0926\u0930\u094D\u0926")) detectedSymptoms.push("cramps");
-  if (lower.includes("headache") || lower.includes("\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28") || lower.includes("\u0938\u093F\u0930\u0926\u0930\u094D\u0926")) detectedSymptoms.push("headache");
-  if (lower.includes("back") || lower.includes("\u0D28\u0D1F\u0D41\u0D35\u0D47\u0D26\u0D28") || lower.includes("\u0915\u092E\u0930 \u0926\u0930\u094D\u0926")) detectedSymptoms.push("backache");
-  if (lower.includes("bloat") || lower.includes("\u0D35\u0D2F\u0D31\u0D4D \u0D35\u0D40\u0D7C\u0D24\u0D4D\u0D24\u0D41") || lower.includes("\u092A\u0947\u091F \u092B\u0942\u0932\u0928\u093E")) detectedSymptoms.push("bloating");
-  if (lower.includes("breast") || lower.includes("\u0D38\u0D4D\u0D24\u0D28")) detectedSymptoms.push("breast_tenderness");
-  if (lower.includes("acne") || lower.includes("breakout") || lower.includes("\u0D2E\u0D41\u0D16\u0D15\u0D4D\u0D15\u0D41\u0D30\u0D41")) detectedSymptoms.push("acne");
-  if (lower.includes("fatigue") || lower.includes("tired") || lower.includes("\u0D15\u0D4D\u0D37\u0D40\u0D23\u0D02") || lower.includes("\u0925\u0915\u093E\u0928")) detectedSymptoms.push("fatigue");
-  if (lower.includes("craving") || lower.includes("\u0D2E\u0D27\u0D41\u0D30\u0D02 \u0D15\u0D34\u0D3F\u0D15\u0D4D\u0D15\u0D3E\u0D7B")) detectedSymptoms.push("cravings");
-  if (lower.includes("nausea") || lower.includes("\u0D1B\u0D7C\u0D26\u0D4D\u0D26\u0D3F") || lower.includes("\u0909\u0932\u094D\u091F\u0940")) detectedSymptoms.push("nausea");
-  if (lower.includes("mood swing") || lower.includes("\u0D38\u0D19\u0D4D\u0D15\u0D1F\u0D02")) detectedSymptoms.push("mood_swings");
-  if (lower.includes("anxious") || lower.includes("anxiety") || lower.includes("\u0D06\u0D36\u0D19\u0D4D\u0D15")) detectedSymptoms.push("anxiety");
-  if (lower.includes("sleep") || lower.includes("insomnia") || lower.includes("\u0D09\u0D31\u0D15\u0D4D\u0D15\u0D2E\u0D3F\u0D32\u0D4D\u0D32\u0D3E\u0D2F\u0D4D\u0D2E")) detectedSymptoms.push("insomnia");
-  if (lower.includes("dizz") || lower.includes("\u0D24\u0D32\u0D15\u0D31\u0D15\u0D4D\u0D15\u0D02") || lower.includes("\u091A\u0915\u094D\u0915\u0930")) detectedSymptoms.push("dizziness");
-  if (lower.includes("appetite") || lower.includes("\u0D35\u0D3F\u0D36\u0D2A\u0D4D\u0D2A\u0D4D")) detectedSymptoms.push("appetite_change");
-  let flow = null;
-  if (lower.includes("heavy") || lower.includes("\u0D15\u0D42\u0D1F\u0D41\u0D24\u0D7D") || lower.includes("\u091C\u094D\u092F\u093E\u0926\u093E")) flow = "heavy";
-  else if (lower.includes("medium") || lower.includes("\u0D38\u0D3E\u0D27\u0D3E\u0D30\u0D23") || lower.includes("\u092E\u0927\u094D\u092F\u092E")) flow = "medium";
-  else if (lower.includes("light") || lower.includes("\u0D15\u0D41\u0D31\u0D35\u0D4D") || lower.includes("\u0915\u092E")) flow = "light";
-  else if (lower.includes("spotting") || lower.includes("\u0D21\u0D4D\u0D30\u0D4B\u0D2A\u0D4D\u0D2A\u0D4D") || lower.includes("\u0938\u094D\u092A\u0949\u091F\u093F\u0902\u0917")) flow = "spotting";
-  else if (lower.includes("period started") || lower.includes("period") || lower.includes("\u0D24\u0D41\u0D1F\u0D19\u0D4D\u0D19\u0D3F")) flow = "medium";
-  let mood = null;
-  if (lower.includes("great") || lower.includes("\u0D28\u0D32\u0D4D\u0D32 \u0D38\u0D28\u0D4D\u0D24\u0D4B\u0D37\u0D02")) mood = "Great";
-  else if (lower.includes("good") || lower.includes("\u0D28\u0D32\u0D4D\u0D32\u0D24\u0D4D")) mood = "Good";
-  else if (lower.includes("low") || lower.includes("\u0D38\u0D19\u0D4D\u0D15\u0D1F\u0D02") || lower.includes("\u0909\u0926\u093E\u0938")) mood = "Low";
-  else if (lower.includes("irritable") || lower.includes("\u0D26\u0D47\u0D37\u0D4D\u0D2F\u0D02")) mood = "Irritable";
-  else if (lower.includes("calm") || lower.includes("\u0D36\u0D3E\u0D28\u0D4D\u0D24\u0D02")) mood = "Calm";
-  else if (lower.includes("okay") || lower.includes("\u0D15\u0D41\u0D34\u0D2A\u0D4D\u0D2A\u0D2E\u0D3F\u0D32\u0D4D\u0D32")) mood = "Okay";
-  let energy = null;
-  if (lower.includes("energy 1") || lower.includes("very tired")) energy = 1;
-  else if (lower.includes("energy 2") || lower.includes("tired")) energy = 2;
-  else if (lower.includes("energy 3") || lower.includes("moderate energy")) energy = 3;
-  else if (lower.includes("energy 4") || lower.includes("good energy")) energy = 4;
-  else if (lower.includes("energy 5") || lower.includes("full of energy")) energy = 5;
-  const entryDate = landmarkDate || today;
+  if (!entryDate) {
+    const landmarkRes = resolveLandmarkExpression(text, today);
+    if (landmarkRes.found && landmarkRes.resolvedDate) {
+      entryDate = landmarkRes.resolvedDate;
+      landmarkName = landmarkRes.landmarkName || null;
+      isApproximate = true;
+      dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
+    }
+  }
+  if (!entryDate) {
+    const clearlyToday = /\b(today|now|this morning|tonight|right now)\b/.test(lower);
+    const pastMarkers = /\b(started|began|came|ended|stopped|was|had|yesterday|ago)\b/.test(lower);
+    if (clearlyToday) entryDate = today;
+    else if (hasLogContent && !pastMarkers) entryDate = today;
+    else {
+      const q = "Which date?";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+    }
+  }
+  if (entryDate > today && !/next year|planning|upcoming/.test(lower)) {
+    const q = `Did you mean last year's date? That date is in the future.`;
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+  }
+  const kind = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
   const entry = {
     date: entryDate,
-    flow,
-    symptoms: detectedSymptoms,
-    mood,
+    flow: extraction.flow,
+    symptoms: extraction.symptoms,
+    mood: extraction.mood,
     energy,
-    sleep: null,
+    sleep,
     notes: text,
     isApproximate,
-    landmarkName
+    landmarkName,
+    kind,
+    dateExplanation,
+    dateWindow
   };
-  toolCalls.push({
-    id: "call_log_" + Date.now(),
-    toolName: "log_entry",
-    args: { date: entryDate, flow, symptoms: detectedSymptoms, mood, energy },
-    result: { entry },
-    latencyMs: Math.max(1, Date.now() - startTime),
-    model: "offline-rule-engine"
-  });
-  const message = isApproximate ? `I found ${landmarkName} on ${landmarkDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
-  return {
-    message,
-    entry,
-    needsClarification: isApproximate,
-    clarificationQuestion: isApproximate ? `Did your period start before, on, or after ${landmarkName}?` : null,
-    activityTrail,
-    toolCalls,
-    planOverlaps
-  };
+  toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+  const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  return { message, entry, needsClarification: isApproximate && !!landmarkName, clarificationQuestion: isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
 
 // ai/backend/protection.ts
