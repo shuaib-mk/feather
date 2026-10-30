@@ -8,14 +8,22 @@
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
 import festivalsData from "./milestonesData";
-import { todayLocal, parseMonthDay } from "../../client/src/lib/localDate";
+import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
 import {
   resolveLandmarkExpression,
+  resolveDateExpression,
   applySlipCorrections,
   applyDayOffset,
   parseRelativeExpression,
 } from "./dateArithmetic";
+import { classifyIntent } from "./intent";
+import { en } from "./lexicon/en";
+import { hi } from "./lexicon/hi";
+import { ml } from "./lexicon/ml";
+import { ta } from "./lexicon/ta";
+import { kn } from "./lexicon/kn";
+import type { LanguageLexicon } from "./lexicon/en";
 
 // The app's existing 14 symptoms
 export const VALID_SYMPTOMS = [
@@ -47,6 +55,9 @@ export interface StructuredEntry {
   notes: string | null;
   isApproximate?: boolean;
   landmarkName?: string | null;
+  kind?: "period_started" | "period_ended" | "daily_log";
+  dateExplanation?: string | null;
+  dateWindow?: { start: string; end: string } | null;
 }
 
 export interface ActivityStep {
@@ -62,6 +73,7 @@ export interface ToolCallRecord {
   result: Record<string, any>;
   latencyMs: number;
   model: string;
+  executedBy: "meta-model" | "offline-rule-engine";
 }
 
 export interface AgentContext {
@@ -71,14 +83,22 @@ export interface AgentContext {
     lastPeriodStart?: string | null;
     nextPeriodEarliest?: string | null;
     nextPeriodLatest?: string | null;
+    isDefault?: boolean;
   };
   periods?: Array<{ startDate: string; endDate?: string | null }>;
   currentDate?: string; // YYYY-MM-DD
   provider?: "meta" | "baseten";
   pendingEntry?: StructuredEntry | null;
+  locale?: string;
+  matchedEvents?: Array<{ title: string; date: string }>;
+  cycleStatsIsDefault?: boolean;
 }
 
 export interface AgentResult {
+  mode?: "live" | "offline";
+  modeReason?: string | null;
+  plannedEvents?: Array<{ title: string; date: string }>;
+  usedPersonalAnchor?: boolean;
   message: string;
   entry?: StructuredEntry | null;
   needsClarification: boolean;
@@ -146,6 +166,7 @@ const TOOLS = [
             type: "string",
             description: "Name of calendar landmark or life event if applicable (e.g. New Year's Day, Marathon, Flight).",
           },
+          kind: { type: "string", enum: ["period_started", "period_ended", "daily_log"], description: "Entry kind." },
         },
         required: ["date"],
       },
@@ -161,10 +182,14 @@ const TOOLS = [
         properties: {
           date: { type: "string", description: "YYYY-MM-DD" },
           flow: { type: "string", enum: ["none", "spotting", "light", "medium", "heavy"] },
+          symptoms_add: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
+          symptoms_remove: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           addSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           removeSymptoms: { type: "array", items: { type: "string", enum: VALID_SYMPTOMS } },
           mood: { type: "string" },
           energy: { type: "integer", minimum: 1, maximum: 5 },
+          sleep: { type: "number" },
+          notes: { type: "string" },
         },
       },
     },
@@ -185,6 +210,7 @@ const TOOLS = [
             type: "integer",
             description: "Year (2025, 2026, or 2027). Defaults to current or most recent year.",
           },
+          offsetDays: { type: "integer", description: "Days to add to the landmark date (negative for before)." },
         },
         required: ["name"],
       },
@@ -225,6 +251,14 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "find_calendar_events",
+      description: "Returns only the personal calendar events the client matched and consented to share in context.matchedEvents. Never invent events.",
+      parameters: { type: "object", properties: { query: { type: "string" } } },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `You are Feather, a voice-first menstrual logging and planning companion built for women globally.
@@ -244,7 +278,8 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before vacation"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
 
-Tone: Warm, respectful, concise, neutral, non-medical.`;
+Tone: Warm, respectful, concise, neutral, non-medical.
+Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
 
 
 function recordsFromContext(context: AgentContext): PeriodRecord[] {
@@ -305,35 +340,9 @@ export async function runLavenderAgent(
 
   const today = context.currentDate || todayLocal();
 
-  // Check if this is an interactive correction on an active pending Accession Slip
-  if (context.pendingEntry) {
-    const correctionRes = applySlipCorrections(context.pendingEntry, userPrompt);
-    if (correctionRes.changes.length > 0) {
-      toolCallsRecorded.push({
-        id: "call_update_" + Date.now(),
-        toolName: "update_entry",
-        args: { userCorrection: userPrompt },
-        result: { updated: correctionRes.updated, changes: correctionRes.changes },
-        latencyMs: Math.max(1, Date.now() - startTime),
-        model: context.provider === "baseten" ? "meta-models/muse-spark-open-1026" : "muse-spark-1.3",
-      });
-
-      activityTrail.push({
-        step: "Accession Slip Correction",
-        detail: correctionRes.changes.join("; "),
-        status: "done",
-      });
-
-      return {
-        message: "I've updated your Accession Slip with your corrections. Please review below.",
-        entry: correctionRes.updated,
-        needsClarification: false,
-        activityTrail,
-        toolCalls: toolCallsRecorded,
-      };
-    }
-  }
-
+  // Live path: no regex pre-intercept for corrections. The pending entry is passed
+  // to the model, which may call update_entry with a patch (Batch 2.4). Offline mode
+  // (parseLocally) is the only place regex corrections run.
   activityTrail.push({
     step: "Processing Speech",
     detail: "Parsing voice input with Muse Spark",
@@ -350,18 +359,18 @@ export async function runLavenderAgent(
   const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
 
   if (!apiKey) {
-    // Return high quality offline fallback with activity trail and recorded tool calls
     activityTrail.forEach((a) => (a.status = "done"));
-    return fallbackResult;
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser — Meta model not used (Meta API key not configured)" };
   }
 
   // OpenAI-compatible Chat Completions API with Tool Calling
   const messages: any[] = [
-    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}.` },
+    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${context.pendingEntry ? `\nPending entry to correct if asked: ${JSON.stringify(context.pendingEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `\nClient-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
     ...conversationHistory,
     { role: "user", content: userPrompt },
   ];
 
+  let usedPersonalAnchorLive = false;
   let structuredEntry: StructuredEntry | null = null;
   let planOverlaps: any[] | undefined = undefined;
   let needsClarification = false;
@@ -393,7 +402,7 @@ export async function runLavenderAgent(
       if (!res.ok) {
         const errorText = await res.text();
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
-        return fallbackResult;
+        return { ...fallbackResult, mode: "offline", modeReason: `Offline parser — Meta model not used (Meta API error ${res.status})` };
       }
 
       const data = await res.json();
@@ -424,7 +433,12 @@ export async function runLavenderAgent(
         let toolResponseContent = "";
         let toolResultObj: any = {};
 
-        if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
+        if (fnName === "find_calendar_events") {
+          const events = context.matchedEvents || [];
+          toolResultObj = { events, source: "context.matchedEvents" };
+          if (events.length) usedPersonalAnchorLive = true;
+          toolResponseContent = JSON.stringify(toolResultObj);
+        } else if (fnName === "milestone_lookup" || fnName === "festival_lookup") {
           const festName = (fnArgs.name || "").toLowerCase();
           let yr = fnArgs.year ? String(fnArgs.year) : undefined;
           activityTrail.push({
@@ -435,10 +449,14 @@ export async function runLavenderAgent(
 
           const landmarkRes = resolveLandmarkExpression(fnArgs.name, today);
           if (landmarkRes.found) {
+            const baseDate = landmarkRes.resolvedDate;
+            const offsetDate = baseDate && fnArgs.offsetDays ? applyDayOffset(baseDate, Number(fnArgs.offsetDays) || 0) : baseDate;
             toolResultObj = {
               milestone: landmarkRes.landmarkName,
               year: yr || landmarkRes.resolvedDate?.slice(0, 4),
-              date: landmarkRes.resolvedDate,
+              date: offsetDate,
+              baseDate,
+              source: "landmarks data (verified dates in landmarks.json / milestones data)",
               found: true,
             };
           } else {
@@ -455,11 +473,13 @@ export async function runLavenderAgent(
             status: "done",
           });
           toolResultObj = {
-            avgCycleLength: context.cycleStats?.avgCycleLength || 28,
-            avgPeriodLength: context.cycleStats?.avgPeriodLength || 5,
+            avgCycleLength: context.cycleStats?.avgCycleLength ?? null,
+            avgPeriodLength: context.cycleStats?.avgPeriodLength ?? null,
             lastPeriodStart: context.cycleStats?.lastPeriodStart || null,
             nextPeriodEarliest: context.cycleStats?.nextPeriodEarliest || null,
             nextPeriodLatest: context.cycleStats?.nextPeriodLatest || null,
+            isDefault: context.cycleStats?.isDefault ?? context.cycleStatsIsDefault ?? false,
+            note: (context.cycleStats?.isDefault ?? context.cycleStatsIsDefault) ? "Not enough data yet — these are defaults, not learned from logged cycles." : undefined,
           };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "check_overlap") {
@@ -468,36 +488,34 @@ export async function runLavenderAgent(
             detail: `Evaluating cycle overlap for ${fnArgs.events?.length || 0} events`,
             status: "done",
           });
-          const overlaps = evaluateContextOverlaps(fnArgs.events || [], context, today);
+          const badEvent = (fnArgs.events || []).find((e: any) => !e || typeof e.date !== "string" || !isValidDateKey(e.date));
+          if (badEvent) { toolResultObj = { error: "Invalid event date: expected YYYY-MM-DD." }; toolResponseContent = JSON.stringify(toolResultObj); }
+          const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
-          activityTrail.push({
-            step: "Structured Entry",
-            detail: `Prepared log for ${fnArgs.date}`,
-            status: "done",
-          });
-          structuredEntry = {
-            date: fnArgs.date || today,
-            flow: fnArgs.flow || null,
-            symptoms: (fnArgs.symptoms || []).filter((s: string) => (VALID_SYMPTOMS as readonly string[]).includes(s)),
-            mood: fnArgs.mood || null,
-            energy: fnArgs.energy || null,
-            sleep: fnArgs.sleep || null,
-            notes: fnArgs.notes || null,
-            isApproximate: fnArgs.isApproximate || false,
-            landmarkName: fnArgs.landmarkName || null,
-          };
-          toolResultObj = { success: true, entry: structuredEntry };
+          const validationError = validateEntryArgs(fnArgs, today);
+          if (validationError) {
+            toolResultObj = { error: validationError };
+          } else {
+            activityTrail.push({ step: "Structured Entry", detail: `Prepared log for ${fnArgs.date}`, status: "done" });
+            structuredEntry = {
+              date: fnArgs.date || today, flow: fnArgs.flow || null,
+              symptoms: (fnArgs.symptoms || []).filter((s: string) => (VALID_SYMPTOMS as readonly string[]).includes(s)),
+              mood: fnArgs.mood || null, energy: fnArgs.energy ?? null, sleep: fnArgs.sleep ?? null, notes: fnArgs.notes || null,
+              isApproximate: fnArgs.isApproximate || false, landmarkName: fnArgs.landmarkName || null, kind: fnArgs.kind || "daily_log",
+            };
+            toolResultObj = { success: true, entry: structuredEntry };
+          }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          if (context.pendingEntry) {
-            const slipRes = applySlipCorrections(context.pendingEntry, userPrompt);
-            structuredEntry = slipRes.updated;
-            toolResultObj = { success: true, entry: structuredEntry, changes: slipRes.changes };
-          } else {
+          if (!context.pendingEntry) {
             toolResultObj = { success: false, error: "No pending slip to update" };
+          } else {
+            const patched = applyModelPatch(context.pendingEntry, fnArgs, today);
+            if (patched.error) toolResultObj = { error: patched.error };
+            else { structuredEntry = patched.entry!; toolResultObj = { success: true, entry: structuredEntry }; }
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         }
@@ -509,6 +527,7 @@ export async function runLavenderAgent(
           result: toolResultObj,
           latencyMs: Date.now() - toolCallStart,
           model,
+          executedBy: "meta-model" as const,
         });
 
         messages.push({
@@ -541,22 +560,143 @@ export async function runLavenderAgent(
     }
 
     return {
-      message: finalMessage || fallbackResult.message,
-      entry: structuredEntry || fallbackResult.entry,
+      message: finalMessage,
+      entry: structuredEntry,
       needsClarification,
       clarificationQuestion,
       activityTrail,
-      toolCalls: toolCallsRecorded.length > 0 ? toolCallsRecorded : fallbackResult.toolCalls,
-      planOverlaps: planOverlaps || fallbackResult.planOverlaps,
+      toolCalls: toolCallsRecorded,
+      planOverlaps,
+      mode: "live",
+      modeReason: null,
+      usedPersonalAnchor: usedPersonalAnchorLive,
     };
   } catch (err: any) {
     console.error("[Lavender Agent] Error in runLavenderAgent:", err);
-    return fallbackResult;
+    return { ...fallbackResult, mode: "offline", modeReason: `Offline parser — Meta model not used (${err?.message || "Meta API request failed"})` };
   }
+}
+
+
+export const VALID_MOODS = ["Great", "Good", "Okay", "Low", "Irritable", "Anxious", "Emotional", "Calm"] as const;
+const LEXICONS: LanguageLexicon[] = [en, hi, ml, ta, kn];
+
+function phraseIndex(lower: string, phrase: string): number {
+  const p = phrase.toLowerCase().trim();
+  if (!p) return -1;
+  if (/^[a-z0-9\s'-]+$/i.test(p)) {
+    const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = new RegExp(`\\b${escaped}\\b`, "i").exec(lower);
+    return m ? m.index : -1;
+  }
+  return lower.indexOf(p);
+}
+function isNegatedAt(lower: string, idx: number): boolean {
+  if (idx < 0) return false;
+  const before = lower.slice(Math.max(0, idx - 32), idx);
+  if (/\b(no|not|without|never)\s+([\p{L}0-9]+\s+){0,3}$/iu.test(before)) return true;
+  for (const lex of LEXICONS) for (const neg of lex.negations) {
+    if (neg && before.trimEnd().endsWith(neg)) return true;
+  }
+  return false;
+}
+export interface LexiconExtraction { symptoms: ValidSymptom[]; flow: StructuredEntry["flow"]; mood: string | null; periodStart: boolean; periodEnd: boolean; }
+export function extractWithLexicon(text: string): LexiconExtraction {
+  const lower = text.toLowerCase();
+  const symptoms: ValidSymptom[] = [];
+  for (const key of VALID_SYMPTOMS) {
+    let found = false;
+    for (const lex of LEXICONS) {
+      for (const phrase of lex.symptoms[key] || []) {
+        const idx = phraseIndex(lower, phrase);
+        if (idx >= 0 && !isNegatedAt(lower, idx)) { found = true; break; }
+      }
+      if (found) break;
+    }
+    if (found) symptoms.push(key);
+  }
+  let flow: StructuredEntry["flow"] = null;
+  if (/\bno (flow|bleeding)\b/i.test(lower)) flow = "none";
+  else {
+    const order: Array<"heavy"|"medium"|"light"|"spotting"> = ["heavy","medium","light","spotting"];
+    outer: for (const level of order) {
+      for (const lex of LEXICONS) {
+        for (const phrase of lex.flow[level] || []) {
+          const idx = phraseIndex(lower, phrase);
+          if (idx >= 0 && !isNegatedAt(lower, idx)) { flow = level; break outer; }
+        }
+      }
+    }
+    if (!flow) for (const lex of LEXICONS) for (const phrase of lex.flow.none || []) { if (phraseIndex(lower, phrase) >= 0) { flow = "none"; break; } }
+  }
+  let mood: string | null = null;
+  const moodCandidates: Array<{mood:string; phrase:string}> = [];
+  for (const lex of LEXICONS) for (const [m, phrases] of Object.entries(lex.mood)) for (const phrase of phrases) moodCandidates.push({ mood: m, phrase });
+  moodCandidates.sort((a,b)=>b.phrase.length-a.phrase.length);
+  for (const c of moodCandidates) { const idx = phraseIndex(lower, c.phrase); if (idx>=0 && !isNegatedAt(lower, idx)) { mood = c.mood; break; } }
+  let periodStart=false, periodEnd=false;
+  for (const lex of LEXICONS) {
+    if (lex.periodStart.some((ph)=>phraseIndex(lower,ph)>=0)) periodStart=true;
+    if (lex.periodEnd.some((ph)=>phraseIndex(lower,ph)>=0)) periodEnd=true;
+  }
+  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b/i.test(lower)) periodStart=true;
+  if (/\bperiod\s+(ended|stopped|finished)\b|\bflow stopped\b/i.test(lower)) periodEnd=true;
+  return { symptoms, flow, mood, periodStart, periodEnd };
+}
+export function validateEntryArgs(args: Record<string, any>, today: string): string | null {
+  if (args.date !== undefined) {
+    if (typeof args.date !== "string" || !isValidDateKey(args.date)) return "Invalid date: expected YYYY-MM-DD calendar date.";
+    const min = addDaysToKey(today, -731);
+    if (args.date < min || args.date > today) return `Invalid date: must be between ${min} and ${today} (today).`;
+  }
+  if (args.flow !== undefined && args.flow !== null && !["none","spotting","light","medium","heavy"].includes(args.flow)) return "Invalid flow value.";
+  if (args.kind !== undefined && !["period_started","period_ended","daily_log"].includes(args.kind)) return "Invalid kind value.";
+  if (args.mood !== undefined && args.mood !== null && !(VALID_MOODS as readonly string[]).includes(args.mood)) return "Invalid mood value.";
+  if (args.energy !== undefined && args.energy !== null && (!Number.isInteger(args.energy) || args.energy < 1 || args.energy > 5)) return "Invalid energy: must be an integer 1-5.";
+  if (args.sleep !== undefined && args.sleep !== null && (typeof args.sleep !== "number" || args.sleep < 0 || args.sleep > 24)) return "Invalid sleep: must be 0-24 hours.";
+  const symptomLists = [args.symptoms, args.symptoms_add, args.symptoms_remove, args.addSymptoms, args.removeSymptoms];
+  for (const list of symptomLists) if (list !== undefined && (!Array.isArray(list) || list.some((s:any)=>!(VALID_SYMPTOMS as readonly string[]).includes(s)))) return "Invalid symptoms: must be a subset of the supported symptoms.";
+  return null;
+}
+export function applyModelPatch(pending: StructuredEntry, patch: Record<string, any>, today: string): { entry?: StructuredEntry; error?: string } {
+  const err = validateEntryArgs(patch, today);
+  if (err) return { error: err };
+  const updated: StructuredEntry = { ...pending, symptoms: [...pending.symptoms] };
+  if (patch.date) updated.date = patch.date;
+  if (patch.flow !== undefined) updated.flow = patch.flow;
+  if (patch.kind) updated.kind = patch.kind;
+  if (patch.mood !== undefined) updated.mood = patch.mood;
+  if (patch.energy !== undefined) updated.energy = patch.energy;
+  if (patch.sleep !== undefined) updated.sleep = patch.sleep;
+  if (patch.notes !== undefined) updated.notes = patch.notes;
+  const add = patch.symptoms_add || patch.addSymptoms || [];
+  const remove = patch.symptoms_remove || patch.removeSymptoms || [];
+  for (const s of add) if (!updated.symptoms.includes(s)) updated.symptoms.push(s);
+  updated.symptoms = updated.symptoms.filter((s)=>!remove.includes(s));
+  return { entry: updated };
+}
+function entryDateMatchesLandmark(lm: { resolvedDate?: string | null }, date: string | null): boolean {
+  if (!date) return false;
+  if (lm.resolvedDate === date) return true;
+  // Offset phrases ("2 days before X") resolve a few days away from the landmark itself.
+  return Math.abs(diffDateKeys(lm.resolvedDate || date, date)) <= 370;
+}
+export function findMatchedEvent(text: string, matched?: Array<{title:string;date:string}>): {title:string;date:string} | null {
+  if (!matched || matched.length===0) return null;
+  const lower = text.toLowerCase();
+  let best: {title:string;date:string} | null = null; let bestScore=0;
+  for (const ev of matched) {
+    const tokens = ev.title.toLowerCase().split(/[^a-z0-9]+/).filter((w)=>w.length>2);
+    const score = tokens.filter((w)=>lower.includes(w)).length;
+    if (score>bestScore) { bestScore=score; best=ev; }
+  }
+  return bestScore>0 ? best : null;
 }
 
 /**
  * Local fallback parser for offline verification, fast tests, and network resilience.
+ * Intent first (Batch 2.1), lexicon word-boundary parser with negation (2.2),
+ * rewritten date resolver (2.3). Never fabricates a log for plan-only or empty messages.
  */
 export function parseLocally(text: string, today: string, context: AgentContext): AgentResult {
   const startTime = Date.now();
@@ -566,179 +706,122 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     { step: "Processing Speech", detail: "Extracted keywords from voice transcript", status: "done" },
   ];
   const toolCalls: ToolCallRecord[] = [];
+  const offline = { mode: "offline" as const, modeReason: "Offline parser — Meta model not used (offline rule engine)" };
 
-  // Medical guardrail check
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    return {
-      message: MEDICAL_REFUSAL_MESSAGE,
-      needsClarification: false,
-      activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }],
-      toolCalls: [],
-    };
+    return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
 
-  // Check if modifying an active pending Accession Slip
+  // Offline-only regex corrections on a pending slip (live path lets the model patch).
   if (context.pendingEntry) {
     const correctionRes = applySlipCorrections(context.pendingEntry, text);
     if (correctionRes.changes.length > 0) {
-      toolCalls.push({
-        id: "call_update_" + Date.now(),
-        toolName: "update_entry",
-        args: { correction: text },
-        result: { updated: correctionRes.updated, changes: correctionRes.changes },
-        latencyMs: Math.max(1, Date.now() - startTime),
-        model: "offline-rule-engine",
-      });
-
-      activityTrail.push({
-        step: "Accession Slip Correction",
-        detail: correctionRes.changes.join("; "),
-        status: "done",
-      });
-
-      return {
-        message: "I've updated your Accession Slip with your corrections. Please review below.",
-        entry: correctionRes.updated,
-        needsClarification: false,
-        activityTrail,
-        toolCalls,
-      };
+      toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+      activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
+      return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
   }
 
-  // Check for Plan Around It events
+  const intent = classifyIntent(text, !!context.pendingEntry);
+  const extraction = extractWithLexicon(text);
+  const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
+  const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
+  const sleepMatch = lower.match(/\b(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/) || lower.match(/\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/);
+  const sleep = sleepMatch ? parseFloat(sleepMatch[1]) : null;
+
+  // Plan Around It events (explicit event words with a date)
   const eventMatches: Array<{ name: string; date: string }> = [];
-  const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}|\d{4}-\d{2}-\d{2})/gi;
+  const eventRegex = /(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation)(?:\s+(?:to|in|for)\s+[a-zA-Z]+)?\s+(?:on|at)?\s*([a-zA-Z]+\s+\d{1,2}(?:,?\s+\d{4})?|\d{4}-\d{2}-\d{2})/gi;
   let match: RegExpExecArray | null;
   while ((match = eventRegex.exec(text)) !== null) {
     const rawDate = match[1];
     let resolvedDate = rawDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      const parsedKey = parseMonthDay(rawDate, currentYear);
-      if (parsedKey) {
-        resolvedDate = parsedKey;
-      }
+      const yrMatch = rawDate.match(/(\d{4})\s*$/);
+      const parsedKey = parseMonthDay(rawDate, yrMatch ? parseInt(yrMatch[1], 10) : currentYear);
+      if (parsedKey) resolvedDate = parsedKey;
     }
-    eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0] || "Event", date: resolvedDate });
+    eventMatches.push({ name: match[0].split(/\s+(?:on|at)/)[0].trim() || "Event", date: resolvedDate });
   }
-
-  let planOverlaps: any[] | undefined = undefined;
+  let planOverlaps: AgentResult["planOverlaps"] = undefined;
   if (eventMatches.length > 0) {
     activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
     planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
-    toolCalls.push({
-      id: "call_overlap_" + Date.now(),
-      toolName: "check_overlap",
-      args: { events: eventMatches },
-      result: { overlaps: planOverlaps },
-      latencyMs: Math.max(1, Date.now() - startTime),
-      model: "offline-rule-engine",
-    });
+    toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   }
 
-  // Check for Landmark Recall using deterministic date arithmetic
-  let landmarkDate: string | null = null;
-  let landmarkName: string | null = null;
-  let isApproximate = false;
+  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd;
 
-  const landmarkRes = resolveLandmarkExpression(text, today);
-  if (landmarkRes.found && landmarkRes.resolvedDate) {
-    landmarkName = landmarkRes.landmarkName;
-    landmarkDate = landmarkRes.resolvedDate;
+  // Personal landmark recall (client-matched events only, Batch 5.5 wiring is honoured here too)
+  const matchedEvent = findMatchedEvent(text, context.matchedEvents);
+  const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
+
+  const earlyLandmark = resolveLandmarkExpression(text, today);
+  // Intent first: no loggable content -> no log slip (bare landmark recall is exempt:
+  // it is the app's landmark-recall shorthand for a period date).
+  if (intent === "other" || (!hasLogContent && intent !== "plan_event")) {
+    if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
+      const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
+      const q = late ? "What would you like to log — for example, that your period started, ended, or a symptom for a date?" : "What would you like to log?";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+    }
+  }
+  if ((intent === "plan_event" || eventMatches.length > 0) && !hasLogContent) {
+    // Plan-only: events only, never an empty log for today. A bare landmark phrase
+    // (legacy landmark-recall shorthand) still falls through to a log entry below.
+    const isBareLandmark = eventMatches.length === 0;
+    if (!isBareLandmark) {
+      return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+    }
+  }
+
+  // Date resolution (Batch 2.3)
+  const resolved = resolveDateExpression(text, today);
+  if (resolved.needsClarification) {
+    return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
+  }
+  let entryDate: string | null = resolved.date;
+  let dateExplanation: string | null = resolved.explanation || null;
+  let dateWindow = resolved.window || null;
+  let landmarkName: string | null = earlyLandmark.found && entryDateMatchesLandmark(earlyLandmark, resolved.date) ? earlyLandmark.landmarkName || null : null;
+  let isApproximate = !!resolved.window || (landmarkName ? /\baround\b|\bnear\b/.test(lower) : false);
+  if (!entryDate && matchedEvent && usedPersonalAnchor) {
+    const off = parseRelativeExpression(text);
+    entryDate = off.weekday ? matchedEvent.date : applyDayOffset(matchedEvent.date, off.days || 0);
+    landmarkName = matchedEvent.title;
+    dateExplanation = `${matchedEvent.title} = ${matchedEvent.date}`;
     isApproximate = true;
-
-    activityTrail.push({
-      step: "Landmark Recall",
-      detail: `Found calendar milestone: ${landmarkName} -> ${landmarkDate}`,
-      status: "done",
-    });
-
-    toolCalls.push({
-      id: "call_milestone_" + Date.now(),
-      toolName: "milestone_lookup",
-      args: { landmarkName, anchorDate: today },
-      result: { baseDate: landmarkRes.baseDate, resolvedDate: landmarkDate },
-      latencyMs: Math.max(1, Date.now() - startTime),
-      model: "offline-rule-engine",
-    });
+  }
+  if (!entryDate) {
+    const landmarkRes = resolveLandmarkExpression(text, today);
+    if (landmarkRes.found && landmarkRes.resolvedDate) {
+      entryDate = landmarkRes.resolvedDate;
+      landmarkName = landmarkRes.landmarkName || null;
+      isApproximate = true;
+      dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
+    }
+  }
+  if (!entryDate) {
+    const clearlyToday = /\b(today|now|this morning|tonight|right now)\b/.test(lower);
+    const pastMarkers = /\b(started|began|came|ended|stopped|was|had|yesterday|ago)\b/.test(lower);
+    if (clearlyToday) entryDate = today;
+    else if (hasLogContent && !pastMarkers) entryDate = today; // present-tense symptom/flow log
+    else {
+      const q = "Which date?";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+    }
+  }
+  if (entryDate > today && !/next year|planning|upcoming/.test(lower)) {
+    const q = `Did you mean last year's date? That date is in the future.`;
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }
 
-  // Symptoms extraction from valid 14
-  const detectedSymptoms: ValidSymptom[] = [];
-  if (lower.includes("cramp") || lower.includes("വയറുവേദന") || lower.includes("दर्द")) detectedSymptoms.push("cramps");
-  if (lower.includes("headache") || lower.includes("തലവേദന") || lower.includes("सिरदर्द")) detectedSymptoms.push("headache");
-  if (lower.includes("back") || lower.includes("നടുവേദന") || lower.includes("कमर दर्द")) detectedSymptoms.push("backache");
-  if (lower.includes("bloat") || lower.includes("വയറ് വീർത്തു") || lower.includes("पेट फूलना")) detectedSymptoms.push("bloating");
-  if (lower.includes("breast") || lower.includes("സ്തന")) detectedSymptoms.push("breast_tenderness");
-  if (lower.includes("acne") || lower.includes("breakout") || lower.includes("മുഖക്കുരു")) detectedSymptoms.push("acne");
-  if (lower.includes("fatigue") || lower.includes("tired") || lower.includes("ക്ഷീണം") || lower.includes("थकान")) detectedSymptoms.push("fatigue");
-  if (lower.includes("craving") || lower.includes("മധുരം കഴിക്കാൻ")) detectedSymptoms.push("cravings");
-  if (lower.includes("nausea") || lower.includes("ഛർദ്ദി") || lower.includes("उल्टी")) detectedSymptoms.push("nausea");
-  if (lower.includes("mood swing") || lower.includes("സങ്കടം")) detectedSymptoms.push("mood_swings");
-  if (lower.includes("anxious") || lower.includes("anxiety") || lower.includes("ആശങ്ക")) detectedSymptoms.push("anxiety");
-  if (lower.includes("sleep") || lower.includes("insomnia") || lower.includes("ഉറക്കമില്ലായ്മ")) detectedSymptoms.push("insomnia");
-  if (lower.includes("dizz") || lower.includes("തലകറക്കം") || lower.includes("चक्कर")) detectedSymptoms.push("dizziness");
-  if (lower.includes("appetite") || lower.includes("വിശപ്പ്")) detectedSymptoms.push("appetite_change");
-
-  // Flow level extraction
-  let flow: StructuredEntry["flow"] = null;
-  if (lower.includes("heavy") || lower.includes("കൂടുതൽ") || lower.includes("ज्यादा")) flow = "heavy";
-  else if (lower.includes("medium") || lower.includes("സാധാരണ") || lower.includes("मध्यम")) flow = "medium";
-  else if (lower.includes("light") || lower.includes("കുറവ്") || lower.includes("कम")) flow = "light";
-  else if (lower.includes("spotting") || lower.includes("ഡ്രോപ്പ്") || lower.includes("स्पॉटिंग")) flow = "spotting";
-  else if (lower.includes("period started") || lower.includes("period") || lower.includes("തുടങ്ങി")) flow = "medium";
-
-  // Mood extraction
-  let mood: string | null = null;
-  if (lower.includes("great") || lower.includes("നല്ല സന്തോഷം")) mood = "Great";
-  else if (lower.includes("good") || lower.includes("നല്ലത്")) mood = "Good";
-  else if (lower.includes("low") || lower.includes("സങ്കടം") || lower.includes("उदास")) mood = "Low";
-  else if (lower.includes("irritable") || lower.includes("ദേഷ്യം")) mood = "Irritable";
-  else if (lower.includes("calm") || lower.includes("ശാന്തം")) mood = "Calm";
-  else if (lower.includes("okay") || lower.includes("കുഴപ്പമില്ല")) mood = "Okay";
-
-  // Energy
-  let energy: number | null = null;
-  if (lower.includes("energy 1") || lower.includes("very tired")) energy = 1;
-  else if (lower.includes("energy 2") || lower.includes("tired")) energy = 2;
-  else if (lower.includes("energy 3") || lower.includes("moderate energy")) energy = 3;
-  else if (lower.includes("energy 4") || lower.includes("good energy")) energy = 4;
-  else if (lower.includes("energy 5") || lower.includes("full of energy")) energy = 5;
-
-  const entryDate = landmarkDate || today;
-
+  const kind: StructuredEntry["kind"] = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
   const entry: StructuredEntry = {
-    date: entryDate,
-    flow,
-    symptoms: detectedSymptoms,
-    mood,
-    energy,
-    sleep: null,
-    notes: text,
-    isApproximate,
-    landmarkName,
+    date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, sleep, notes: text,
+    isApproximate, landmarkName, kind, dateExplanation, dateWindow,
   };
-
-  toolCalls.push({
-    id: "call_log_" + Date.now(),
-    toolName: "log_entry",
-    args: { date: entryDate, flow, symptoms: detectedSymptoms, mood, energy },
-    result: { entry },
-    latencyMs: Math.max(1, Date.now() - startTime),
-    model: "offline-rule-engine",
-  });
-
-  const message = isApproximate
-    ? `I found ${landmarkName} on ${landmarkDate}. Would you like to confirm this period entry?`
-    : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
-
-  return {
-    message,
-    entry,
-    needsClarification: isApproximate,
-    clarificationQuestion: isApproximate ? `Did your period start before, on, or after ${landmarkName}?` : null,
-    activityTrail,
-    toolCalls,
-    planOverlaps,
-  };
+  toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+  const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  return { message, entry, needsClarification: isApproximate && !!landmarkName, clarificationQuestion: isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
