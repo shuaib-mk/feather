@@ -735,6 +735,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
   const planDateRe = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
   const eventMatches: Array<{ name: string; date: string }> = [];
+  const planDateSpans: Array<{ index: number; length: number }> = [];
   let planDateInvalid = false;
   const passedPlanCandidates: Array<{ name: string; thisYear: string; nextYear: string }> = [];
   {
@@ -764,8 +765,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       if (explicitYear === null && resolvedDate < today) {
         const nextYear = parseMonthDay(dateNoYear, currentYear + 1);
         if (nextYear) passedPlanCandidates.push({ name: title, thisYear: resolvedDate, nextYear });
+        planDateSpans.push({ index: m.index, length: rawDate.length });
         continue;
       }
+      planDateSpans.push({ index: m.index, length: rawDate.length });
       eventMatches.push({ name: title, date: resolvedDate });
     }
   }
@@ -818,8 +821,16 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     }
   }
 
-  // Date resolution (Batch 2.3)
-  const resolved = resolveDateExpression(text, today);
+  // Date resolution (Batch 2.3). Plan-event dates belong to the event, not the
+  // log: strip them so e.g. "dinner on Nov 3 and I have cramps" logs cramps for
+  // today instead of asking a stale-date question about the dinner date.
+  let logDateText = text;
+  if (planDateSpans.length > 0) {
+    for (const span of [...planDateSpans].sort((a, b) => b.index - a.index)) {
+      logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
+    }
+  }
+  const resolved = resolveDateExpression(logDateText, today);
   if (resolved.needsClarification) {
     return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
   }

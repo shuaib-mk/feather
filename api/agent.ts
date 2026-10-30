@@ -1774,6 +1774,7 @@ function parseLocally(text, today, context) {
   const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
   const planDateRe = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
   const eventMatches = [];
+  const planDateSpans = [];
   let planDateInvalid = false;
   const passedPlanCandidates = [];
   {
@@ -1800,8 +1801,10 @@ function parseLocally(text, today, context) {
       if (explicitYear === null && resolvedDate < today) {
         const nextYear = parseMonthDay(dateNoYear, currentYear + 1);
         if (nextYear) passedPlanCandidates.push({ name: title, thisYear: resolvedDate, nextYear });
+        planDateSpans.push({ index: m.index, length: rawDate.length });
         continue;
       }
+      planDateSpans.push({ index: m.index, length: rawDate.length });
       eventMatches.push({ name: title, date: resolvedDate });
     }
   }
@@ -1843,7 +1846,13 @@ function parseLocally(text, today, context) {
       return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
     }
   }
-  const resolved = resolveDateExpression(text, today);
+  let logDateText = text;
+  if (planDateSpans.length > 0) {
+    for (const span of [...planDateSpans].sort((a, b) => b.index - a.index)) {
+      logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
+    }
+  }
+  const resolved = resolveDateExpression(logDateText, today);
   if (resolved.needsClarification) {
     return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
   }

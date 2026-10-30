@@ -59,6 +59,12 @@ async function main(){
   const transcribeSrc=readFileSync(join(process.cwd(),"api-src/transcribe.ts"),"utf8");
   check("A4 transcribe generic client message", transcribeSrc.includes("Couldn't hear that — try again or type it"));
 
+  // Mixed plan + symptom log: event date must not become the log date or trigger a stale-date question
+  const mixLog:any=await runLavenderAgent("dinner on Nov 3 and I have cramps", CTX);
+  check("mixed plan+daily_log keeps plannedEvents", JSON.stringify(mixLog.plannedEvents)===JSON.stringify([{title:"dinner",date:"2026-11-03"}]));
+  check("mixed plan+daily_log returns daily_log with cramps for today", mixLog.entry?.kind==="daily_log" && mixLog.entry?.date==="2026-10-28" && JSON.stringify(mixLog.entry?.symptoms)===JSON.stringify(["cramps"]));
+  check("mixed plan+daily_log asks no stale-date question", !mixLog.needsClarification && !/more than 6 months|Did you mean/.test(mixLog.clarificationQuestion||mixLog.message||""));
+
   console.log(`ParserFixes: ${passed} passed, ${failed} failed`);
   if(failures.length) console.log(failures.join("\n"));
   if(failed) process.exit(1);
