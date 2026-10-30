@@ -10,6 +10,9 @@ import {
   addDays as engineAddDays,
   dayDifference,
   validateRecords,
+  isBleedingFlow,
+  lastBleedingDayForPeriod,
+  type EntryKind,
   type PeriodRecord,
   type Prediction,
   type CycleStatistics,
@@ -28,6 +31,7 @@ export interface Period {
 
 export interface DayLog {
   id: number;
+  kind?: EntryKind;
   logDate: string; // YYYY-MM-DD
   flow: "none" | "spotting" | "light" | "medium" | "heavy" | null;
   symptoms: string[];
@@ -43,6 +47,8 @@ export interface CycleStats {
   avgPeriodLength: number; // Defaults to 5 if < 1 recorded flow length
   isDefaultCycle: boolean;
   isDefaultPeriod: boolean;
+  /** True when any headline number (28-day cycle / 5-day bleeding) is a default, not learned. */
+  isDefault: boolean;
   lastPeriodStart?: string | null;
   currentPeriod?: Period | null;
   nextPeriodDate?: string | null;
@@ -200,6 +206,42 @@ export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): void
   }
 }
 
+export const MAX_PERIOD_DAYS = 10;
+export const APPROXIMATE_DEFAULT_RADIUS_DAYS = 3;
+
+/** Real approximate window: supplied range wins, otherwise +/- radius (default 3 for "around"). */
+export function approximateWindow(
+  startDate: string,
+  startEarliest?: string | null,
+  startLatest?: string | null,
+  radiusDays: number = APPROXIMATE_DEFAULT_RADIUS_DAYS,
+): { startEarliest: string; startLatest: string } {
+  if (startEarliest && startLatest && startEarliest < startLatest) {
+    return { startEarliest, startLatest };
+  }
+  return {
+    startEarliest: engineAddDays(startDate, -radiusDays),
+    startLatest: engineAddDays(startDate, radiusDays),
+  };
+}
+
+function sortedPeriodsAsc(periods: Period[]): Period[] {
+  return [...periods].sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+function lastBleedingDay(period: Period, logs: DayLog[], periodsAsc: Period[]): string {
+  const idx = periodsAsc.findIndex((x) => x.id === period.id);
+  const nextStart = idx >= 0 ? periodsAsc[idx + 1]?.startDate : undefined;
+  let last = period.endDate || period.startDate;
+  for (const log of logs) {
+    if (!isBleedingFlow(log.flow)) continue;
+    if (log.logDate < period.startDate) continue;
+    if (nextStart && log.logDate >= nextStart) continue;
+    if (log.logDate > last) last = log.logDate;
+  }
+  return last;
+}
+
 export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }): Period {
   toDate(period.startDate);
   if (period.endDate) {
@@ -211,10 +253,16 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
 
   const data = loadCycleData();
   const id = period.id || Date.now();
+  const isApproximate = Boolean(period.isApproximate || period.landmarkName || period.startEarliest);
+  const window = isApproximate
+    ? approximateWindow(period.startDate, period.startEarliest, period.startLatest)
+    : { startEarliest: period.startEarliest ?? null, startLatest: period.startLatest ?? null };
   const newPeriod: Period = {
     ...period,
     id,
-    isApproximate: !!period.landmarkName || !!period.startEarliest,
+    isApproximate,
+    startEarliest: window.startEarliest,
+    startLatest: window.startLatest,
   };
 
   const existingIdx = data.periods.findIndex((p) => p.id === id || p.startDate === period.startDate);
@@ -235,24 +283,140 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
   return newPeriod;
 }
 
-export function addOrUpdateLog(log: Omit<DayLog, "id"> & { id?: number }): DayLog {
-  toDate(log.logDate);
-  const data = loadCycleData();
-  const id = log.id || Date.now();
-  const newLog: DayLog = { ...log, id };
-
-  const existingIdx = data.logs.findIndex((l) => l.logDate === log.logDate);
-  if (existingIdx >= 0) {
-    data.logs[existingIdx] = newLog;
-  } else {
-    data.logs.push(newLog);
-  }
-
-  data.logs.sort((a, b) => b.logDate.localeCompare(a.logDate));
-  saveCycleData(data);
-  return newLog;
+export interface SaveLogEntryOptions {
+  kind?: EntryKind;
+  /** Set only after the user confirms a period longer than MAX_PERIOD_DAYS in the confirm slip. */
+  confirmLongPeriod?: boolean;
+  landmarkName?: string | null;
+  startEarliest?: string | null;
+  startLatest?: string | null;
 }
 
+export interface SaveLogEntryResult {
+  log: DayLog;
+  period: Period | null;
+  needsConfirmation: boolean;
+  confirmationReason?: string;
+  saved: boolean;
+}
+
+/**
+ * Saves a daily log and its period atomically (both or neither) in one write.
+ * Bleeding (light/medium/heavy) merges into a period within a 2-day gap;
+ * spotting is logged but never starts or extends a period.
+ */
+export function saveLogEntry(
+  logInput: Omit<DayLog, "id"> & { id?: number },
+  options: SaveLogEntryOptions = {},
+): SaveLogEntryResult {
+  const kind: EntryKind = options.kind || logInput.kind || "daily_log";
+  toDate(logInput.logDate);
+  const data = loadCycleData();
+  const periodsAsc = sortedPeriodsAsc(data.periods);
+  const logId = logInput.id || Date.now();
+  const newLog: DayLog = { ...logInput, id: logId, kind };
+
+  const candidateLogs = [...data.logs];
+  const existingLogIdx = candidateLogs.findIndex((l) => l.logDate === logInput.logDate);
+  if (existingLogIdx >= 0) candidateLogs[existingLogIdx] = newLog;
+  else candidateLogs.push(newLog);
+
+  let candidatePeriods = [...data.periods];
+  let affected: Period | null = null;
+
+  const finish = (needsConfirmation = false, confirmationReason?: string): SaveLogEntryResult => {
+    if (needsConfirmation) {
+      // Nothing is written: the confirm slip must ask before saving either part.
+      return { log: newLog, period: affected, needsConfirmation: true, confirmationReason, saved: false };
+    }
+    validateRecords(toPeriodRecords(candidatePeriods));
+    candidateLogs.sort((a, b) => b.logDate.localeCompare(a.logDate));
+    candidatePeriods.sort((a, b) => b.startDate.localeCompare(a.startDate));
+    saveCycleData({ periods: candidatePeriods, logs: candidateLogs });
+    return { log: newLog, period: affected, needsConfirmation: false, saved: true };
+  };
+
+  if (kind === "period_ended") {
+    const target = [...periodsAsc].reverse().find((per) => per.startDate <= logInput.logDate);
+    if (!target) throw new Error("No period to end: log a period start first.");
+    if (logInput.logDate < target.startDate) {
+      throw new Error(`Period end ${logInput.logDate} precedes start ${target.startDate}`);
+    }
+    affected = { ...target, endDate: logInput.logDate };
+    candidatePeriods = candidatePeriods.map((per) => (per.id === target.id ? affected! : per));
+    return finish();
+  }
+
+  const wantsPeriod = logInput.flow !== "spotting" && (kind === "period_started" || isBleedingFlow(logInput.flow));
+  if (wantsPeriod) {
+    const date = logInput.logDate;
+    // Inside an existing period or its observed bleeding span?
+    for (const per of periodsAsc) {
+      const last = lastBleedingDay(per, data.logs, periodsAsc);
+      if (date >= per.startDate && date <= last) {
+        affected = per;
+        return finish();
+      }
+    }
+    // Within 2 days after the last bleeding day -> extend.
+    for (const per of periodsAsc) {
+      const last = lastBleedingDay(per, data.logs, periodsAsc);
+      const gap = dayDifference(last, date);
+      if (gap >= 1 && gap <= 2) {
+        const newEnd = date;
+        if (dayDifference(per.startDate, newEnd) + 1 > MAX_PERIOD_DAYS && !options.confirmLongPeriod) {
+          affected = per;
+          return finish(true, `This would make a ${dayDifference(per.startDate, newEnd) + 1}-day period (over ${MAX_PERIOD_DAYS} days). Save it anyway?`);
+        }
+        affected = { ...per, endDate: newEnd };
+        candidatePeriods = candidatePeriods.map((x) => (x.id === per.id ? affected! : x));
+        return finish();
+      }
+    }
+    // Within 2 days before a period start -> move the start earlier.
+    for (const per of periodsAsc) {
+      const gap = dayDifference(date, per.startDate);
+      if (gap >= 1 && gap <= 2) {
+        const end = per.endDate || lastBleedingDay(per, data.logs, periodsAsc);
+        if (dayDifference(date, end) + 1 > MAX_PERIOD_DAYS && !options.confirmLongPeriod) {
+          affected = per;
+          return finish(true, `This would make a ${dayDifference(date, end) + 1}-day period (over ${MAX_PERIOD_DAYS} days). Save it anyway?`);
+        }
+        affected = { ...per, startDate: date, endDate: per.endDate || date };
+        candidatePeriods = candidatePeriods.map((x) => (x.id === per.id ? affected! : x));
+        return finish();
+      }
+    }
+    // No period within the 2-day gap -> create a new period.
+    const isApproximate = Boolean(options.landmarkName || options.startEarliest || options.startLatest);
+    const window = isApproximate
+      ? approximateWindow(date, options.startEarliest, options.startLatest)
+      : { startEarliest: null as string | null, startLatest: null as string | null };
+    const newPeriodId = Math.max(Date.now(), ...candidatePeriods.map((x) => x.id), logId) + 1;
+    affected = {
+      id: newPeriodId,
+      startDate: date,
+      endDate: date,
+      startEarliest: window.startEarliest,
+      startLatest: window.startLatest,
+      landmarkName: options.landmarkName ?? null,
+      isApproximate,
+    };
+    candidatePeriods.push(affected);
+    return finish();
+  }
+
+  // Spotting / non-bleeding daily logs never start or extend a period.
+  return finish();
+}
+
+export function addOrUpdateLog(log: Omit<DayLog, "id"> & { id?: number }): DayLog {
+  const result = saveLogEntry(log);
+  if (result.needsConfirmation) {
+    throw new Error(result.confirmationReason || "This log needs confirmation before saving.");
+  }
+  return result.log;
+}
 
 export function deleteDayLog(logDate: string): void {
   const data = loadCycleData();
@@ -277,6 +441,8 @@ function toPeriodRecords(periods: Period[]): PeriodRecord[] {
     confirmed: true,
     source: "manual",
     landmarkName: p.landmarkName || null,
+    startEarliest: p.startEarliest || null,
+    startLatest: p.startLatest || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
@@ -287,7 +453,7 @@ function toPeriodRecords(periods: Period[]): PeriodRecord[] {
  * Calculates median cycle length, Median Absolute Deviation (MAD) uncertainty windows,
  * and tracks clinical quality metrics without inventing missing data.
  */
-export function computeCycleStats(periods: Period[]): CycleStats {
+export function computeCycleStats(periods: Period[], logs: DayLog[] = []): CycleStats {
   const today = todayStr();
 
   if (!periods || periods.length === 0) {
@@ -298,6 +464,7 @@ export function computeCycleStats(periods: Period[]): CycleStats {
       avgPeriodLength: 5,
       isDefaultCycle: true,
       isDefaultPeriod: true,
+      isDefault: true,
       prediction: emptyPred,
       predictionStatus: emptyPred.status,
       confidence: emptyPred.confidence,
@@ -306,17 +473,32 @@ export function computeCycleStats(periods: Period[]): CycleStats {
   }
 
   const records = toPeriodRecords(periods);
-  const stats = getCycleStatistics(records);
+  const observations = (logs || []).map((l) => ({
+    date: l.logDate,
+    bleeding: isBleedingFlow(l.flow),
+    flow: l.flow || undefined,
+    symptoms: l.symptoms,
+    mood: l.mood,
+    energy: l.energy,
+    sleepHours: l.sleepHours,
+    notes: l.notes || undefined,
+  }));
+  const stats = getCycleStatistics(records, undefined, observations as any, today);
   const prediction = getPrediction(records, today);
-  const daily = getDailyStatus(records, [], today);
+  const daily = getDailyStatus(records, observations as any, today);
 
   const sorted = [...periods].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const latest = sorted[sorted.length - 1];
 
+  // An open period never stays "open forever": with no bleeding log for 3+
+  // days it counts as ended at its last bleeding day (read-time only).
   let currentPeriod: Period | null = null;
   if (latest && latest.startDate <= today) {
-    if (!latest.endDate || today <= latest.endDate) {
-      currentPeriod = latest;
+    if (latest.endDate) {
+      if (today <= latest.endDate) currentPeriod = latest;
+    } else {
+      const lastBleed = lastBleedingDay(latest, logs || [], sortedPeriodsAsc(periods));
+      if (dayDifference(lastBleed, today) < 3) currentPeriod = latest;
     }
   }
 
@@ -329,6 +511,7 @@ export function computeCycleStats(periods: Period[]): CycleStats {
     avgPeriodLength: avgPeriod,
     isDefaultCycle: stats.completedCycleCount === 0,
     isDefaultPeriod: stats.averageBleedingDuration === null,
+    isDefault: stats.completedCycleCount === 0 || stats.averageBleedingDuration === null,
     lastPeriodStart: latest?.startDate || null,
     currentPeriod,
     nextPeriodDate: prediction.expectedStart,

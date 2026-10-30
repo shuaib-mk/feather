@@ -5,7 +5,7 @@ import { PageHeader } from "../components/PageHeader";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
-import { prettyDate, todayStr } from "../cycleStorage";
+import { prettyDate, todayStr, addDays } from "../cycleStorage";
 
 const FLOW_OPTIONS = [
   { key: "none", label: "None" },
@@ -56,6 +56,7 @@ export function VoiceFlowPage() {
   const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(false);
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
+  const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
 
@@ -163,36 +164,45 @@ export function VoiceFlowPage() {
     setManualText("");
   };
 
-  const handleSaveConfirmed = () => {
+  const handleSaveConfirmed = (confirmLongPeriod: boolean = false) => {
     if (!confirmEntry) return;
 
-    if (confirmEntry.flow && confirmEntry.flow !== "none") {
-      savePeriod({
-        startDate: confirmEntry.date,
-        endDate: null,
-        startEarliest: confirmEntry.isApproximate ? confirmEntry.date : null,
-        startLatest: confirmEntry.isApproximate ? confirmEntry.date : null,
+    // One atomic save: the log and its period are written together or not at all.
+    const isBleeding = confirmEntry.flow === "light" || confirmEntry.flow === "medium" || confirmEntry.flow === "heavy";
+    const result = saveLog(
+      {
+        logDate: confirmEntry.date,
+        flow: confirmEntry.flow || null,
+        symptoms: confirmEntry.symptoms || [],
+        mood: confirmEntry.mood || null,
+        energy: confirmEntry.energy || null,
+        sleepHours: confirmEntry.sleep || null,
+        notes: confirmEntry.notes || null,
+      },
+      {
+        kind: isBleeding ? "period_started" : "daily_log",
         landmarkName: confirmEntry.landmarkName || null,
-      });
-    }
+        startEarliest: confirmEntry.isApproximate ? addDays(confirmEntry.date, -3) : null,
+        startLatest: confirmEntry.isApproximate ? addDays(confirmEntry.date, 3) : null,
+        confirmLongPeriod,
+      },
+    );
 
-    saveLog({
-      logDate: confirmEntry.date,
-      flow: confirmEntry.flow || null,
-      symptoms: confirmEntry.symptoms || [],
-      mood: confirmEntry.mood || null,
-      energy: confirmEntry.energy || null,
-      sleepHours: confirmEntry.sleep || null,
-      notes: confirmEntry.notes || null,
-    });
+    if (!result) return; // error toast shown by CycleContext; nothing was saved
+    if (result.needsConfirmation) {
+      setLongPeriodWarning(result.confirmationReason || "This would make a period longer than 10 days. Save it anyway?");
+      return;
+    }
 
     const confirmedDate = confirmEntry.date;
     setSavedSuccessMessage(`Entry for ${prettyDate(confirmedDate)} saved to your device vault.`);
     setConfirmEntry(null);
     setSlipCorrectionText("");
+    setLongPeriodWarning(null);
   };
 
   const handleDiscard = () => {
+    setLongPeriodWarning(null);
     setConfirmEntry(null);
     setSlipCorrectionText("");
     setPlanOverlaps(null);
@@ -528,6 +538,12 @@ export function VoiceFlowPage() {
           </form>
 
           {/* Save & Discard Actions */}
+          {longPeriodWarning && (
+            <div role="alert" className="rounded-[14px] bg-amber-50 border border-amber-300 px-3.5 py-2.5 text-xs text-amber-900 font-sans flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="flex-1">{longPeriodWarning}</span>
+              <button type="button" onClick={() => handleSaveConfirmed(true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">Save anyway</button>
+            </div>
+          )}
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
             <button
               type="button"
@@ -538,7 +554,7 @@ export function VoiceFlowPage() {
             </button>
             <button
               type="button"
-              onClick={handleSaveConfirmed}
+              onClick={() => handleSaveConfirmed(false)}
               className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center"
             >
               Confirm &amp; Save Entry

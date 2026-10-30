@@ -4,7 +4,9 @@ import {
   saveCycleData,
   addOrUpdatePeriod,
   deletePeriodEntry,
-  addOrUpdateLog,
+  saveLogEntry,
+  type SaveLogEntryOptions,
+  type SaveLogEntryResult,
   deleteDayLog,
   computeCycleStats,
   exportCycleDataJSON,
@@ -26,9 +28,11 @@ interface CycleContextValue {
   data: { periods: Period[]; logs: DayLog[] };
   stats: CycleStats;
   refreshData: () => void;
-  savePeriod: (p: Omit<Period, "id"> & { id?: number }) => void;
+  savePeriod: (p: Omit<Period, "id"> & { id?: number }) => Period | null;
   removePeriod: (id: number) => void;
-  saveLog: (l: Omit<DayLog, "id"> & { id?: number }) => void;
+  saveLog: (l: Omit<DayLog, "id"> & { id?: number }, opts?: SaveLogEntryOptions) => SaveLogEntryResult | null;
+  errorToast: string | null;
+  dismissErrorToast: () => void;
   removeLog: (date: string) => void;
   clearAllVaultData: () => void;
 
@@ -60,12 +64,13 @@ const CycleContext = createContext<CycleContextValue | null>(null);
 
 export function CycleProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<{ periods: Period[]; logs: DayLog[] }>(() => loadCycleData());
-  const [stats, setStats] = useState<CycleStats>(() => computeCycleStats(data.periods));
+  const [stats, setStats] = useState<CycleStats>(() => computeCycleStats(data.periods, data.logs));
   const [isDemoActive, setIsDemoActive] = useState<boolean>(() => isDemoDataLoaded());
 
   // Backup & Privacy Notifications
   const [overdueDismissed, setOverdueDismissed] = useState<boolean>(false);
   const [backupToast, setBackupToast] = useState<boolean>(false);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
   const [useBrowserSpeech, setUseBrowserSpeechState] = useState<boolean>(() => {
     try {
       return localStorage.getItem("feather_use_web_speech") === "true";
@@ -83,44 +88,56 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   const refreshData = useCallback(() => {
     const loaded = loadCycleData();
     setData(loaded);
-    const newStats = computeCycleStats(loaded.periods);
+    const newStats = computeCycleStats(loaded.periods, loaded.logs);
     setStats(newStats);
     setIsDemoActive(isDemoDataLoaded());
     setSynthesisResult(getBaselineSynthesis(loaded.periods, newStats, 2026));
   }, []);
 
   useEffect(() => {
-    const newStats = computeCycleStats(data.periods);
+    const newStats = computeCycleStats(data.periods, data.logs);
     setStats(newStats);
     setSynthesisResult(getBaselineSynthesis(data.periods, newStats, 2026));
   }, [data.periods.length, data.logs.length]);
 
-  const savePeriod = useCallback((p: Omit<Period, "id"> & { id?: number }) => {
-    addOrUpdatePeriod(p);
-    refreshData();
-    const count = getEntriesSinceExport();
-    if (count >= 5) {
-      setBackupToast(true);
+  const savePeriod = useCallback((p: Omit<Period, "id"> & { id?: number }): Period | null => {
+    try {
+      const saved = addOrUpdatePeriod(p);
+      refreshData();
+      const count = getEntriesSinceExport();
+      if (count >= 5) {
+        setBackupToast(true);
+      }
+      return saved;
+    } catch (err: any) {
+      setErrorToast(err?.message || "Could not save that period. Nothing was changed.");
+      return null;
     }
   }, [refreshData]);
 
   const removePeriod = useCallback((id: number) => {
-    deletePeriodEntry(id);
-    refreshData();
+    try { deletePeriodEntry(id); refreshData(); } catch (err: any) { setErrorToast(err?.message || "Could not delete that period."); }
   }, [refreshData]);
 
-  const saveLog = useCallback((l: Omit<DayLog, "id"> & { id?: number }) => {
-    addOrUpdateLog(l);
-    refreshData();
-    const count = getEntriesSinceExport();
-    if (count >= 5) {
-      setBackupToast(true);
+  const saveLog = useCallback((l: Omit<DayLog, "id"> & { id?: number }, opts?: SaveLogEntryOptions): SaveLogEntryResult | null => {
+    try {
+      const result = saveLogEntry(l, opts);
+      if (result.saved) {
+        refreshData();
+        const count = getEntriesSinceExport();
+        if (count >= 5) {
+          setBackupToast(true);
+        }
+      }
+      return result;
+    } catch (err: any) {
+      setErrorToast(err?.message || "Could not save that entry. Nothing was changed.");
+      return null;
     }
   }, [refreshData]);
 
   const removeLog = useCallback((date: string) => {
-    deleteDayLog(date);
-    refreshData();
+    try { deleteDayLog(date); refreshData(); } catch (err: any) { setErrorToast(err?.message || "Could not delete that log."); }
   }, [refreshData]);
 
   const clearAllVaultData = useCallback(() => {
@@ -132,7 +149,7 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     const demo = loadSyntheticDemoData();
     setData(demo);
     setIsDemoActive(true);
-    const newStats = computeCycleStats(demo.periods);
+    const newStats = computeCycleStats(demo.periods, demo.logs);
     setStats(newStats);
     setSynthesisResult(getBaselineSynthesis(demo.periods, newStats, 2026));
   }, []);
@@ -224,8 +241,16 @@ export function CycleProvider({ children }: { children: ReactNode }) {
         triggerBackupToast: () => setBackupToast(true),
         useBrowserSpeech,
         setUseBrowserSpeech,
+        errorToast,
+        dismissErrorToast: () => setErrorToast(null),
       }}
     >
+      {errorToast && (
+        <div role="alert" className="fixed top-4 left-3 right-3 sm:left-auto sm:right-8 z-[60] max-w-md ml-auto rounded-[16px] bg-rose-50 border border-rose-300 px-4 py-3 font-sans text-xs text-rose-900 shadow-xl flex items-start gap-2">
+          <span className="flex-1">{errorToast}</span>
+          <button type="button" onClick={() => setErrorToast(null)} aria-label="Dismiss error" className="font-semibold cursor-pointer">x</button>
+        </div>
+      )}
       {children}
     </CycleContext.Provider>
   );

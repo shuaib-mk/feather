@@ -22,9 +22,55 @@ export type PeriodRecord = {
   confirmed: boolean;
   source: "manual" | "voice" | "text" | "import";
   landmarkName?: string | null;
+  /** Approximate-start window (real range, earliest < latest) when the start was recalled approximately. */
+  startEarliest?: DateKey | null;
+  startLatest?: DateKey | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type EntryKind = "period_started" | "period_ended" | "daily_log";
+
+export const BLEEDING_FLOWS = ["light", "medium", "heavy"] as const;
+
+/** Bleeding (light/medium/heavy) can start/extend a period. Spotting never does. */
+export function isBleedingFlow(flow?: string | null): boolean {
+  return flow === "light" || flow === "medium" || flow === "heavy";
+}
+
+/** Last observed bleeding day for a period, from explicit daily observations only. */
+export function lastBleedingDayForPeriod(
+  record: PeriodRecord,
+  observations: DailyObservation[],
+  nextStartDate?: DateKey | null,
+): DateKey | null {
+  let last: DateKey | null = record.endDate ?? null;
+  for (const obs of observations) {
+    if (obs.date < record.startDate) continue;
+    if (nextStartDate && obs.date >= nextStartDate) continue;
+    const bleeding = obs.flow ? isBleedingFlow(obs.flow) : obs.bleeding;
+    if (bleeding && (!last || obs.date > last)) last = obs.date;
+  }
+  return last;
+}
+
+/**
+ * Effective end of a period, computed at read time and never written back:
+ * recorded endDate wins; otherwise an open period with no bleeding log for
+ * 3+ days (as of asOfDate) counts as ended at its last bleeding day.
+ */
+export function effectivePeriodEnd(
+  record: PeriodRecord,
+  observations: DailyObservation[],
+  asOfDate?: DateKey,
+  nextStartDate?: DateKey | null,
+): DateKey | null {
+  if (record.endDate) return record.endDate;
+  const lastBleeding = lastBleedingDayForPeriod(record, observations, nextStartDate) ?? record.startDate;
+  if (nextStartDate) return lastBleeding;
+  if (asOfDate && dayDifference(lastBleeding, asOfDate) >= 3) return lastBleeding;
+  return null;
+}
 
 export type DailyObservation = {
   date: DateKey;
@@ -67,6 +113,8 @@ export type Prediction = {
   cyclesUsed: number;
   confidence: "none" | "low" | "moderate" | "limited";
   reason: string;
+  /** True when cycleLengthDays is the 28-day default, not learned from data. */
+  isDefault: boolean;
 };
 
 export type DailyStatus = {
@@ -289,6 +337,8 @@ export function reconstructCycles(records: PeriodRecord[]): Cycle[] {
 export function getCycleStatistics(
   records: PeriodRecord[],
   settings = DEFAULT_SETTINGS,
+  observations: DailyObservation[] = [],
+  asOfDate?: DateKey,
 ): CycleStatistics {
   const cycles = reconstructCycles(records);
   const completed = cycles.filter((c) => c.lengthDays !== null);
@@ -302,12 +352,17 @@ export function getCycleStatistics(
   const recent = eligible.slice(-settings.historyWindow).map((c) => c.lengthDays!);
   const allLengths = completed.map((c) => c.lengthDays!);
 
-  // Bleeding duration analysis
+  // Bleeding duration analysis: learned from real periods only. Recorded
+  // endDates win; open periods count only once effectively ended (see
+  // effectivePeriodEnd) -- durations are never invented.
   const sorted = validateRecords(records);
   const confirmed = sorted.filter((r) => r.confirmed);
   const durations = confirmed
-    .filter((r) => r.endDate)
-    .map((r) => dayDifference(r.startDate, r.endDate!) + 1);
+    .map((r, i) => {
+      const end = effectivePeriodEnd(r, observations, asOfDate, confirmed[i + 1]?.startDate ?? null);
+      return end ? dayDifference(r.startDate, end) + 1 : null;
+    })
+    .filter((d): d is number => d !== null);
 
   const hasUnknownEndDates = confirmed.some((r) => !r.endDate);
   const averageBleedingDuration = durations.length
@@ -367,6 +422,7 @@ export function getPrediction(
       cyclesUsed: 0,
       confidence: "none",
       reason: "No confirmed period start has been recorded on or before this date.",
+      isDefault: false,
     };
   }
 
@@ -375,29 +431,41 @@ export function getPrediction(
   const history = stats.recentCycleLengths;
   const observedCount = history.length;
 
+  // Approximate starts: anchor on the window midpoint and widen uncertainty
+  // by half the window width.
+  const approxHalfWidth =
+    last.startEarliest && last.startLatest && last.startEarliest < last.startLatest
+      ? Math.ceil(dayDifference(last.startEarliest, last.startLatest) / 2)
+      : 0;
+  const anchorStart = approxHalfWidth
+    ? addDays(last.startEarliest!, Math.floor(dayDifference(last.startEarliest!, last.startLatest!) / 2))
+    : last.startDate;
+
   // Single recorded start: provisional prediction
   if (observedCount === 0) {
-    const next = addDays(last.startDate, settings.defaultCycleLength);
+    const next = addDays(anchorStart, settings.defaultCycleLength);
     return {
       status: asOfDate > next ? "overdue" : "provisional",
       expectedStart: next,
-      earliestStart: addDays(next, -4),
-      latestStart: addDays(next, 4),
+      earliestStart: addDays(next, -4 - approxHalfWidth),
+      latestStart: addDays(next, 4 + approxHalfWidth),
       cycleLengthDays: settings.defaultCycleLength,
       cyclesUsed: 0,
       confidence: "low",
       reason: "No completed cycle history; using a provisional default.",
+      isDefault: true,
     };
   }
 
   const cycleLength = roundDay(median(history));
-  const expected = addDays(last.startDate, cycleLength);
+  const expected = addDays(anchorStart, cycleLength);
 
   const deviations = history.map((length) => Math.abs(length - cycleLength));
   const mad = median(deviations);
 
-  // Heuristic display range based on historical variability (3 to 10 days)
-  const margin = Math.min(10, Math.max(3, Math.ceil(1.5 * mad)));
+  // Heuristic display range based on historical variability (3 to 10 days),
+  // widened for approximate anchors.
+  const margin = Math.min(10, Math.max(3, Math.ceil(1.5 * mad))) + approxHalfWidth;
 
   const confidence: Prediction["confidence"] =
     observedCount >= 4 && mad <= 3
@@ -418,6 +486,7 @@ export function getPrediction(
       observedCount >= 2
         ? "Estimated from recent completed cycles."
         : "Limited personal history; estimate may be inaccurate.",
+      isDefault: false,
   };
 }
 
@@ -716,8 +785,8 @@ export class FeatherEngine {
     return reconstructCycles(this.records);
   }
 
-  public getCycleStatistics(): CycleStatistics {
-    return getCycleStatistics(this.records, this.settings);
+  public getCycleStatistics(asOfDate?: DateKey): CycleStatistics {
+    return getCycleStatistics(this.records, this.settings, this.observations, asOfDate);
   }
 
   public getPrediction(asOfDate: DateKey): Prediction {
