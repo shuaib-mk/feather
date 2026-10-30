@@ -104,9 +104,7 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isHovered, setIsHovered] = useState<boolean>(false);
-
-  const isActive = (path: string) => {
+    const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
   };
@@ -118,21 +116,21 @@ export function Sidebar() {
           ======================================================== */}
       <aside
         data-slot="sidebar"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className="group/sidebar fixed z-40 top-6 left-4 md:left-6 hidden md:flex flex-col gap-2.5 select-none"
-        style={{ willChange: "transform", transform: "translateZ(0)" }}
+        className="fixed z-40 left-4 md:left-6 hidden md:flex flex-col gap-2.5 select-none w-[220px]"
+        style={{
+          top: "max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1.25rem))",
+          willChange: "transform",
+          transform: "translateZ(0)",
+        }}
       >
         <div
           data-slot="sidebar-card"
-          className={`liquid-glass-lens flex flex-col p-1.5 transition-[width,border-radius,box-shadow] duration-200 ease-out ${
-            isHovered ? "w-[216px] rounded-[24px]" : "w-13 rounded-[24px]"
-          }`}
+          className="liquid-glass-lens flex flex-col p-2.5 w-[220px] rounded-[24px]"
         >
           {/* Top Brand Bar */}
           <Link
             to="/"
-            className="flex w-full items-center gap-2.5 rounded-[18px] p-2 text-left relative overflow-hidden cursor-pointer"
+            className="flex w-full items-center gap-2.5 rounded-[18px] p-2 text-left relative overflow-hidden cursor-pointer hover:bg-white/[0.12] transition-colors"
           >
             <div className="size-5 shrink-0 flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="size-5 text-stone-900">
@@ -148,7 +146,7 @@ export function Sidebar() {
               </svg>
             </div>
 
-            <div className={`flex flex-col overflow-hidden transition-opacity duration-200 ${isHovered ? "opacity-100 block" : "opacity-0 hidden"}`}>
+            <div className="flex flex-col overflow-hidden">
               <div className="flex items-center gap-1.5">
                 <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
                   Feather
@@ -165,11 +163,7 @@ export function Sidebar() {
           <div className="my-1 px-0.5">
             <Link
               to="/voice"
-              className={`flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer ${
-                isHovered
-                  ? "liquid-glass-button justify-start font-semibold text-stone-900"
-                  : "justify-center text-stone-800 hover:bg-black/[0.04]"
-              }`}
+              className="flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer liquid-glass-nav-cta justify-start font-semibold text-stone-900"
             >
               <div className="size-5 shrink-0 flex items-center justify-center">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -178,7 +172,7 @@ export function Sidebar() {
                   <line x1="12" y1="19" x2="12" y2="22" />
                 </svg>
               </div>
-              <span className={`font-sans text-[13px] font-medium truncate transition-opacity duration-200 ${isHovered ? "opacity-100 block" : "opacity-0 hidden"}`}>
+              <span className="font-sans text-[13px] font-medium truncate">
                 Record Log
               </span>
             </Link>
@@ -194,15 +188,15 @@ export function Sidebar() {
                   to={item.path}
                   className={`group/item flex w-full items-center gap-2.5 rounded-[16px] p-2 transition-all cursor-pointer ${
                     active
-                      ? "liquid-glass-pill bg-white text-stone-950 font-semibold shadow-2xs"
-                      : "text-stone-700 hover:bg-black/[0.04] hover:text-stone-950"
+                      ? "liquid-glass-nav-active shadow-xs font-semibold text-stone-950"
+                      : "liquid-glass-nav-item text-stone-700 hover:text-stone-950"
                   }`}
                   aria-label={item.label}
                 >
                   <div className="size-5 shrink-0 flex items-center justify-center text-stone-800">
                     {item.icon(active)}
                   </div>
-                  <span className={`font-sans text-[13px] truncate transition-opacity duration-200 ${isHovered ? "opacity-100 block" : "opacity-0 hidden"}`}>
+                  <span className="font-sans text-[13px] truncate">
                     {item.label}
                   </span>
                 </Link>
@@ -214,17 +208,15 @@ export function Sidebar() {
         {/* Local Vault Badge Pill */}
         <div
           data-slot="sidebar-badge"
-          className={`liquid-glass-lens flex items-center transition-[width,border-radius] duration-200 ease-out overflow-hidden ${
-            isHovered ? "w-[216px] rounded-[20px] px-3 py-2" : "w-13 h-10 rounded-full justify-center p-0"
-          }`}
+          className="liquid-glass-lens flex items-center gap-2.5 rounded-[20px] p-2.5 w-[220px] overflow-hidden"
         >
-          <div className="size-6 shrink-0 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <div className="size-6 shrink-0 flex items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
           </div>
-          <div className={`flex flex-col text-left pl-2.5 transition-opacity duration-200 ${isHovered ? "opacity-100 block" : "opacity-0 hidden"}`}>
+          <div className="flex flex-col text-left pl-1">
             <span className="font-sans text-[11px] font-semibold text-stone-800">
               100% On-Device
             </span>
@@ -265,7 +257,7 @@ export function Sidebar() {
         <div className="flex items-center gap-1.5">
           <Link
             to="/voice"
-            className="liquid-glass-pill px-3 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="bg-white/[0.14] hover:bg-white/[0.24] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7)] px-3 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer rounded-full"
             aria-label="Voice Capture"
           >
             <span className="size-1.5 rounded-full bg-rose-500" />
@@ -273,7 +265,7 @@ export function Sidebar() {
           </Link>
           <Link
             to="/settings"
-            className="liquid-glass-pill p-2 text-stone-700 hover:text-stone-950 cursor-pointer"
+            className="bg-white/[0.14] hover:bg-white/[0.24] border border-white/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.7)] p-2 text-stone-700 hover:text-stone-950 cursor-pointer rounded-full"
             aria-label="Settings"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -302,12 +294,12 @@ export function Sidebar() {
               to={item.path}
               className={`flex flex-col items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-all cursor-pointer ${
                 active
-                  ? "text-stone-950 font-bold"
-                  : "text-stone-500 hover:text-stone-800"
+                  ? "liquid-glass-nav-active !py-0.5 text-stone-950 font-bold"
+                  : "text-stone-600 hover:text-stone-900 font-medium"
               }`}
               aria-label={item.shortLabel}
             >
-              <div className={active ? "text-stone-950" : "text-stone-500"}>
+              <div className={active ? "text-stone-950" : "text-stone-600"}>
                 {item.icon(active)}
               </div>
               <span className="font-sans text-[10px] font-medium tracking-normal">

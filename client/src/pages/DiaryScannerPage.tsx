@@ -114,7 +114,7 @@ export function DiaryScannerPage() {
       {/* Upload & Image Dropzone */}
       <div className="liquid-glass-card rounded-[24px] p-6 sm:p-8 space-y-5 text-center">
         {!previewUrl ? (
-          <label className="border-2 border-dashed border-stone-300 hover:border-violet-500 rounded-[20px] p-8 flex flex-col items-center justify-center space-y-3 cursor-pointer transition-colors bg-white/40 hover:bg-white/70">
+          <label className="border-2 border-dashed border-stone-300/70 hover:border-violet-500 rounded-[20px] p-8 flex flex-col items-center justify-center space-y-3 cursor-pointer transition-colors liquid-glass-pill !rounded-[20px] hover:!bg-white/60">
             <div className="size-12 rounded-full bg-stone-100 flex items-center justify-center text-stone-600">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />

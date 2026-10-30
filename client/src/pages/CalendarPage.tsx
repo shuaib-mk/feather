@@ -40,19 +40,24 @@ export function CalendarPage(){
       <div role="grid" aria-label={monthName} className="grid grid-cols-7 gap-1">
         {weekdayNames.map((w,i)=><div key={i} className="text-center text-[11px] font-semibold text-stone-500 min-h-[20px]">{w}</div>)}
         {Array.from({length:month.leadingBlanks},(_,i)=><div key={`b${i}`} />)}
-        {month.days.map(d=> <button key={d.date} data-date={d.date} type="button" role="gridcell" aria-label={d.label} onClick={()=>setSelected(d.date)} onKeyDown={(e)=>onKey(e,d.date)} className={`relative min-h-[44px] min-w-[44px] rounded-xl text-sm flex flex-col items-center justify-center border ${d.bleeding?"bg-rose-500 text-white font-bold":d.spotting?"border-rose-400 border-2 text-rose-700":d.predicted?"bg-violet-100 text-violet-900":"bg-white/60"} ${d.isToday?"ring-2 ring-stone-900":"border-stone-200/60"} ${selected===d.date?"outline outline-2 outline-stone-900":""}`}>
+        {month.days.map(d=> <button key={d.date} data-date={d.date} type="button" role="gridcell" aria-label={d.label} onClick={()=>setSelected(d.date)} onKeyDown={(e)=>onKey(e,d.date)} className={`relative min-h-[44px] min-w-[44px] rounded-xl text-sm flex flex-col items-center justify-center transition-all ${d.bleeding?"liquid-glass-day-bleeding font-bold":d.spotting?"liquid-glass-day-spotting":d.predicted?"liquid-glass-day-predicted font-medium":"liquid-glass-day text-stone-800"} ${d.isToday?"ring-2 ring-stone-900/80 shadow-md":""} ${selected===d.date?"outline outline-2 outline-violet-600/85 scale-[1.03] z-10":""}`}>
           <span>{Number(d.date.slice(8,10))}</span>
           <span className="flex gap-0.5">{d.hasLog && <span aria-hidden className="size-1.5 rounded-full bg-current inline-block" />}{d.events.slice(0,3).map((ev,i)=><span key={i} aria-hidden className="size-1.5 rounded-full bg-amber-500 inline-block" />)}{d.events.length>3 && <span className="text-[9px]">+{d.events.length-3}</span>}</span>
         </button>)}
       </div>
-      <div className="flex flex-wrap gap-3 text-[11px] text-stone-600"><span>■ Logged bleeding day</span><span>□ Spotting</span><span className="bg-violet-100 px-1">Shaded = predicted window (estimate)</span><span>● Log / event</span></div>
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-600">
+        <span className="flex items-center gap-1.5"><span className="size-3 rounded-md bg-rose-500 inline-block shadow-2xs" /> Logged bleeding day</span>
+        <span className="flex items-center gap-1.5"><span className="size-3 rounded-md border-2 border-rose-400 bg-rose-50/60 inline-block" /> Spotting</span>
+        <span className="flex items-center gap-1.5"><span className="size-3 rounded-md bg-violet-300/40 border border-violet-400/50 inline-block" /> Shaded = predicted window</span>
+        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-stone-700 inline-block" /> Log / event</span>
+      </div>
       <p className="text-[11px] text-stone-500">Shaded days are estimates from your logged cycles. Not medical advice.</p>
     </div>
     {sel && <div className="liquid-glass-card rounded-[24px] p-5 space-y-3" aria-label="Day details">
       <h3 className="font-serif font-semibold">{sel.label}</h3>
-      {sel.log ? <div className="text-xs space-y-2"><p>Flow: {sel.log.flow||"none"} · Symptoms: {sel.log.symptoms.join(", ")||"—"} · Mood: {sel.log.mood||"—"}</p><div className="flex gap-2 flex-wrap"><Link className="liquid-glass-button rounded-full px-4 py-2 min-h-[44px] inline-flex items-center" to={`/voice?date=${sel.date}`}>Log by voice for this day</Link><button type="button" className="rounded-full px-4 py-2 min-h-[44px] border" onClick={()=>{ if(confirm("Delete this log?")) removeLog(sel.date); }}>Delete log</button><label className="text-xs">Flow <select aria-label="Edit flow" defaultValue={sel.log.flow||"none"} onChange={(e)=>saveLog({logDate:sel.date, flow:e.target.value as any, symptoms:sel.log!.symptoms, mood:sel.log!.mood, energy:sel.log!.energy, sleepHours:sel.log!.sleepHours, notes:sel.log!.notes})}>{["none","spotting","light","medium","heavy"].map(f=><option key={f} value={f}>{f}</option>)}</select></label></div></div> : <p className="text-xs text-stone-600">No log for this day.</p>}
+      {sel.log ? <div className="text-xs space-y-2"><p>Flow: {sel.log.flow||"none"} · Symptoms: {sel.log.symptoms.join(", ")||"—"} · Mood: {sel.log.mood||"—"}</p><div className="flex gap-2 flex-wrap"><Link className="liquid-glass-button rounded-full px-4 py-2 min-h-[44px] inline-flex items-center" to={`/voice?date=${sel.date}`}>Log by voice for this day</Link><button type="button" className="liquid-glass-pill rounded-full px-4 py-2 min-h-[44px]" onClick={()=>{ if(confirm("Delete this log?")) removeLog(sel.date); }}>Delete log</button><label className="text-xs">Flow <select aria-label="Edit flow" defaultValue={sel.log.flow||"none"} onChange={(e)=>saveLog({logDate:sel.date, flow:e.target.value as any, symptoms:sel.log!.symptoms, mood:sel.log!.mood, energy:sel.log!.energy, sleepHours:sel.log!.sleepHours, notes:sel.log!.notes})}>{["none","spotting","light","medium","heavy"].map(f=><option key={f} value={f}>{f}</option>)}</select></label></div></div> : <p className="text-xs text-stone-600">No log for this day.</p>}
       <div className="space-y-2"><h4 className="text-xs font-semibold">Events</h4>{sel.events.map(ev=><div key={ev.id} className="flex justify-between text-xs"><span>{ev.title} ({ev.date})</span><button type="button" className="underline" onClick={()=>{ deleteEvent(ev.id); setEvents(loadEvents()); }}>Delete</button></div>)}
-      <div className="flex gap-2 flex-wrap"><input aria-label="Event title" value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Event title" className="border rounded-full px-3 py-2 min-h-[44px] text-xs" /><button type="button" className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs" onClick={()=>{ if(!newTitle.trim()) return; upsertEvent({title:newTitle.trim(), date:sel.date, source:"manual"}); setEvents(loadEvents()); setNewTitle(""); }}>Add event</button></div></div>
+      <div className="flex gap-2 flex-wrap"><input aria-label="Event title" value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Event title" className="liquid-glass-input rounded-full px-4 py-2 min-h-[44px] text-xs" /><button type="button" className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs" onClick={()=>{ if(!newTitle.trim()) return; upsertEvent({title:newTitle.trim(), date:sel.date, source:"manual"}); setEvents(loadEvents()); setNewTitle(""); }}>Add event</button></div></div>
     </div>}
     <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 text-xs">
       <h3 className="font-serif text-base font-semibold">Calendar sync (.ics)</h3>
@@ -67,4 +72,32 @@ export function CalendarPage(){
     <PlanAroundIt />
   </div>;
 }
-export function NextThirtyDaysStrip(){ const {data}=useCycle(); const today=todayLocal(); const [events]=useState(()=>loadEvents()); const days=useMemo(()=>nextThirtyDays(data.periods,data.logs,events,today),[data,events,today]); return <Link to="/calendar" className="block liquid-glass-card rounded-[24px] p-4"><span className="text-xs font-semibold block mb-2">Next 30 days — open calendar</span><span className="flex gap-1 flex-wrap">{days.map(d=><span key={d.date} title={d.label} className={`size-8 rounded-lg text-[10px] flex items-center justify-center ${d.bleeding?"bg-rose-500 text-white":d.predicted?"bg-violet-100":"bg-white/70 border"} ${d.isToday?"ring-2 ring-stone-900":""}`}>{Number(d.date.slice(8,10))}</span>)}</span></Link>; }
+export function NextThirtyDaysStrip(){
+  const { data } = useCycle();
+  const today = todayLocal();
+  const [events] = useState(() => loadEvents());
+  const days = useMemo(() => nextThirtyDays(data.periods, data.logs, events, today), [data, events, today]);
+
+  return (
+    <Link to="/calendar" className="block liquid-glass-card rounded-[24px] p-4 transition-all">
+      <span className="text-xs font-semibold block mb-2.5 text-stone-800">Next 30 days — open calendar</span>
+      <span className="flex gap-1.5 flex-wrap">
+        {days.map((d) => (
+          <span
+            key={d.date}
+            title={d.label}
+            className={`size-8 rounded-xl text-[10px] flex items-center justify-center font-medium transition-all ${
+              d.bleeding
+                ? "liquid-glass-day-bleeding"
+                : d.predicted
+                ? "liquid-glass-day-predicted"
+                : "liquid-glass-day text-stone-700"
+            } ${d.isToday ? "ring-2 ring-stone-900 shadow-xs" : ""}`}
+          >
+            {Number(d.date.slice(8, 10))}
+          </span>
+        ))}
+      </span>
+    </Link>
+  );
+}

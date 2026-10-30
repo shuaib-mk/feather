@@ -196,7 +196,7 @@ export function VaultPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-sans">
           {/* Hackathon Reviewer Demo State */}
-          <div className="p-4 rounded-[18px] bg-white/70 border border-stone-200/70 space-y-2">
+          <div className="p-4 rounded-[18px] liquid-glass-tile space-y-2">
             <span className="font-bold text-stone-900 block">Demo Mode (fictional data, separate namespace)</span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
               Load 4 historical cycles and 5 symptom logs to test landmark recalls, overlap forecasts, and foresight matrices immediately.

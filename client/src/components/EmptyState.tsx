@@ -11,7 +11,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   return (
     <div className="liquid-glass-card rounded-[22px] p-8 text-center flex flex-col items-center justify-center space-y-3 max-w-md mx-auto my-6">
       {icon && (
-        <div className="size-12 rounded-2xl bg-white/70 border border-stone-200/60 flex items-center justify-center text-stone-700 shadow-2xs mb-1">
+        <div className="size-12 rounded-2xl liquid-glass-pill flex items-center justify-center text-stone-700 mb-1">
           {icon}
         </div>
       )}

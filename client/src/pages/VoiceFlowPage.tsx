@@ -426,7 +426,7 @@ export function VoiceFlowPage() {
           </span>
           <div className="space-y-2">
             {planOverlaps.map((item, idx) => (
-              <div key={idx} className="p-3 rounded-[16px] bg-white/80 border border-stone-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div key={idx} className="p-3 rounded-[16px] liquid-glass-tile flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div className="min-w-0">
                   <span className="font-semibold text-stone-900 block font-sans truncate">{item.name || item.eventName} ({prettyDate(item.eventDate || item.date)})</span>
                   <span className="text-stone-600 text-[11px] block">{item.overlapNote || item.note}</span>
@@ -457,7 +457,7 @@ export function VoiceFlowPage() {
                 Confirm Cycle Entry Details
               </h3>
             </div>
-            <span className="font-sans text-[11px] font-medium bg-white/80 text-stone-600 px-2.5 py-1 rounded-full border border-stone-200/70">
+            <span className="liquid-glass-pill font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
               Confirmation Required
             </span>
           </div>
@@ -613,7 +613,7 @@ export function VoiceFlowPage() {
               </p>
             ) : (
               toolCalls.map((call, idx) => (
-                <div key={idx} className="bg-white/80 rounded-[14px] p-3 border border-stone-200/70 space-y-1 shadow-xs">
+                <div key={idx} className="liquid-glass-card rounded-[14px] p-3 space-y-1 shadow-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-stone-900 flex items-center gap-1">
                       <span className="text-violet-600">λ</span> {call.toolName}

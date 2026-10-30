@@ -106,7 +106,7 @@ createRoot(rootEl).render(
   <StrictMode>
     <RootErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <div className="w-full min-h-screen bg-[#fafafa]" data-feather-app>
+        <div className="w-full min-h-screen" data-feather-app>
           <App />
         </div>
       </QueryClientProvider>

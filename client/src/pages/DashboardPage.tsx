@@ -217,7 +217,7 @@ export function DashboardPage() {
                     </div>
 
                     {latestPeriod.landmarkName && (
-                      <span className="liquid-glass-pill px-2.5 py-1 text-[11px] font-sans font-medium text-stone-700 bg-white/70 flex items-center gap-1.5">
+                      <span className="liquid-glass-pill px-2.5 py-1 text-[11px] font-sans font-medium text-stone-700 flex items-center gap-1.5">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
                           <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
                           <path d="M7 7h.01" />
@@ -255,7 +255,7 @@ export function DashboardPage() {
                   {recentLogs.map((log) => (
                     <div
                       key={log.id || log.logDate}
-                      className="p-2.5 rounded-[14px] bg-white/60 border border-stone-200/60 flex items-center justify-between text-xs"
+                      className="p-2.5 rounded-[14px] liquid-glass-tile flex items-center justify-between text-xs"
                     >
                       <div>
                         <span className="font-semibold text-stone-900 block font-sans">

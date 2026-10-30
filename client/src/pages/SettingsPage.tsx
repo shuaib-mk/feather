@@ -154,17 +154,17 @@ export function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1 font-sans">
-          <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
+          <div className="p-3 rounded-xl liquid-glass-tile">
             <span className="font-sans text-[11px] text-stone-500 font-medium block">Per-IP Minute Rate</span>
             <span className="font-serif text-lg font-semibold text-stone-900">20 req/min</span>
             <span className="text-[11px] text-stone-500 block">Prevents runaway voice loops</span>
           </div>
-          <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
+          <div className="p-3 rounded-xl liquid-glass-tile">
             <span className="font-sans text-[11px] text-stone-500 font-medium block">Per-IP Daily Quota</span>
             <span className="font-serif text-lg font-semibold text-stone-900">150 req/day</span>
             <span className="text-[11px] text-stone-500 block">Per serverless edge instance</span>
           </div>
-          <div className="p-3 rounded-xl bg-white/70 border border-stone-200/60">
+          <div className="p-3 rounded-xl liquid-glass-tile">
             <span className="font-sans text-[11px] text-stone-500 font-medium block">Global Server Cap</span>
             <span className="font-serif text-lg font-semibold text-stone-900">500 req/day</span>
             <span className="text-[11px] text-stone-500 block">DAILY_REQUEST_CAP limit</span>
