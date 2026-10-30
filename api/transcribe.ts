@@ -35,11 +35,7 @@ async function transcribeAudio(audioBuffer, mimeType = "audio/wav", languageHint
   const config = getConfig();
   const apiKey = config.metaApiKey || config.basetenApiKey;
   if (!apiKey) {
-    console.warn("[Lavender Voice] No META_API_KEY set. Returning offline fallback transcription.");
-    return {
-      text: "Period started today, heavy flow with cramps and fatigue.",
-      language: "en"
-    };
+    return { text: "", error: "Couldn't hear that \u2014 try again or type it" };
   }
   const isWav = audioBuffer.length >= 12 && audioBuffer.subarray(0, 4).toString("ascii") === "RIFF" && audioBuffer.subarray(8, 12).toString("ascii") === "WAVE";
   try {
@@ -141,33 +137,41 @@ function extractClientIp(req) {
   }
   return "127.0.0.1";
 }
-function isOriginAllowed(originOrReferer) {
+function requestHost(req) {
+  const h = req && req.headers || {};
+  const raw = h["x-forwarded-host"] || h["host"] || "";
+  return String(Array.isArray(raw) ? raw[0] : raw).split(",")[0].trim().toLowerCase();
+}
+function configuredAllowedOrigins() {
+  return (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+function isOriginAllowed(originOrReferer, reqOrHost) {
   if (!originOrReferer) return true;
+  let originHost = "";
   try {
-    const url = new URL(originOrReferer);
-    const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      return true;
-    }
-    if (host.endsWith(".vercel.app")) {
-      return true;
-    }
-    const configuredAllowed = process.env.ALLOWED_ORIGIN;
-    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
-      return true;
-    }
-    return false;
+    originHost = new URL(originOrReferer).host.toLowerCase();
   } catch {
-    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
-      return true;
-    }
     return false;
   }
+  const ownHost = typeof reqOrHost === "string" ? reqOrHost.toLowerCase() : reqOrHost ? requestHost(reqOrHost) : "";
+  if (ownHost && originHost === ownHost) return true;
+  return configuredAllowedOrigins().some((entry) => {
+    try {
+      return new URL(entry.includes("://") ? entry : `https://${entry}`).host.toLowerCase() === originHost;
+    } catch {
+      return entry === originHost;
+    }
+  });
+}
+function corsAllowOrigin(req) {
+  const origin = req?.headers?.origin;
+  if (!origin) return void 0;
+  return isOriginAllowed(origin, req) ? origin : void 0;
 }
 function checkStatelessProtection(req, options) {
   const headers = req.headers || {};
   const origin = headers["origin"] || headers["referer"];
-  if (!isOriginAllowed(origin)) {
+  if (!isOriginAllowed(origin, req)) {
     return {
       allowed: false,
       statusCode: 403,
@@ -278,7 +282,8 @@ function validateAudioBuffer(buffer, mimeType, maxSeconds = 30) {
 // api-src/transcribe.ts
 function sendResponse(res, statusCode, data) {
   if (res.setHeader) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const _aco = corsAllowOrigin(res?.req);
+    if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
@@ -300,7 +305,7 @@ function sendResponse(res, statusCode, data) {
   if (typeof res.writeHead === "function") {
     res.writeHead(statusCode, {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     });
@@ -333,7 +338,8 @@ async function getRequestBody(req) {
 async function handler(req, res) {
   if (req.method === "OPTIONS" || req.httpMethod === "OPTIONS") {
     if (res && res.setHeader) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      const _aco = corsAllowOrigin(res?.req);
+      if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
       if (typeof res.status === "function") return res.status(204).end();
@@ -345,7 +351,7 @@ async function handler(req, res) {
     return {
       statusCode: 204,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
       },
@@ -362,7 +368,7 @@ async function handler(req, res) {
     if (!res && req && req.httpMethod) {
       return {
         statusCode: status,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null" },
         body: JSON.stringify(errorBody)
       };
     }
@@ -400,7 +406,7 @@ async function handler(req, res) {
         statusCode: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null"
         },
         body: JSON.stringify(result)
       };

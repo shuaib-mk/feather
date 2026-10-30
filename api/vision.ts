@@ -24,17 +24,6 @@ function getConfig() {
   };
 }
 
-// client/src/lib/localDate.ts
-function formatDateKey(year, month, day) {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-function toLocalKey(date) {
-  return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
-}
-function todayLocal(now = /* @__PURE__ */ new Date()) {
-  return toLocalKey(now);
-}
-
 // ai/backend/vision.ts
 async function extractDiaryDates(imageBase64, mimeType = "image/jpeg") {
   const config = getConfig();
@@ -42,14 +31,7 @@ async function extractDiaryDates(imageBase64, mimeType = "image/jpeg") {
   const baseUrl = config.useBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
   const model = config.useBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
   if (!apiKey) {
-    const curYear = Number(todayLocal().slice(0, 4));
-    return {
-      periods: [
-        { startDate: `${curYear}-09-02`, endDate: `${curYear}-09-07`, confidence: 0.95, notes: "Circled in red ink" },
-        { startDate: `${curYear}-10-01`, endDate: `${curYear}-10-05`, confidence: 0.92, notes: "Marked with dot" }
-      ],
-      summary: "Detected 2 marked period cycles from calendar photo."
-    };
+    return { periods: [], summary: "Vision is unavailable because no model API key is configured. No dates were extracted." };
   }
   const prompt = `You are analyzing a photo of a handwritten paper diary or wall calendar to extract marked or circled period dates.
 Extract each contiguous sequence of marked dates as a period cycle.
@@ -110,6 +92,17 @@ If month or year is visible, use it; otherwise assume the current year. Do not p
   }
 }
 
+// client/src/lib/localDate.ts
+function formatDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+function toLocalKey(date) {
+  return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+function todayLocal(now = /* @__PURE__ */ new Date()) {
+  return toLocalKey(now);
+}
+
 // ai/backend/protection.ts
 var minuteHits = /* @__PURE__ */ new Map();
 var dailyHits = /* @__PURE__ */ new Map();
@@ -141,33 +134,41 @@ function extractClientIp(req) {
   }
   return "127.0.0.1";
 }
-function isOriginAllowed(originOrReferer) {
+function requestHost(req) {
+  const h = req && req.headers || {};
+  const raw = h["x-forwarded-host"] || h["host"] || "";
+  return String(Array.isArray(raw) ? raw[0] : raw).split(",")[0].trim().toLowerCase();
+}
+function configuredAllowedOrigins() {
+  return (process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+function isOriginAllowed(originOrReferer, reqOrHost) {
   if (!originOrReferer) return true;
+  let originHost = "";
   try {
-    const url = new URL(originOrReferer);
-    const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      return true;
-    }
-    if (host.endsWith(".vercel.app")) {
-      return true;
-    }
-    const configuredAllowed = process.env.ALLOWED_ORIGIN;
-    if (configuredAllowed && (originOrReferer.includes(configuredAllowed) || host.includes(configuredAllowed))) {
-      return true;
-    }
-    return false;
+    originHost = new URL(originOrReferer).host.toLowerCase();
   } catch {
-    if (originOrReferer.includes("localhost") || originOrReferer.includes(".vercel.app")) {
-      return true;
-    }
     return false;
   }
+  const ownHost = typeof reqOrHost === "string" ? reqOrHost.toLowerCase() : reqOrHost ? requestHost(reqOrHost) : "";
+  if (ownHost && originHost === ownHost) return true;
+  return configuredAllowedOrigins().some((entry) => {
+    try {
+      return new URL(entry.includes("://") ? entry : `https://${entry}`).host.toLowerCase() === originHost;
+    } catch {
+      return entry === originHost;
+    }
+  });
+}
+function corsAllowOrigin(req) {
+  const origin = req?.headers?.origin;
+  if (!origin) return void 0;
+  return isOriginAllowed(origin, req) ? origin : void 0;
 }
 function checkStatelessProtection(req, options) {
   const headers = req.headers || {};
   const origin = headers["origin"] || headers["referer"];
-  if (!isOriginAllowed(origin)) {
+  if (!isOriginAllowed(origin, req)) {
     return {
       allowed: false,
       statusCode: 403,
@@ -246,7 +247,8 @@ function checkStatelessProtection(req, options) {
 // api-src/vision.ts
 function sendResponse(res, statusCode, data) {
   if (res.setHeader) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const _aco = corsAllowOrigin(res?.req);
+    if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
@@ -268,7 +270,7 @@ function sendResponse(res, statusCode, data) {
   if (typeof res.writeHead === "function") {
     res.writeHead(statusCode, {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     });
@@ -301,7 +303,8 @@ async function getRequestBody(req) {
 async function handler(req, res) {
   if (req.method === "OPTIONS" || req.httpMethod === "OPTIONS") {
     if (res && res.setHeader) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      const _aco = corsAllowOrigin(res?.req);
+      if (_aco) res.setHeader("Access-Control-Allow-Origin", _aco);
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
       if (typeof res.status === "function") return res.status(204).end();
@@ -313,7 +316,7 @@ async function handler(req, res) {
     return {
       statusCode: 204,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
       },
@@ -330,7 +333,7 @@ async function handler(req, res) {
     if (!res && req && req.httpMethod) {
       return {
         statusCode: status,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null" },
         body: JSON.stringify(errorBody)
       };
     }
@@ -359,7 +362,7 @@ async function handler(req, res) {
         statusCode: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": corsAllowOrigin(res?.req) || "null"
         },
         body: JSON.stringify(result)
       };
