@@ -21,23 +21,7 @@
   --lavender: #7c3aed;
   --lavender-soft: #ede9fe;
 
-  /* ========================================================
-     macOS Tahoe 26 Liquid Glass Design System Tokens
-     (Reverse-engineered from liquidglassdesign.com & liqui.design)
-     ======================================================== */
-  --lq-radius-panel: 26px;
-  --lq-radius-card: 22px;
-  --lq-radius-pill: 9999px;
-  --lq-tint: rgba(255, 255, 255, 0.78);
-  --lq-tint-deep: rgba(255, 255, 255, 0.36);
-  --lq-clear-wash: rgba(255, 255, 255, 0.90);
-  --lq-clear-wash-deep: rgba(255, 255, 255, 0.68);
-  --lq-rim-hi: rgba(255, 255, 255, 0.98);
-  --lq-rim-lo: rgba(255, 255, 255, 0.42);
-  --lq-shadow-elevated: 0 24px 60px rgba(10, 15, 40, 0.08), 0 4px 14px rgba(10, 15, 40, 0.03);
-  --lq-shadow-subtle: 0 10px 28px -4px rgba(70, 60, 90, 0.05), 0 2px 5px 0 rgba(0, 0, 0, 0.02);
-
-  /* Tahoe Serene Accent Colors */
+  /* Feather Signature Gradients */
   --gradient-rose: #daa7d2;
   --gradient-lavender: #a9bad1;
   --gradient-blue: #4986b4;
@@ -115,48 +99,36 @@ html, body {
    - Silky 120 FPS Mobile & Desktop Smoothness
    ======================================================== */
 
-/* ========================================================
-   FEATHER x LIQUID GLASS macOS TAHOE 26 OPTICAL SYSTEM
-   Reverse-Engineered from liquidglassdesign.com & liqui.design
-   - Serene Lake Tahoe Crystal Atmosphere
-   - 4-Layer Optical Architecture: Refract + Tint + Specular + Content
-   - Dual Specular Inset Rim Lighting
-   - Squircle Physical Bezel Geometry
-   - 120Hz Hardware-Composited Transitions
-   ======================================================== */
-
 .feather-aura-bg {
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: #fafbfd;
+  background-color: #fcfbfa;
   background-image: 
-    radial-gradient(circle at 10% 8%, rgba(73, 134, 180, 0.24) 0%, transparent 48%),
-    radial-gradient(circle at 90% 10%, rgba(218, 167, 210, 0.26) 0%, transparent 48%),
-    radial-gradient(circle at 50% 45%, rgba(247, 245, 253, 0.70) 0%, transparent 58%),
-    radial-gradient(circle at 16% 82%, rgba(169, 186, 209, 0.25) 0%, transparent 52%),
-    radial-gradient(circle at 84% 82%, rgba(73, 134, 180, 0.20) 0%, transparent 48%);
+    radial-gradient(circle at 10% 8%, rgba(218, 167, 210, 0.32) 0%, transparent 45%),
+    radial-gradient(circle at 90% 12%, rgba(73, 134, 180, 0.28) 0%, transparent 45%),
+    radial-gradient(circle at 50% 45%, rgba(247, 233, 244, 0.42) 0%, transparent 55%),
+    radial-gradient(circle at 18% 80%, rgba(169, 186, 209, 0.30) 0%, transparent 50%),
+    radial-gradient(circle at 82% 82%, rgba(218, 167, 210, 0.26) 0%, transparent 45%);
   background-attachment: fixed;
   position: relative;
 }
 
-/* Floating Navigation Dock & Desktop Sidebar Lens */
+/* Floating Navigation Bars Only (Top Bar, Bottom Dock, Sidebar) */
 .liquid-glass-lens {
-  isolation: isolate;
-  background: linear-gradient(135deg, var(--lq-tint, rgba(255, 255, 255, 0.84)) 0%, var(--lq-tint-deep, rgba(255, 255, 255, 0.45)) 100%);
-  background-color: rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(20px) saturate(190%);
-  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 0 1px 1.5px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px color-mix(in srgb, var(--lq-rim-hi, #ffffff) 60%, transparent),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    var(--lq-shadow-elevated);
+    inset 2px 2px 4px rgba(220, 220, 225, 0.5),
+    inset -2px -2px 4px #ffffff,
+    0 10px 28px -4px rgba(70, 60, 90, 0.05),
+    0 2px 5px 0 rgba(0, 0, 0, 0.02);
   transform: translateZ(0);
   backface-visibility: hidden;
-  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              height 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              border-radius 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: width 0.18s ease-out,
+              height 0.18s ease-out,
+              border-radius 0.18s ease-out,
               box-shadow 0.15s ease,
               background-color 0.15s ease;
 }
@@ -189,13 +161,11 @@ html, body {
 }
 
 .liquid-glass-lens:hover {
-  background-color: rgba(255, 255, 255, 0.94);
+  background-color: rgba(255, 255, 255, 0.92);
   box-shadow: 
-    inset 0 1.5px 2px #ffffff,
-    inset 1.5px 0 1.5px 0.5px rgba(255, 255, 255, 0.7),
-    inset -1px -1px 1.5px rgba(255, 255, 255, 0.55),
-    0 28px 70px rgba(10, 15, 40, 0.10),
-    0 6px 18px rgba(10, 15, 40, 0.04);
+    inset 2px 2px 5px rgba(210, 210, 220, 0.6),
+    inset -2px -2px 5px #ffffff,
+    0 14px 32px -4px rgba(70, 60, 90, 0.07);
 }
 
 /* Specular Rim Light Edge Layer */
@@ -205,7 +175,7 @@ html, body {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.45) 35%, rgba(169, 186, 209, 0.40) 70%, rgba(218, 167, 210, 0.50) 100%);
+  background: linear-gradient(145deg, #ffffff 0%, rgba(255, 255, 255, 0.45) 40%, rgba(169, 186, 209, 0.35) 70%, rgba(218, 167, 210, 0.45) 100%);
   -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) content-box;
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) exclude, linear-gradient(#000 0 0) content-box;
@@ -213,19 +183,18 @@ html, body {
   z-index: 10;
 }
 
-/* Dedicated Mobile Top Bar Lens (macOS Tahoe 26 Glass Header) */
+/* Dedicated Mobile Top Bar Lens (100% Rich Frosted Liquid Glass, No Flat See-Through) */
 .liquid-glass-topbar {
   position: fixed !important;
-  isolation: isolate;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 100%) !important;
-  backdrop-filter: blur(24px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.95) !important;
   box-shadow: 
-    inset 0 1px 1.5px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.5),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    var(--lq-shadow-subtle) !important;
+    inset 1.5px 1.5px 3.5px rgba(220, 220, 235, 0.65),
+    inset -1.5px -1.5px 3.5px #ffffff,
+    0 10px 28px -4px rgba(70, 60, 90, 0.08),
+    0 2px 6px 0 rgba(0, 0, 0, 0.02) !important;
   transform: translateZ(0);
 }
 
@@ -235,7 +204,7 @@ html, body {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(218, 167, 210, 0.45) 45%, rgba(169, 186, 209, 0.40) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(218, 167, 210, 0.4) 45%, rgba(169, 186, 209, 0.35) 100%);
   -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) content-box;
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) exclude, linear-gradient(#000 0 0) content-box;
@@ -243,19 +212,18 @@ html, body {
   z-index: 10;
 }
 
-/* Dedicated Mobile Bottom Dock (macOS Tahoe 26 Floating Dock) */
+/* Dedicated Mobile Bottom Dock Lens */
 .liquid-glass-dock {
   position: fixed !important;
-  isolation: isolate;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.96) 100%) !important;
-  backdrop-filter: blur(24px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 255, 255, 0.96) 100%) !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.95) !important;
   box-shadow: 
-    inset 0 1.5px 2px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.5),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    var(--lq-shadow-elevated) !important;
+    inset 2px 2px 4px rgba(220, 220, 235, 0.6),
+    inset -2px -2px 4px #ffffff,
+    0 12px 34px -6px rgba(70, 60, 90, 0.12),
+    0 3px 8px 0 rgba(0, 0, 0, 0.03) !important;
   transform: translateZ(0);
 }
 
@@ -265,7 +233,7 @@ html, body {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(169, 186, 209, 0.45) 45%, rgba(218, 167, 210, 0.50) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(169, 186, 209, 0.4) 45%, rgba(218, 167, 210, 0.45) 100%);
   -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) content-box;
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) exclude, linear-gradient(#000 0 0) content-box;
@@ -273,18 +241,16 @@ html, body {
   z-index: 10;
 }
 
-/* Island Floating Modals & Sheets (macOS Tahoe 26 Window Sheet) */
+/* Island Floating Modals */
 .liquid-glass-island {
-  isolation: isolate;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.84) 100%);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 0 1px 1.5px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.5),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    var(--lq-shadow-elevated);
+    inset 2px 2px 4px rgba(220, 220, 225, 0.5),
+    inset -2px -2px 4px #ffffff,
+    0 18px 40px -8px rgba(70, 60, 90, 0.07);
   transform: translateZ(0);
 }
 
@@ -295,71 +261,64 @@ html, body {
   border-radius: inherit;
   pointer-events: none;
   padding: 1px;
-  background: linear-gradient(160deg, #ffffff 0%, rgba(169, 186, 209, 0.35) 50%, #ffffff 100%);
+  background: linear-gradient(160deg, #ffffff 0%, rgba(169, 186, 209, 0.3) 50%, #ffffff 100%);
   -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0) content-box;
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) exclude, linear-gradient(#000 0 0) content-box;
   z-index: 10;
 }
 
-/* In-Page Content Glass Cards (macOS Tahoe 26 Content Panels) */
+/* In-Page Content Glass Cards (Authentic Frosted Glass, 120Hz Pure Speed) */
 .liquid-glass-card {
   position: relative;
-  isolation: isolate;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.72) 100%);
   background-color: rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 0 1px 1px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px color-mix(in srgb, var(--lq-rim-hi, #ffffff) 50%, transparent),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.35)),
-    var(--lq-shadow-subtle);
+    inset 1.5px 1.5px 3.5px rgba(220, 220, 225, 0.45),
+    inset -1.5px -1.5px 3.5px #ffffff,
+    0 8px 24px -4px rgba(70, 60, 90, 0.05),
+    0 1px 3px 0 rgba(0, 0, 0, 0.02);
   transform: translateZ(0);
   backface-visibility: hidden;
-  transition: transform 0.16s ease,
-              box-shadow 0.16s ease,
-              background-color 0.16s ease;
+  transition: transform 0.15s ease,
+              box-shadow 0.15s ease,
+              background-color 0.15s ease;
 }
 
 .liquid-glass-card:hover {
-  background-color: rgba(255, 255, 255, 0.92);
+  background-color: rgba(255, 255, 255, 0.90);
   box-shadow: 
-    inset 0 1.5px 1.5px #ffffff,
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.6),
-    inset -1px -1px 1px rgba(255, 255, 255, 0.45),
-    0 14px 34px -4px rgba(70, 60, 90, 0.08);
+    inset 1.5px 1.5px 4px rgba(210, 210, 220, 0.55),
+    inset -1.5px -1.5px 4px #ffffff,
+    0 12px 30px -4px rgba(70, 60, 90, 0.08);
 }
 
-/* Liquid Glass Interactive Pill Controls (Tahoe 26 Segmented / Toolbar Capsule) */
+/* Liquid Glass Interactive Pill Controls */
 .liquid-glass-pill {
-  isolation: isolate;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.66) 100%);
-  background-color: rgba(255, 255, 255, 0.80);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow: 
-    inset 0 1px 1px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.5),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    0 2px 8px -1px rgba(70, 60, 90, 0.05);
-  border-radius: var(--lq-radius-pill, 9999px);
+    inset 1px 1px 2.5px rgba(220, 220, 225, 0.45),
+    inset -1px -1px 2.5px #ffffff,
+    0 2px 8px -1px rgba(70, 60, 90, 0.04);
+  border-radius: 9999px;
   transform: translateZ(0);
   backface-visibility: hidden;
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-              background-color 0.14s ease,
-              box-shadow 0.14s ease;
+  transition: transform 0.12s ease,
+              background-color 0.12s ease,
+              box-shadow 0.12s ease;
 }
 
 .liquid-glass-pill:hover {
   background-color: rgba(255, 255, 255, 0.95);
   box-shadow: 
-    inset 0 1.5px 1.5px #ffffff,
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.65),
-    inset -1px -1px 1px rgba(255, 255, 255, 0.5),
-    0 4px 14px -2px rgba(70, 60, 90, 0.07);
+    inset 1px 1px 3px rgba(210, 210, 220, 0.55),
+    inset -1px -1px 3px #ffffff,
+    0 4px 12px -1px rgba(70, 60, 90, 0.06);
 }
 
 /* Liquid Glass Input / Text Box */
@@ -399,21 +358,19 @@ html, body {
 .liquid-glass-button,
 .liquid-glass-button-dark {
   position: relative;
-  isolation: isolate;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 245, 252, 0.80) 100%) !important;
-  backdrop-filter: blur(18px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(190%) !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(246, 242, 250, 0.82) 100%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   color: #1a1718 !important;
   border: 1px solid rgba(255, 255, 255, 0.95) !important;
   box-shadow: 
-    inset 0 1px 1.5px var(--lq-rim-hi, rgba(255, 255, 255, 0.98)),
-    inset 1px 0 1px 0.5px rgba(255, 255, 255, 0.55),
-    inset -1px -1px 1px var(--lq-rim-lo, rgba(255, 255, 255, 0.42)),
-    0 8px 22px -4px rgba(40, 70, 110, 0.10),
+    inset 1.5px 1.5px 3.5px rgba(220, 220, 235, 0.65),
+    inset -1.5px -1.5px 3.5px #ffffff,
+    0 8px 22px -4px rgba(70, 60, 90, 0.08),
     0 2px 4px 0 rgba(0, 0, 0, 0.02) !important;
   transform: translateZ(0);
   backface-visibility: hidden;
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+  transition: transform 0.15s ease,
               background 0.15s ease,
               box-shadow 0.15s ease,
               border-color 0.15s ease;
@@ -557,37 +514,6 @@ a.liquid-glass-pill:active {
     0 2px 6px -1px rgba(0, 0, 0, 0.02);
 }
 
-/* ========================================================
-   TAHOE 26 TRUE REFRACTION (Chromium only, opt-in via .lq-refract)
-   Glass is reserved for the floating layer — dock, top bar,
-   sidebar, and sheets — never body content (HIG legibility rule).
-   ======================================================== */
-.lq-refract .liquid-glass-dock,
-.lq-refract .liquid-glass-topbar {
-  backdrop-filter: url(#lq-tahoe-refract) blur(10px) saturate(190%) !important;
-}
-
-.lq-refract .liquid-glass-lens,
-.lq-refract .liquid-glass-island {
-  backdrop-filter: url(#lq-tahoe-refract) blur(10px) saturate(190%);
-}
-
-/* Reduce Transparency: go opaque, keep the rim light */
-@media (prefers-reduced-transparency: reduce) {
-  .liquid-glass-lens,
-  .liquid-glass-topbar,
-  .liquid-glass-dock,
-  .liquid-glass-island,
-  .liquid-glass-card,
-  .liquid-glass-pill,
-  .liquid-glass-button,
-  .liquid-glass-button-dark {
-    background: #fbfbfd !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-}
-
 /* Feather Rainbow Gradient Badge */
 .gradient-badge {
   background: #ffffff;
@@ -713,129 +639,3 @@ a.liquid-glass-pill:active {
   }
 }
 
-
-
-/* ========================================================
-   TAHOE LIQUID GLASS — UNIFIED TOKEN LAYER (extends the
-   existing liquid-glass-* classes above; no second system)
-   Levels: base (page) / raised (cards, controls) / floating
-   (nav, sheets, modals). Blur is reserved for the floating
-   layer and hero CTA so at most a few blurred layers stack.
-   ======================================================== */
-:root {
-  --glass-blur: 24px;
-  --glass-saturate: 1.6;
-  --glass-fill-base: rgba(255, 255, 255, 0.12);
-  --glass-fill-raised: rgba(255, 255, 255, 0.20);
-  --glass-fill-floating: rgba(255, 255, 255, 0.22);
-  --glass-fill-solid: #f4f1ea;
-  --glass-edge-hi: rgba(255, 255, 255, 0.95);
-  --glass-edge-lo: rgba(120, 130, 155, 0.35);
-  --glass-edge-hover: rgba(255, 255, 255, 1);
-  --glass-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 62%);
-  --glass-shadow-contact: 0 1px 2px rgba(30, 41, 59, 0.07), 0 4px 10px rgba(30, 41, 59, 0.05);
-  --glass-shadow-ambient: 0 18px 44px rgba(30, 41, 59, 0.10), 0 6px 18px rgba(30, 41, 59, 0.05);
-  --glass-radius-card: 24px;
-  --glass-radius-sheet: 28px;
-  --glass-radius-pill: 9999px;
-  --glass-focus-ring: #6d28d9;
-  --glass-text: #1a1718;
-}
-/* Dark token values (activated only if a data-theme="dark" attribute is ever set;
-   the app ships no dark toggle, so nothing is forced into dark mode here). */
-:root[data-theme="dark"] {
-  --glass-fill-base: rgba(28, 30, 38, 0.10);
-  --glass-fill-raised: rgba(28, 30, 38, 0.12);
-  --glass-fill-floating: rgba(28, 30, 38, 0.14);
-  --glass-fill-solid: #23252d;
-  --glass-edge-hi: rgba(255, 255, 255, 0.38);
-  --glass-edge-lo: rgba(0, 0, 0, 0.45);
-  --glass-specular: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0) 62%);
-  --glass-shadow-contact: 0 1px 2px rgba(0, 0, 0, 0.28), 0 4px 10px rgba(0, 0, 0, 0.22);
-  --glass-shadow-ambient: 0 18px 44px rgba(0, 0, 0, 0.38), 0 6px 18px rgba(0, 0, 0, 0.25);
-  --glass-text: #f5f2ec;
-}
-
-/* Shared surface recipe (raised + floating) */
-.liquid-glass-card, .liquid-glass-card-interactive, .liquid-glass-sheet,
-.liquid-glass-lens, .liquid-glass-topbar, .liquid-glass-dock, .liquid-glass-island,
-.liquid-glass-pill, .liquid-glass-button, .liquid-glass-button-dark, .liquid-glass-orb,
-.liquid-glass-banner {
-  color: var(--glass-text);
-  border: 1px solid var(--glass-edge-lo);
-  border-top-color: var(--glass-edge-hi);
-  border-left-color: var(--glass-edge-hi);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), var(--glass-shadow-contact), var(--glass-shadow-ambient);
-  background-image: var(--glass-specular);
-  transition: transform 0.16s ease, opacity 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
-}
-/* Raised: no backdrop blur (performance; many cards may be on screen) */
-.liquid-glass-card, .liquid-glass-card-interactive {
-  background-color: var(--glass-fill-raised);
-  border-radius: var(--glass-radius-card);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-}
-/* Floating: the only blurred layer (nav, top bar, dock, sheets, banners) */
-.liquid-glass-sheet, .liquid-glass-lens, .liquid-glass-topbar, .liquid-glass-dock, .liquid-glass-island, .liquid-glass-banner {
-  background-color: var(--glass-fill-floating);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-}
-.liquid-glass-sheet { border-radius: var(--glass-radius-sheet); }
-.liquid-glass-banner { border-radius: var(--glass-radius-pill); background-color: rgba(254, 243, 199, 0.35); }
-/* Controls */
-.liquid-glass-button, .liquid-glass-button-dark, .liquid-glass-pill, .liquid-glass-orb {
-  border-radius: var(--glass-radius-pill);
-  background-color: var(--glass-fill-raised);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-  min-height: 44px;
-}
-.liquid-glass-orb { backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)); }
-/* Hover brightens the edge; press scales gently. Only transform/opacity animate. */
-.liquid-glass-card-interactive:hover, .liquid-glass-button:hover, .liquid-glass-button-dark:hover,
-.liquid-glass-pill:hover, .liquid-glass-lens:hover, .liquid-glass-topbar:hover, .liquid-glass-dock:hover, .liquid-glass-sheet:hover {
-  border-color: var(--glass-edge-hover);
-}
-.liquid-glass-button:active, .liquid-glass-button-dark:active, .liquid-glass-pill:active,
-.liquid-glass-card-interactive:active, .liquid-glass-orb:active { transform: scale(0.98); }
-/* Visible keyboard focus on every surface, including touch devices with keyboards */
-:focus-visible { outline: 2px solid var(--glass-focus-ring) !important; outline-offset: 2px; }
-/* Refraction only on hero elements: nav, sheet, main CTA */
-.lq-refract .liquid-glass-lens, .lq-refract .liquid-glass-topbar, .lq-refract .liquid-glass-dock,
-.lq-refract .liquid-glass-sheet, .lq-refract .liquid-glass-orb {
-  backdrop-filter: url(#lq-tahoe-refract) blur(10px) saturate(1.7);
-}
-/* Inputs & toggles */
-.liquid-glass-input, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]), select, textarea {
-  border-radius: 18px; min-height: 44px; color: var(--glass-text);
-}
-.liquid-glass-input { background-color: var(--glass-fill-raised); background-image: var(--glass-specular); border: 1px solid var(--glass-edge-lo); border-top-color: var(--glass-edge-hi); }
-input[type="checkbox"] {
-  appearance: none; -webkit-appearance: none; flex: none; cursor: pointer;
-  width: 44px; height: 26px; border-radius: var(--glass-radius-pill);
-  background-color: var(--glass-fill-raised); background-image: var(--glass-specular);
-  border: 1px solid var(--glass-edge-lo); border-top-color: var(--glass-edge-hi);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), var(--glass-shadow-contact);
-  position: relative; transition: transform 0.16s ease, opacity 0.16s ease, background-color 0.16s ease;
-}
-input[type="checkbox"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 3px rgba(30,41,59,0.25); transition: transform 0.16s ease; }
-input[type="checkbox"]:checked { background-color: #292524; }
-input[type="checkbox"]:checked::after { transform: translateX(18px); }
-/* Fallbacks */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .liquid-glass-sheet, .liquid-glass-lens, .liquid-glass-topbar, .liquid-glass-dock, .liquid-glass-island, .liquid-glass-banner, .liquid-glass-orb { background-color: var(--glass-fill-solid); }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .liquid-glass-card, .liquid-glass-card-interactive, .liquid-glass-sheet, .liquid-glass-lens, .liquid-glass-topbar,
-  .liquid-glass-dock, .liquid-glass-island, .liquid-glass-pill, .liquid-glass-button, .liquid-glass-button-dark,
-  .liquid-glass-orb, .liquid-glass-banner, .liquid-glass-input, input[type="checkbox"] {
-    background-color: var(--glass-fill-solid) !important; background-image: none !important;
-    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .liquid-glass-card, .liquid-glass-card-interactive, .liquid-glass-sheet, .liquid-glass-lens, .liquid-glass-topbar,
-  .liquid-glass-dock, .liquid-glass-island, .liquid-glass-pill, .liquid-glass-button, .liquid-glass-button-dark,
-  .liquid-glass-orb, .liquid-glass-banner, input[type="checkbox"], input[type="checkbox"]::after { transition: none !important; }
-  .liquid-glass-button:active, .liquid-glass-pill:active, .liquid-glass-card-interactive:active, .liquid-glass-orb:active { transform: none; }
-}
