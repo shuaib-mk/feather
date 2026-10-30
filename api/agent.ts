@@ -575,7 +575,7 @@ var landmarks_default = [
 
 // ai/backend/landmarks.ts
 var LANDMARKS = landmarks_default;
-var MILESTONES_DATA = LANDMARKS.map((l) => ({ name: l.names.en, aliases: Array.from(/* @__PURE__ */ new Set([...Object.values(l.names), l.names.en.toLowerCase(), ...l.id === "international-womens-day" ? ["Women's Day", "womens day", "women day"] : []])), kind: l.pack, dates: l.dates, pack: l.pack, source: l.source }));
+var MILESTONES_DATA = LANDMARKS.map((l) => ({ name: l.names.en, aliases: Array.from(/* @__PURE__ */ new Set([...Object.values(l.names), l.names.en.toLowerCase(), ...l.id === "international-womens-day" ? ["Women's Day", "womens day", "women day"] : [], ...l.id === "new-years-day" ? ["New Year's", "new year", "New Year"] : []])), kind: l.pack, dates: l.dates, pack: l.pack, source: l.source }));
 
 // ai/backend/dateArithmetic.ts
 var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
