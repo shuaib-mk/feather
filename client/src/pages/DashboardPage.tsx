@@ -164,10 +164,10 @@ export function DashboardPage() {
                 Cycle Length
               </span>
               <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
-                {stats.medianCycleLength || stats.avgCycleLength}d
+                {stats.isDefaultCycle ? "Not enough data yet" : `${stats.medianCycleLength || stats.avgCycleLength}d`}
               </div>
               <span className="font-sans text-[11px] text-stone-500 block truncate">
-                {stats.isDefaultCycle ? "Population (28d)" : "Observed median"}
+                {stats.isDefaultCycle ? "Log a completed cycle to learn this" : "Observed median"}
               </span>
             </div>
 
@@ -176,10 +176,10 @@ export function DashboardPage() {
                 Flow Duration
               </span>
               <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
-                {stats.avgPeriodLength}d
+                {stats.isDefaultPeriod ? "Not enough data yet" : `${stats.avgPeriodLength}d`}
               </div>
               <span className="font-sans text-[11px] text-stone-500 block truncate">
-                {stats.isDefaultPeriod ? "Default (5d)" : "Observed average"}
+                {stats.isDefaultPeriod ? "Log a completed period to learn this" : "Observed average"}
               </span>
             </div>
 

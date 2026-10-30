@@ -76,7 +76,7 @@ export function InsightsPage() {
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <p className="leading-relaxed">
-              <strong className="font-semibold">Calibrating Mode:</strong> No confirmed cycles recorded yet. Projections below display population baselines (28-day cycle). Log your first period or load reviewer demo data in the Vault to activate personalized predictions.
+              <strong className="font-semibold">Calibrating Mode:</strong> No confirmed cycles recorded yet. Not enough data yet to learn your cycle. Log your first periods to activate personalized estimates.
             </p>
           </div>
           <Link

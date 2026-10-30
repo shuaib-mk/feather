@@ -98,9 +98,9 @@ export function VaultPage() {
           <span className="font-sans text-xs font-medium text-stone-500 block">
             Average Cycle
           </span>
-          <div className="font-serif text-2xl font-semibold text-stone-900">{stats.avgCycleLength} days</div>
+          <div className="font-serif text-2xl font-semibold text-stone-900">{stats.isDefaultCycle ? "Not enough data yet" : `${stats.avgCycleLength} days`}</div>
           <span className="text-[11px] text-stone-500 font-sans">
-            {stats.isDefaultCycle ? "Default estimate" : "From history"}
+            {stats.isDefaultCycle ? "Log a completed cycle to learn this" : "From history"}
           </span>
         </div>
 

@@ -152,5 +152,21 @@ try {
   assert(evaluateEventOverlap("2026-05-01", oneCycle, "2026-04-10").status === "unknown", "1.3 one completed cycle is still unknown");
 } catch (e: any) { assert(false, "1.3", e.message); }
 
+
+// ---- 1.4 defaults are not data ----
+try {
+  reset();
+  const empty = computeCycleStats([], []);
+  assert(empty.isDefault === true && empty.isDefaultCycle === true && empty.isDefaultPeriod === true, "1.4 empty stats are flagged isDefault");
+  const one = computeCycleStats([{ id: 1, startDate: "2026-01-01", endDate: "2026-01-05" }], []);
+  assert(one.isDefaultCycle === true, "1.4 one period (no completed cycle) cycle length is still default");
+  const learned = computeCycleStats([
+    { id: 1, startDate: "2026-01-01", endDate: "2026-01-05" },
+    { id: 2, startDate: "2026-01-29", endDate: "2026-02-02" },
+    { id: 3, startDate: "2026-02-26", endDate: "2026-03-02" },
+  ], []);
+  assert(learned.isDefault === false && learned.avgCycleLength === 28, "1.4 learned 28 from real cycles is not flagged default", `avg=${learned.avgCycleLength}`);
+} catch (e: any) { assert(false, "1.4", e.message); }
+
 console.log(`\nbatch1: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
