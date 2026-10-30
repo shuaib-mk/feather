@@ -172,14 +172,14 @@ export function useAudioRecorder() {
 
     cleanupAudioPipeline();
 
-    // Reject audio over 10 minutes (Meta ASR limit in the owner-provided docs)
+    // Reject audio over 60 seconds (client cap; server enforces the same limit)
     if (pcmDurationSeconds(chunks, sampleRate) > MAX_AUDIO_SECONDS) {
       setState((prev) => ({
         ...prev,
         isRecording: false,
         audioBlob: null,
         audioUrl: null,
-        permissionError: "That recording is over 10 minutes. Please record a shorter clip, or type your entry instead.",
+        permissionError: "That recording is over 60 seconds. Please record a shorter clip, or type your entry instead.",
       }));
       return;
     }

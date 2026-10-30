@@ -26,7 +26,7 @@ function getConfig() {
 
 // ai/backend/transcribe.ts
 var GENERIC_TRANSCRIBE_ERROR = "Couldn't hear that \u2014 try again or type it";
-var MAX_AUDIO_SECONDS = 600;
+var MAX_AUDIO_SECONDS = 60;
 var SUPPORTED_VOICE_LANGUAGES = {
   en: "English",
   hi: "Hindi",
@@ -67,38 +67,25 @@ async function transcribeAudio(audioBuffer, mimeType = "audio/wav", languageHint
     return { text: "", error: GENERIC_TRANSCRIBE_ERROR, statusCode: 413 };
   }
   const config = getConfig();
-  const apiKey = config.metaApiKey || config.basetenApiKey;
+  const apiKey = config.metaApiKey;
   if (!apiKey) {
     return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
   }
   try {
-    const isMetaAi = config.metaBaseUrl.includes("api.meta.ai");
     let response;
-    if (isMetaAi) {
-      const requestJson = buildTranscribeRequest(config.museVoiceModel, languageHint);
-      const formData = new FormData();
-      formData.append(
-        "request",
-        new Blob([JSON.stringify(requestJson)], { type: "application/json" }),
-        "request.json"
-      );
-      formData.append("audio", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
-      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/asr/transcribe`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData
-      });
-    } else {
-      const formData = new FormData();
-      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("wav") ? "wav" : "webm";
-      formData.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), `recording.${extension}`);
-      formData.append("model", config.museVoiceModel);
-      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/audio/transcriptions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData
-      });
-    }
+    const requestJson = buildTranscribeRequest(config.museVoiceModel, languageHint);
+    const formData = new FormData();
+    formData.append(
+      "request",
+      new Blob([JSON.stringify(requestJson)], { type: "application/json" }),
+      "request.json"
+    );
+    formData.append("audio", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
+    response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/asr/transcribe`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData
+    });
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
       console.error(`[transcribe] ASR upstream ${response.status}: ${errText}`);
@@ -380,8 +367,8 @@ async function handler(req, res) {
   }
   const protection = checkStatelessProtection(req, {
     endpointName: "transcribe",
-    maxBodyBytes: 40 * 1024 * 1024
-    // 10 min of 24 kHz mono WAV (~29 MB) plus base64 overhead,
+    maxBodyBytes: 6 * 1024 * 1024
+    // 60s of 24 kHz mono WAV is ~3.9 MB as base64 JSON; note Vercel's platform body limit is ~4.5 MB, so longer clips cannot be uploaded on Vercel regardless of this setting,
   });
   if (!protection.allowed) {
     const status = protection.statusCode || 429;
@@ -414,7 +401,7 @@ async function handler(req, res) {
         };
       }
       const buffer = Buffer.from(audioBase64, "base64");
-      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
+      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 60);
       if (!audioCheck.valid) {
         return {
           statusCode: 400,
@@ -457,7 +444,7 @@ async function handler(req, res) {
       return sendResponse(res, 400, { error: "Missing audioBase64 data" });
     }
     const buffer = Buffer.from(audioBase64, "base64");
-    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
+    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 60);
     if (!audioCheck.valid) {
       return sendResponse(res, 400, { error: audioCheck.error, code: "AUDIO_TOO_LONG" });
     }

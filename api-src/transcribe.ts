@@ -84,7 +84,7 @@ export async function handler(req: any, res?: any) {
   // Stateless Protection (Rate limits, Origin, Max payload 4MB)
   const protection = checkStatelessProtection(req, {
     endpointName: "transcribe",
-    maxBodyBytes: 40 * 1024 * 1024, // 10 min of 24 kHz mono WAV (~29 MB) plus base64 overhead,
+    maxBodyBytes: 6 * 1024 * 1024, // 60s of 24 kHz mono WAV is ~3.9 MB as base64 JSON; note Vercel's platform body limit is ~4.5 MB, so longer clips cannot be uploaded on Vercel regardless of this setting,
   });
 
   if (!protection.allowed) {
@@ -120,7 +120,7 @@ export async function handler(req: any, res?: any) {
         };
       }
       const buffer = Buffer.from(audioBase64, "base64");
-      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
+      const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 60);
       if (!audioCheck.valid) {
         return {
           statusCode: 400,
@@ -166,7 +166,7 @@ export async function handler(req: any, res?: any) {
       return sendResponse(res, 400, { error: "Missing audioBase64 data" });
     }
     const buffer = Buffer.from(audioBase64, "base64");
-    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 600);
+    const audioCheck = validateAudioBuffer(buffer, mimeType || "audio/wav", 60);
     if (!audioCheck.valid) {
       return sendResponse(res, 400, { error: audioCheck.error, code: "AUDIO_TOO_LONG" });
     }

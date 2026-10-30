@@ -9,13 +9,16 @@
 //              audioEncoding:"WAV", languageBias:[...], keywords:[...]}
 //              sent as application/json, and "audio" = the WAV file.
 //   Response JSON: read the "transcript" field.
-// Audio must be mono 16-bit PCM WAV at 16 kHz or 24 kHz; max 10 minutes.
+// Audio must be mono 16-bit PCM WAV at 16 kHz or 24 kHz; max 60 seconds.
+// Why 60s: Vercel serverless functions reject request bodies over ~4.5 MB before
+// our handler runs. 60s of 24 kHz mono WAV is ~2.9 MB raw (~3.9 MB base64 JSON),
+// which fits; longer clips would be rejected by the platform, not by Meta.
 // The speech model id comes only from MUSE_VOICE_MODEL (never the Spark model).
 
 import { getConfig } from "./config";
 
 export const GENERIC_TRANSCRIBE_ERROR = "Couldn't hear that — try again or type it";
-export const MAX_AUDIO_SECONDS = 600;
+export const MAX_AUDIO_SECONDS = 60;
 
 // Indian languages supported by Meta voice per owner-provided docs, plus English.
 // Malayalam is NOT in Meta's supported list; Malayalam is typed-text/offline only.
@@ -90,42 +93,29 @@ export async function transcribeAudio(
   }
 
   const config = getConfig();
-  const apiKey = config.metaApiKey || config.basetenApiKey;
+  // Meta only: transcription never falls back to Baseten or any other provider.
+  const apiKey = config.metaApiKey;
   if (!apiKey) {
     return { text: "", error: GENERIC_TRANSCRIBE_ERROR };
   }
 
   try {
-    const isMetaAi = config.metaBaseUrl.includes("api.meta.ai");
     let response: Response;
 
-    if (isMetaAi) {
-      const requestJson = buildTranscribeRequest(config.museVoiceModel, languageHint);
-      const formData = new FormData();
-      formData.append(
-        "request",
-        new Blob([JSON.stringify(requestJson)], { type: "application/json" }),
-        "request.json",
-      );
-      formData.append("audio", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
+    const requestJson = buildTranscribeRequest(config.museVoiceModel, languageHint);
+    const formData = new FormData();
+    formData.append(
+      "request",
+      new Blob([JSON.stringify(requestJson)], { type: "application/json" }),
+      "request.json",
+    );
+    formData.append("audio", new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" }), "audio.wav");
 
-      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/asr/transcribe`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
-      });
-    } else {
-      // Non-Meta (Baseten OpenAI-compatible) fallback path.
-      const formData = new FormData();
-      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("wav") ? "wav" : "webm";
-      formData.append("file", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), `recording.${extension}`);
-      formData.append("model", config.museVoiceModel);
-      response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/audio/transcriptions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
-      });
-    }
+    response = await fetch(`${config.metaBaseUrl.replace(/\/$/, "")}/asr/transcribe`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: formData,
+    });
 
     if (!response.ok) {
       // Detail stays server-side only; the client gets a generic message.

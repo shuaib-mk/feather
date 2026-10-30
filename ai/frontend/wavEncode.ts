@@ -4,7 +4,10 @@
 // module can be unit-tested in Node.
 
 export const TARGET_SAMPLE_RATE = 24000;
-export const MAX_AUDIO_SECONDS = 600; // reject audio over 10 minutes
+export const MAX_AUDIO_SECONDS = 60; // reject audio over 60 seconds
+// Why 60s: Vercel serverless functions reject request bodies over ~4.5 MB before
+// our handler runs. 60s of 24 kHz 16-bit mono WAV is ~2.9 MB raw (~3.9 MB as the
+// base64 JSON we upload), which fits; longer clips would fail at the platform.
 
 export function mergePcmChunks(chunks: Float32Array[]): Float32Array {
   const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);

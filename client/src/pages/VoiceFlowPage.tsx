@@ -312,7 +312,7 @@ export function VoiceFlowPage() {
             </div>
           </div>
         </div>
-        <p className="text-[11px] text-stone-500 font-sans">Voice transcription supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu. Malayalam voice is not supported by Meta — Malayalam works when typed (offline parser).</p>
+        <p className="text-[11px] text-stone-500 font-sans">Voice transcription supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu. Malayalam voice is not supported by Meta — Malayalam works when typed (offline parser). Recordings are capped at 60 seconds.</p>
 
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
         <div className="flex flex-col items-center justify-center space-y-3 py-2">

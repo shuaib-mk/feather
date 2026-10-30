@@ -73,13 +73,36 @@ async function main() {
     check(`upstream ${status} -> no upstream detail leaked`, !JSON.stringify(res).includes("UPSTREAM_DETAIL_SHOULD_NOT_LEAK"));
   }
 
-  // Over 10 minutes -> 413 without calling fetch
+  // Over 60 seconds -> 413 without calling fetch
   let fetchCalled = false;
   (globalThis as any).fetch = async () => { fetchCalled = true; return { ok: true, status: 200, json: async () => ({ transcript: "x" }), text: async () => "" }; };
   const longWav = makeWav(1);
-  longWav.writeUInt32LE(79, 28); // fake byteRate so parsed duration = 48000/79 = ~608s > 600s
+  longWav.writeUInt32LE(79, 28); // fake byteRate so parsed duration = 48000/79 = ~608s > 60s cap
   const longRes: any = await transcribeAudio(longWav, "audio/wav");
-  check("over 10 minutes -> 413 generic, no fetch", longRes.statusCode === 413 && longRes.error === GENERIC_TRANSCRIBE_ERROR && !fetchCalled, JSON.stringify(longRes));
+  check("over 60 seconds -> 413 generic, no fetch", longRes.statusCode === 413 && longRes.error === GENERIC_TRANSCRIBE_ERROR && !fetchCalled, JSON.stringify(longRes));
+
+  // 60-second cap constants on both client and server
+  const { MAX_AUDIO_SECONDS: serverCap } = await import("../backend/transcribe");
+  const { MAX_AUDIO_SECONDS: clientCap } = await import("../../ai/frontend/wavEncode");
+  check("MAX_AUDIO_SECONDS is 60 on server and client", serverCap === 60 && clientCap === 60, `${serverCap}/${clientCap}`);
+
+  // Baseten can never run for transcription: no Meta key -> no fetch at all,
+  // even with a Baseten key and USE_BASETEN=true set.
+  const basetenCalls: string[] = [];
+  (globalThis as any).fetch = async (url: string) => { basetenCalls.push(String(url)); return { ok: true, status: 200, json: async () => ({ transcript: "x" }), text: async () => "" }; };
+  delete process.env.META_API_KEY;
+  process.env.BASETEN_API_KEY = "baseten-test-key";
+  process.env.USE_BASETEN = "true";
+  const noMetaRes: any = await transcribeAudio(makeWav(1), "audio/wav");
+  check("no Meta key -> generic error, Baseten never called", noMetaRes.error === GENERIC_TRANSCRIBE_ERROR && basetenCalls.length === 0, JSON.stringify({ noMetaRes, basetenCalls }));
+  // Meta failure with a Baseten key present -> generic error, only the Meta ASR endpoint was called
+  process.env.META_API_KEY = "test-key-not-real";
+  const metaFailCalls: string[] = [];
+  (globalThis as any).fetch = async (url: string) => { metaFailCalls.push(String(url)); return { ok: false, status: 500, text: async () => "meta down", json: async () => ({}) }; };
+  const metaFailRes: any = await transcribeAudio(makeWav(1), "audio/wav");
+  check("Meta 500 -> generic error, Baseten never called", metaFailRes.error === GENERIC_TRANSCRIBE_ERROR && metaFailCalls.length === 1 && metaFailCalls[0] === "https://api.meta.ai/v1/asr/transcribe" && !metaFailCalls.some((u) => u.includes("baseten") || u.includes("audio/transcriptions")), JSON.stringify(metaFailCalls));
+  delete process.env.BASETEN_API_KEY;
+  delete process.env.USE_BASETEN;
 
   // Network failure -> generic 500, no throw
   (globalThis as any).fetch = async () => { throw new Error("network down"); };
