@@ -1,4 +1,4 @@
-// Date resolution & Global Milestone Recall test suite
+﻿// Date resolution & Global Milestone Recall test suite
 import { runLavenderAgent } from "../backend/agent";
 import { LANDMARKS } from "../backend/landmarks";
 const milestonesData = LANDMARKS.map((l:any)=>({name:l.names.en, aliases:Object.values(l.names) as string[], dates:l.dates}));
@@ -36,7 +36,7 @@ async function runTests() {
   }
 
   // 3. Test Landmark Recall with currentDate=2026-10-28: "Two days before New Year's" -> most recent past occurrence (2025-12-30)
-  const promptTwoDaysBeforeNY = "Two days before New Year's";
+  const promptTwoDaysBeforeNY = "Period started two days before New Year's";
   const resNY = await runLavenderAgent(promptTwoDaysBeforeNY, { currentDate: "2026-10-28" });
   if (resNY.entry && resNY.entry.date === "2025-12-30" && resNY.entry.landmarkName?.includes("New Year")) {
     console.log(`[PASS] Landmark Recall "Two days before New Year's" resolved to most recent past occurrence: ${resNY.entry.date} (landmark=${resNY.entry.landmarkName})`);
@@ -162,3 +162,4 @@ runTests().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+
