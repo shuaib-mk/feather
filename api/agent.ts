@@ -1775,20 +1775,19 @@ function parseLocally(text, today, context) {
   const planDateRe = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
   const eventMatches = [];
   let planDateInvalid = false;
+  const passedPlanCandidates = [];
   {
     let m;
     let prevEnd = 0;
-    const cleanTitle = (seg) => seg.replace(/[,";]+\s*$/g, "").replace(/^\s*(?:and|&)\s+/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s).trim();
+    const cleanTitle = (seg) => seg.replace(/[,";]+\s*$/g, "").replace(/^\s*(?:and|&)\s+/i, "").replace(/^\s*(?:i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s).trim();
     while ((m = planDateRe.exec(text)) !== null) {
       const rawDate = m[0];
       const explicitYear = /\b\d{4}\b/.test(rawDate) && !/^\d{4}-/.test(rawDate) ? parseInt(rawDate.match(/\b\d{4}\b/)[0], 10) : /^\d{4}-/.test(rawDate) ? parseInt(rawDate.slice(0, 4), 10) : null;
       let resolvedDate;
+      const dateNoYear = rawDate.replace(/,?\s+\b\d{4}\b/, "");
       if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) resolvedDate = isValidDateKey(rawDate) ? rawDate : null;
       else {
-        resolvedDate = parseMonthDay(rawDate, explicitYear ?? currentYear);
-        if (resolvedDate && explicitYear === null && resolvedDate < today) {
-          resolvedDate = parseMonthDay(rawDate, currentYear + 1);
-        }
+        resolvedDate = parseMonthDay(dateNoYear, explicitYear ?? currentYear);
       }
       const seg = text.slice(prevEnd, m.index);
       prevEnd = m.index + rawDate.length;
@@ -1796,6 +1795,11 @@ function parseLocally(text, today, context) {
       const title = cleanTitle(seg.split(/\band\b/i).pop() || seg) || "Event";
       if (!resolvedDate || !isValidDateKey(resolvedDate)) {
         planDateInvalid = true;
+        continue;
+      }
+      if (explicitYear === null && resolvedDate < today) {
+        const nextYear = parseMonthDay(dateNoYear, currentYear + 1);
+        if (nextYear) passedPlanCandidates.push({ name: title, thisYear: resolvedDate, nextYear });
         continue;
       }
       eventMatches.push({ name: title, date: resolvedDate });
@@ -1828,6 +1832,10 @@ function parseLocally(text, today, context) {
       const q = late ? "What would you like to log \u2014 for example, that your period started, ended, or a symptom for a date?" : "What would you like to log?";
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
+  }
+  const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0 ? `Did you mean ${passedPlanCandidates[0].thisYear} (already passed) or ${passedPlanCandidates[0].nextYear}?` : null;
+  if (planPassedQuestion && !hasLogContent) {
+    return { message: planPassedQuestion, entry: null, needsClarification: true, clarificationQuestion: planPassedQuestion, activityTrail, toolCalls, planOverlaps, ...offline };
   }
   if ((intent === "plan_event" || eventMatches.length > 0) && !hasLogContent) {
     const isBareLandmark = eventMatches.length === 0;
@@ -1891,7 +1899,7 @@ function parseLocally(text, today, context) {
   };
   toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
-  return { message, entry, needsClarification: isApproximate && !!landmarkName, clarificationQuestion: isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null, activityTrail, toolCalls, planOverlaps, plannedEvents: hasLogContent ? void 0 : eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+  return { message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
 
 // ai/backend/protection.ts
@@ -2176,10 +2184,11 @@ async function handler(req, res) {
         body: JSON.stringify(result)
       };
     } catch (err) {
+      console.error("[api] upstream error:", err?.message || err);
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: err.message || "Agent execution failed" })
+        body: JSON.stringify({ error: "Something went wrong \u2014 please try again" })
       };
     }
   }
@@ -2200,7 +2209,8 @@ async function handler(req, res) {
     const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
     return sendResponse(res, 200, result);
   } catch (err) {
-    return sendResponse(res, 500, { error: err.message || "Agent execution failed" });
+    console.error("[agent] upstream error:", err?.message || err);
+    return sendResponse(res, 500, { error: "Something went wrong \u2014 please try again" });
   }
 }
 var agent_default = handler;

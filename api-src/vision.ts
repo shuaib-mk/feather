@@ -129,10 +129,11 @@ export async function handler(req: any, res?: any) {
         body: JSON.stringify(result),
       };
     } catch (err: any) {
+      console.error("[api] upstream error:", err?.message || err);
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: err.message || "Vision extraction failed" }),
+        body: JSON.stringify({ error: "Something went wrong — please try again" }),
       };
     }
   }
@@ -151,7 +152,7 @@ export async function handler(req: any, res?: any) {
     const result = await extractDiaryDates(imageBase64, mimeType || "image/jpeg");
     return sendResponse(res, 200, result);
   } catch (err: any) {
-    return sendResponse(res, 500, { error: err.message || "Vision extraction failed" });
+    console.error("[vision] upstream error:", err?.message || err); return sendResponse(res, 500, { error: "Something went wrong — please try again" });
   }
 }
 

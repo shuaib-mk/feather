@@ -138,10 +138,11 @@ export async function handler(req: any, res?: any) {
         body: JSON.stringify(result),
       };
     } catch (err: any) {
+      console.error("[api] upstream error:", err?.message || err);
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: err.message || "Agent execution failed" }),
+        body: JSON.stringify({ error: "Something went wrong — please try again" }),
       };
     }
   }
@@ -165,7 +166,7 @@ export async function handler(req: any, res?: any) {
     const result = await runLavenderAgent(message, agentContext, conversationHistory || []);
     return sendResponse(res, 200, result);
   } catch (err: any) {
-    return sendResponse(res, 500, { error: err.message || "Agent execution failed" });
+    console.error("[agent] upstream error:", err?.message || err); return sendResponse(res, 500, { error: "Something went wrong — please try again" });
   }
 }
 

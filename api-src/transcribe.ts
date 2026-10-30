@@ -138,10 +138,11 @@ export async function handler(req: any, res?: any) {
         body: JSON.stringify(result),
       };
     } catch (err: any) {
+      console.error("[api] upstream error:", err?.message || err);
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: err.message || "Transcription failed" }),
+        body: JSON.stringify({ error: "Couldn't hear that — try again or type it" }),
       };
     }
   }
@@ -165,7 +166,7 @@ export async function handler(req: any, res?: any) {
     const result = await transcribeAudio(buffer, mimeType || "audio/wav", languageHint);
     return sendResponse(res, 200, result);
   } catch (err: any) {
-    return sendResponse(res, 500, { error: err.message || "Transcription failed" });
+    console.error("[transcribe] upstream error:", err?.message || err); return sendResponse(res, 500, { error: "Couldn't hear that — try again or type it" });
   }
 }
 
