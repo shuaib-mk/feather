@@ -1253,6 +1253,31 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       }
     }
   }
+  // Prompt 8 Group A: event/planning intent + landmark -> NEXT occurrence event,
+  // never a log slip, never the past-year question. Log intent keeps clarifying.
+  const EVENT_NOUN_RE = /\b(exam|party|trip|appointment|wedding|interview|birthday|dentist|flight|conference|presentation|holiday|vacation|marathon|race|dinner|event|meeting)\b/i;
+  if (!hasLogContent && eventMatches.length === 0 && earlyLandmark.found && earlyLandmark.resolvedDate && (intent === "plan_event" || EVENT_NOUN_RE.test(lower))) {
+    let evDate: string | null = earlyLandmark.resolvedDate;
+    if (evDate && evDate < today) {
+      const lmName = earlyLandmark.landmarkName || "Event";
+      const nextLm = resolveLandmarkExpression(`${lmName} next year`, today);
+      if (nextLm.found && nextLm.baseDate) {
+        const off = earlyLandmark.baseDate ? Math.round((Date.parse(earlyLandmark.resolvedDate) - Date.parse(earlyLandmark.baseDate)) / 86400000) : 0;
+        evDate = applyDayOffset(nextLm.baseDate, off);
+      } else { evDate = null; }
+    }
+    if (evDate && evDate >= today) {
+      let title = text.replace(/\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+(?:before|after)\b/gi, " ");
+      if (earlyLandmark.landmarkName) title = title.replace(new RegExp(earlyLandmark.landmarkName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), " ");
+      title = title.replace(/\b(on|is|starts?|at|coming up)\b/gi, " ").replace(/[^a-zA-Z' ]+/g, " ").replace(/\s+/g, " ").trim().replace(/^(my|the|a|an)\s+/i, "");
+      if (!title) title = "Event";
+      eventMatches.push({ name: title, date: evDate });
+      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+      activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
+      toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+      return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+    }
+  }
   // Intent first: no loggable content -> no log slip (bare landmark recall is exempt:
   // it is the app's landmark-recall shorthand for a period date).
   if (intent === "other" || (!hasLogContent && intent !== "plan_event")) {
