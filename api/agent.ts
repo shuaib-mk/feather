@@ -78,6 +78,94 @@ var MEDICAL_ADVICE_PATTERNS = [
   /\b(?:friend|mom|mother|sister|aunt|partner|coworker|someone|people|internet|tiktok|google|reddit)\s+(?:said|told\s+me|suggested|recommended|says|thinks)\s+(?:that\s+)?(?:i\s+should|to\s+take|to\s+use|taking|it'?s\s+(?:normal|safe|okay|bad|dangerous))\b/i,
   /\b(?:log|note|record|save|remember)\s+that\s+i\s+(?:should|need\s+to|ought\s+to|can)\s+(?:take|use|try|stop|start)\s+(?:this|that|a|an|the|my|some)?\s*(?:pill|pills|tablet|tablets|medicine|medication|drug|painkiller|antibiotic|dose|dosage)\b/i
 ];
+var REDIRECT_MESSAGES = {
+  fertility: "I can't help with that, but I can log how you feel or show your logged cycles.",
+  verdict: "I can't help with that, but I can show your logged cycles or log how you feel today.",
+  diet_exercise: "I can't help with that, but I can log how you feel or show your logged cycles.",
+  phase: "I can't help with that, but I can log how you feel or show your logged cycles."
+};
+var FERTILITY_PATTERNS = [
+  /\bwhen\s+am\s+i\s+ovulat/i,
+  /\bovulat(?:ion|ing|e)\s+(?:date|day|window|time|happen)/i,
+  /\bfertile\s+(?:window|days?|period)\b/i,
+  /\bmy\s+fertility\b/i,
+  /\bbest\s+days?\s+to\s+conceive\b/i,
+  /\bdays?\s+to\s+avoid\s+pregnancy\b/i,
+  /\bsafe\s+days?\b/i,
+  /\bcan\s+i\s+get\s+pregnant\s+on\s+day\s*\d+\b/i,
+  /\bis\s+it\s+safe\s+to\s+have\s+sex\b/i,
+  /\bovulation\b/i,
+  /\bfertile\b/i,
+  /\u0905\u0902\u0921\u094b\u0924\u094d\u0938\u0930\u094d\u0917/,
+  /\u0909\u092a\u091c\u093e\u090a\u20ac?\s*\u0926\u093f\u0928/
+];
+var VERDICT_PATTERNS = [
+  /\bis\s+\d+\s*days?\s+normal\b(?!\s+for\s+me\b)/i,
+  /\bis\s+(?:my\s+)?(?:cycle\s+length|period\s+length)\s+(?:healthy|normal|regular|okay|ok|fine)\b/i,
+  /\bhow\s+many\s+days\s+is\s+a\s+normal\s+period\b/i,
+  /\bwhat(?:'s|\s+is)\s+a?\s*normal\s+cycle\s+length\b/i,
+  /\u0938\u093e\u092e\u093e\u0928\u094d\u092f\s+\u091a\u0915\u094d\u0930/
+];
+var SYMPTOM_VERDICT_PATTERNS = [
+  /\bis\s+(?:this|my|the)?\s*(?:cramp|cramps|pain|bleeding|flow|discharge|symptom|blood)\b[^.?!]*\b(?:normal|abnormal|healthy|regular|okay|ok|fine|bad|dangerous|concerning)\b/i,
+  /\bis\s+this\s+(?:cramp|cramps|pain)\s+normal\b/i,
+  /\bshould\s+i\s+(?:be\s+)?(?:worried|worry)\b/i,
+  /\bmean\s+something\s+is\s+wrong\b/i
+];
+var DIET_EXERCISE_PATTERNS = [
+  /\bwhat\s+(?:to|should\s+i)\s+(?:eat|drink|avoid)\b[^.?!]*\bperiod\b/i,
+  /\bexercise\s+(?:during|on|while)\b[^.?!]*\bperiod\b/i,
+  /\bcan\s+i\s+exercise\b[^.?!]*\bperiod\b/i,
+  /\bhome\s+remedy\s+for\s+(?:cramps?|period\s+pain|pain)\b/i,
+  /\bdiet\s+for\s+(?:pcos|pcod|period|cramps?)\b/i,
+  /\bfoods?\s+to\s+(?:eat|avoid)\b[^.?!]*\bperiod\b/i,
+  /\u092a\u0940\u0930\u093f\u092f\u0921\s+\u092e\u0947\u0902\s+\u0915\u094d\u092f\u093e\s+\u0916\u093e\u0928\u093e/
+];
+var PHASE_PATTERNS = [
+  /\bwhat\s+does\s+(?:my\s+)?cycle\s+phase\s+mean\b/i,
+  /\bwhat\s+phase\s+am\s+i\s+in\b/i,
+  /\b(?:luteal|follicular)\b/i,
+  /\bcycle\s+phase\s+mean/i,
+  /\u091a\u0915\u094d\u0930\s+\u091a\u0930\u0923/
+];
+var CATEGORY_PATTERNS = [
+  ["fertility", FERTILITY_PATTERNS],
+  ["verdict", VERDICT_PATTERNS],
+  ["diet_exercise", DIET_EXERCISE_PATTERNS],
+  ["phase", PHASE_PATTERNS]
+];
+function classifyGuardrailCategory(input) {
+  const t = input.trim();
+  if (!t) return null;
+  if (SYMPTOM_VERDICT_PATTERNS.some((p) => p.test(t))) return "medical";
+  for (const [cat, pats] of CATEGORY_PATTERNS) {
+    if (pats.some((p) => p.test(t))) return cat;
+  }
+  return checkMedicalAdviceGuardrail(t).isRefusal ? "medical" : null;
+}
+function getGuardrailResponseMessage(input) {
+  const cat = classifyGuardrailCategory(input);
+  if (!cat || cat === "medical") return MEDICAL_REFUSAL_MESSAGE;
+  return REDIRECT_MESSAGES[cat];
+}
+var BANNED_OUTPUT_PATTERNS = [
+  /\bovulat\w*\b/i,
+  /\bfertile\b/i,
+  /\bis\s+normal\b/i,
+  /\bhealthy\s+range\b/i,
+  /\byou\s+are\s+ovulating\b/i,
+  /\bguaranteed\b/i,
+  /\bclear\s+window\b/i,
+  /\bnormal\b/i,
+  /\babnormal\b/i,
+  /\bhealthy\b/i,
+  /\bunhealthy\b/i,
+  /\bsafe\b/i
+];
+function checkModelOutputGuard(text) {
+  const blocked = BANNED_OUTPUT_PATTERNS.some((p) => p.test(text || ""));
+  return { blocked, message: blocked ? REDIRECT_MESSAGES.verdict : text };
+}
 var SEVERE_SYMPTOM_PATTERNS = [
   // Fainting / passed out / syncope
   /\b(?:faint(?:ed|ing|s)?|passed\s+out|passing\s+out|blacked\s+out|blacking\s+out|lost\s+consciousness|unconscious|syncope)\b/i,
@@ -89,6 +177,11 @@ var SEVERE_SYMPTOM_PATTERNS = [
   /\b(?:severe\s+(?:pain|abdominal\s+pain|pelvic\s+pain|stomach\s+pain|cramp|cramps)|unbearable\s+(?:pain|cramp|cramps)|excruciating\s+(?:pain|cramp|cramps)|worst\s+pain\s+of\s+my\s+life)\b/i,
   // High fever with pain, chills, or discharge
   /\b(?:high\s+fever|fever\s+(?:with|and)\s+(?:[\w\s]{0,20}?\s+)?(?:pain|cramps|chills|discharge|bleeding|vomiting|dizziness)|(?:pain|cramps|chills|discharge|bleeding)\s+(?:with|and)\s+(?:a\s+)?(?:high\s+)?fever)\b/i,
+  // v2: soaking a pad/tampon every hour or two; fainting with bleeding; severe pain with fever
+  /\bsoak(?:ing|ed|s)?\s+(?:through\s+)?(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)\s+(?:every|each)\s+(?:hour|1\s*hour|two\s+hours|2\s*hours)\b/i,
+  /\b(?:faint\w*|pass(?:ed|ing)?\s+out|black\w*\s+out)\b[^.?!]*\b(?:bleed\w*|blood)\b/i,
+  /\bsevere\s+(?:pain|cramps?)\b[^.?!]*\bfever\b/i,
+  /\bfever\b[^.?!]*\bsevere\s+(?:pain|cramps?)\b/i,
   // Suicidal thoughts / self-harm
   /\b(?:suicid(?:al|e)|thoughts?\s+of\s+(?:self[-\s]?harm|hurting\s+myself|ending\s+my\s+life|dying)|want(?:ing)?\s+to\s+(?:die|hurt\s+myself|end\s+it\s+all)|self[-\s]?harm)\b/i
 ];
@@ -112,7 +205,7 @@ function checkMedicalAdviceGuardrail(input) {
   if (!normalized) {
     return { isRefusal: false, refusalMessage: null };
   }
-  for (const pattern of MEDICAL_ADVICE_PATTERNS) {
+  for (const pattern of [...MEDICAL_ADVICE_PATTERNS, ...FERTILITY_PATTERNS, ...VERDICT_PATTERNS, ...SYMPTOM_VERDICT_PATTERNS, ...DIET_EXERCISE_PATTERNS, ...PHASE_PATTERNS]) {
     if (pattern.test(normalized)) {
       return {
         isRefusal: true,
@@ -442,6 +535,96 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
     cyclesAhead: k,
     expectedStart
   };
+}
+
+// ai/backend/intent.ts
+var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
+var LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
+var OWN_DATA_PATTERNS = [
+  /\bwhat(?:'s|\s+is)\s+my\s+(?:average|avg)\s+cycle\b/i,
+  /\bmy\s+(?:average|avg)\s+cycle\b/i,
+  /\bhow\s+long\s+are\s+my\s+periods\b/i,
+  /\bhow\s+long\s+do\s+my\s+periods\s+last\b/i,
+  /\bwhen\s+is\s+my\s+next\s+period\b/i,
+  /\bmy\s+next\s+period\b/i,
+  /\b(?:longest|shortest)\s+(?:cycle|period)\b/i,
+  /\bhow\s+many\s+(?:cycles|periods)\s+have\s+i\s+logged\b/i,
+  /\bis\s+\d+\s*days?\s+normal\s+for\s+me\b/i,
+  /\bis\s+my\s+cycle\s+regular\b/i,
+  /\bshow\s+(?:me\s+)?my\s+(?:logged\s+)?cycles\b/i
+];
+function isOwnDataQuestion(text) {
+  const t = text.trim();
+  if (!t) return false;
+  return OWN_DATA_PATTERNS.some((p) => p.test(t));
+}
+function classifyIntent(text, hasPendingEntry = false) {
+  const lower = ` ${text.toLowerCase().trim()} `;
+  if (checkMedicalAdviceGuardrail(text).isRefusal) return "medical_question";
+  if (isOwnDataQuestion(text)) return "own_data_question";
+  if (hasPendingEntry && /\b(change|make it|actually|remove|add|instead|no,|correction|update)\b/.test(lower)) return "correction";
+  if (/\bperiod\s+(is\s+)?late\b|\blate\s+period\b|\bmissed\s+(my\s+)?period\b/.test(lower) && !/started|flow|log/.test(lower)) return "other";
+  const hasEvent = EVENT_WORDS.some((w) => new RegExp(`\\b${w}\\b`, "i").test(lower));
+  const hasLog = LOG_WORDS.some((w) => lower.includes(w)) || /\benergy\s*[1-5]\b/.test(lower) || checkSevereSymptomEscalation(text).isSevere;
+  if (hasEvent && !hasLog) return "plan_event";
+  if (/\bperiod\s+(ended|stopped|finished)\b|\bflow\s+stopped\b/.test(lower)) return "period_end";
+  if (/\bperiod\s+(started|began|came)\b|\bstarted\s+my\s+period\b|\bgot\s+my\s+period\b/.test(lower)) return "period_start";
+  if (hasLog) return "daily_log";
+  if (hasEvent) return "plan_event";
+  return "other";
+}
+
+// ai/backend/ownDataAnswer.ts
+var OVERLAP_DISCLAIMER_TEXT = "Estimates based on your logged cycles. Cycles vary, so this is not a guarantee and not contraception or medical advice.";
+var NOT_ENOUGH_DATA_MESSAGE = "Not enough data yet. Log at least 2 more periods and I can show your numbers.";
+var VERDICT_TAIL = "Whether that is typical for you is a question for a doctor. I can only log and plan.";
+var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function label(key) {
+  const m = parseInt(key.slice(5, 7), 10), d = parseInt(key.slice(8, 10), 10);
+  return MONTHS[(m || 1) - 1] + " " + d;
+}
+function addDaysKey(key, days) {
+  const dt = new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) + days * 864e5);
+  const p = (n) => String(n).padStart(2, "0");
+  return dt.getUTCFullYear() + "-" + p(dt.getUTCMonth() + 1) + "-" + p(dt.getUTCDate());
+}
+function computeOwnDataStats(ctx) {
+  const starts = [...new Set((ctx.periods || []).map((p) => p.startDate).filter(Boolean))].sort();
+  const lengths = [];
+  for (let i = 1; i < starts.length; i++) {
+    const diff = Math.round((Date.parse(starts[i]) - Date.parse(starts[i - 1])) / 864e5);
+    if (diff > 0) lengths.push(diff);
+  }
+  let avgPeriodDays = ctx.cycleStats?.avgPeriodLength ?? null;
+  if (avgPeriodDays == null) {
+    const durs = (ctx.periods || []).filter((p) => p.endDate && p.endDate >= p.startDate).map((p) => Math.round((Date.parse(p.endDate) - Date.parse(p.startDate)) / 864e5) + 1);
+    avgPeriodDays = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length * 10) / 10 : null;
+  }
+  return {
+    completedCycles: lengths.length,
+    medianDays: lengths.length ? median(lengths) : null,
+    minDays: lengths.length ? Math.min(...lengths) : null,
+    maxDays: lengths.length ? Math.max(...lengths) : null,
+    avgPeriodDays,
+    lastStart: starts.length ? starts[starts.length - 1] : null
+  };
+}
+function buildOwnDataAnswer(text, ctx) {
+  if (!isOwnDataQuestion(text)) return null;
+  const s = computeOwnDataStats(ctx);
+  if (s.completedCycles < 2 || s.medianDays == null) {
+    return { kind: "own_data_answer", message: NOT_ENOUGH_DATA_MESSAGE, usedLiveModel: false };
+  }
+  const stats = "From your " + s.completedCycles + " logged cycles: median " + s.medianDays + " days (range " + s.minDays + " to " + s.maxDays + " days)." + (s.avgPeriodDays != null ? " Periods last about " + s.avgPeriodDays + " days." : "");
+  if (/\bwhen\s+is\s+my\s+next\s+period\b|\bmy\s+next\s+period\b/i.test(text) && s.lastStart) {
+    const earliest = ctx.cycleStats?.nextPeriodEarliest || addDaysKey(s.lastStart, s.minDays);
+    const latest = ctx.cycleStats?.nextPeriodLatest || addDaysKey(s.lastStart, s.maxDays);
+    return { kind: "own_data_answer", message: "Your next period is estimated between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
+  }
+  if (/\bis\s+\d+\s*days?\s+normal\s+for\s+me\b|\bis\s+my\s+cycle\s+regular\b/i.test(text)) {
+    return { kind: "own_data_answer", message: stats + " " + VERDICT_TAIL, usedLiveModel: false };
+  }
+  return { kind: "own_data_answer", message: stats, usedLiveModel: false };
 }
 
 // ai/backend/landmarks.json
@@ -1045,24 +1228,6 @@ function resolveDateExpression(text, today) {
   return none;
 }
 
-// ai/backend/intent.ts
-var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
-var LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
-function classifyIntent(text, hasPendingEntry = false) {
-  const lower = ` ${text.toLowerCase().trim()} `;
-  if (checkMedicalAdviceGuardrail(text).isRefusal) return "medical_question";
-  if (hasPendingEntry && /\b(change|make it|actually|remove|add|instead|no,|correction|update)\b/.test(lower)) return "correction";
-  if (/\bperiod\s+(is\s+)?late\b|\blate\s+period\b|\bmissed\s+(my\s+)?period\b/.test(lower) && !/started|flow|log/.test(lower)) return "other";
-  const hasEvent = EVENT_WORDS.some((w) => new RegExp(`\\b${w}\\b`, "i").test(lower));
-  const hasLog = LOG_WORDS.some((w) => lower.includes(w)) || /\benergy\s*[1-5]\b/.test(lower) || checkSevereSymptomEscalation(text).isSevere;
-  if (hasEvent && !hasLog) return "plan_event";
-  if (/\bperiod\s+(ended|stopped|finished)\b|\bflow\s+stopped\b/.test(lower)) return "period_end";
-  if (/\bperiod\s+(started|began|came)\b|\bstarted\s+my\s+period\b|\bgot\s+my\s+period\b/.test(lower)) return "period_start";
-  if (hasLog) return "daily_log";
-  if (hasEvent) return "plan_event";
-  return "other";
-}
-
 // ai/backend/lexicon/en.ts
 var en = {
   symptoms: {
@@ -1417,6 +1582,7 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
 1. STRICT MEDICAL & HEALTH REFUSAL:
    - NEVER give medical advice, interpret symptoms, diagnose conditions, recommend medication or dosages, or provide fertility, contraception, or pregnancy-risk guidance.
    - You MUST NEVER use words like "safe", "guaranteed", "clear window", or anything implying pregnancy or fertility safety.
+   - NEVER state whether a cycle length, period length, flow or symptom is normal, healthy or abnormal. NEVER give ovulation or fertile-window information. For such questions reply only with: "I can't help with that, but I can log how you feel or show your logged cycles."
    - If the user asks ANY question seeking medical diagnosis, symptom interpretation, medication, treatment, or pregnancy risk, you MUST refuse immediately with this exact fixed message and nothing else:
      "I can only help with logging and planning. For health questions, please talk to a doctor."
 
@@ -1645,7 +1811,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
       status: "done"
     });
     return {
-      message: MEDICAL_REFUSAL_MESSAGE,
+      message: getGuardrailResponseMessage(userPrompt),
       needsClarification: false,
       activityTrail,
       toolCalls: toolCallsRecorded
@@ -1659,6 +1825,14 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
       detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended",
       status: "done"
     });
+  }
+  if (!severeCheck.isSevere) {
+    const ownLive = buildOwnDataAnswer(userPrompt, context);
+    if (ownLive) {
+      activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+      activityTrail.forEach((a) => a.status = "done");
+      return { message: ownLive.message, kind: ownLive.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline", modeReason: "Answered from your own logs, no model call" };
+    }
   }
   activityTrail.push({
     step: "Processing Speech",
@@ -1873,6 +2047,11 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
         });
       }
     }
+    const bannedOut = checkModelOutputGuard(finalMessage);
+    if (bannedOut.blocked) {
+      activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
+      return { message: REDIRECT_MESSAGES.verdict, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "live", modeReason: "Output guard replaced the model reply" };
+    }
     const outputGuard = checkMedicalAdviceGuardrail(finalMessage);
     if (outputGuard.isRefusal) {
       return {
@@ -2053,11 +2232,16 @@ function parseLocally(text, today, context) {
   const toolCalls = [];
   const offline = { mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (offline rule engine)" };
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
+    return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
   const severeCheck = checkSevereSymptomEscalation(text);
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended", status: "done" });
+  }
+  const ownData = buildOwnDataAnswer(text, context);
+  if (ownData) {
+    activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+    return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
