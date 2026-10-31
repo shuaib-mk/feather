@@ -6,6 +6,11 @@ import { loadCycleData, computeCycleStats, exportCycleDataJSON, importCycleDataJ
 import { parseLocally } from "../backend/agent";
 import { checkMedicalAdviceGuardrail, checkSevereSymptomEscalation, MEDICAL_REFUSAL_MESSAGE, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "../backend/guardrail";
 import { agentMessageKind } from "../../client/src/lib/voiceMessage";
+import { buildAndFilterChronicleItems } from "../../client/src/pages/ChroniclePage";
+import { buildWeekdayHeader } from "../../client/src/pages/CalendarPage";
+import { buildMonthDayStates } from "../../client/src/lib/calendarView";
+import { buildDemoData } from "../../client/src/lib/demoMode";
+import { countDailyNotes } from "../../client/src/cycleStorage";
 
 console.log("=== Prompt 6 Audit Regression Suite ===");
 
@@ -124,4 +129,36 @@ const mem: Record<string, string> = {};
   }
 
   console.log("[PASS] Group B: Severe-symptom escalation & disguised medical advice refusal");
+}
+
+// Group C: Chronicle Daily Notes filter, Calendar weekday header alignment, Plan Around It
+{
+  // C1: Chronicle filter with mixed entries (Demo Mode: 7 periods + 14 logs = 14 All Entries, 7 Periods, 7 Daily Notes)
+  const demo = buildDemoData("2026-10-31");
+  const all = buildAndFilterChronicleItems(demo.periods, demo.logs, "all");
+  const periodsOnly = buildAndFilterChronicleItems(demo.periods, demo.logs, "periods");
+  const dailyNotesOnly = buildAndFilterChronicleItems(demo.periods, demo.logs, "logs");
+
+  assert.strictEqual(all.allItems.length, 14, "Golden baseline: 14 All Entries");
+  assert.strictEqual(all.filteredItems.length, 14, "All filter returns 14 entries");
+  assert.strictEqual(periodsOnly.filteredItems.length, 7, "Periods filter returns 7 periods");
+  assert(periodsOnly.filteredItems.every((i) => i.isPeriod), "Periods filter includes only period items");
+  assert.strictEqual(dailyNotesOnly.filteredItems.length, 7, "Daily Notes filter must return 7 daily notes (not 14)");
+  assert.strictEqual(dailyNotesOnly.filteredItems.length, countDailyNotes(demo.periods, demo.logs), "Filtered Daily Notes count must match tab badge count");
+  assert(dailyNotesOnly.filteredItems.every((i) => !i.isPeriod && i.isLog), "Daily Notes filter must exclude period start records");
+
+  // C2: Calendar weekday header aligns with grid's first weekday
+  const sunHeader = buildWeekdayHeader(0, "en-US");
+  assert.deepStrictEqual(sunHeader, ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "Sunday-start header must be Sun..Sat");
+  const monHeader = buildWeekdayHeader(1, "en-GB");
+  assert.strictEqual(monHeader[0], "Mon", "Monday-start header must start with Mon");
+  assert.strictEqual(monHeader[6], "Sun", "Monday-start header must end with Sun");
+
+  // Verify Nov 1, 2026 (Sunday) lands in column 0 ("Sun") under en-US
+  const nov2026 = buildMonthDayStates(2026, 11, [], [], [], "2026-10-31", "en-US");
+  assert.strictEqual(nov2026.weekStart, 0);
+  assert.strictEqual(nov2026.leadingBlanks, 0, "Nov 1, 2026 is Sunday so 0 leading blanks in Sunday-start grid");
+  assert.strictEqual(sunHeader[nov2026.leadingBlanks], "Sun", "Nov 1, 2026 renders under Sun");
+
+  console.log("[PASS] Group C: Chronicle Daily Notes filter (7/14) & Calendar weekday header (Sun..Sat)");
 }

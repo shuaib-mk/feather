@@ -10,6 +10,14 @@ import { PlanAroundIt } from "../components/PlanAroundIt";
 import { todayLocal } from "../lib/localDate";
 import { addDays } from "../lib/periodEngine";
 
+export function buildWeekdayHeader(weekStart: 0 | 1, locale = "en-US"): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const base = weekStart === 1 ? 5 : 4; // 2026-01-04 is Sunday, 2026-01-05 is Monday
+    const d = new Date(Date.UTC(2026, 0, base + i));
+    return d.toLocaleDateString(locale, { weekday: "short", timeZone: "UTC" });
+  });
+}
+
 export function CalendarPage(){
   const { data, stats, saveLog, removeLog, isDemoActive } = useCycle();
   const today = todayLocal();
@@ -33,7 +41,7 @@ export function CalendarPage(){
   const downloadICS=()=>{ const blob=new Blob([buildCycleCalendarICS(data.periods, stats, events, icsTitle)],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); };
   const onImportFile=async (f:File)=>{ const text=await f.text(); const res=parseICS(text, addDays(today,-540), addDays(today,365)); setImportPreview(res.events); setImportWarnings(res.warnings); setChecked(new Set(res.events.map(e=>e.id))); };
   const saveImport=()=>{ if(!importPreview) return; const chosen=importPreview.filter(e=>checked.has(e.id)); const merged=[...events]; for(const e of chosen){ if(!merged.some(x=>(x.uid&&x.uid===e.uid&&x.date===e.date))) merged.push(e); } saveEvents(merged); setEvents(merged); setImportPreview(null); };
-  const weekdayNames = Array.from({length:7},(_,i)=>{ const base = month.weekStart===1 ? 1:0; const d=new Date(Date.UTC(2026,0,base+i+ (month.weekStart===1?0:0))); return d.toLocaleDateString(locale,{weekday:"short",timeZone:"UTC"}); });
+  const weekdayNames = buildWeekdayHeader(month.weekStart, locale);
   return <div className="space-y-5" onTouchStart={(e)=>{touchX.current=e.touches[0].clientX;}} onTouchEnd={(e)=>{ if(touchX.current==null) return; const dx=e.changedTouches[0].clientX-touchX.current; if(Math.abs(dx)>50) move(dx<0?1:-1); touchX.current=null; }}>
     <PageHeader title="Calendar" subtitle="Logged days and estimated windows from your cycles." badge="Calendar" />
     {data.periods.length===0 && <div className="liquid-glass-card rounded-[24px] p-5 text-xs">No cycles logged yet. The calendar still works — log a period to see estimates. <Link className="underline font-semibold" to="/voice">Log by voice</Link></div>}

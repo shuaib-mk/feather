@@ -4,7 +4,55 @@ import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { prettyDate, countDailyNotes, effectivePeriodDurationDays } from "../cycleStorage";
+import { prettyDate, countDailyNotes, effectivePeriodDurationDays, type Period, type DayLog } from "../cycleStorage";
+
+export interface TimelineItem {
+  id: string;
+  date: string;
+  isPeriod: boolean;
+  periodItem?: Period;
+  isLog: boolean;
+  logItem?: DayLog;
+}
+
+export function buildAndFilterChronicleItems(
+  periods: Period[],
+  logs: DayLog[],
+  filterType: "all" | "periods" | "logs",
+): { allItems: TimelineItem[]; filteredItems: TimelineItem[] } {
+  const dateMap = new Map<string, TimelineItem>();
+  periods.forEach((p) => {
+    const existing = dateMap.get(p.startDate) || {
+      id: `p-${p.id || p.startDate}`,
+      date: p.startDate,
+      isPeriod: true,
+      periodItem: p,
+      isLog: false,
+    };
+    existing.isPeriod = true;
+    existing.periodItem = p;
+    dateMap.set(p.startDate, existing);
+  });
+  logs.forEach((l) => {
+    const existing = dateMap.get(l.logDate) || {
+      id: `l-${l.id || l.logDate}`,
+      date: l.logDate,
+      isPeriod: false,
+      isLog: true,
+      logItem: l,
+    };
+    existing.isLog = true;
+    existing.logItem = l;
+    dateMap.set(l.logDate, existing);
+  });
+  const allItems = Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+  const filteredItems = allItems.filter((item) => {
+    if (filterType === "periods") return item.isPeriod;
+    if (filterType === "logs") return !item.isPeriod && item.isLog;
+    return true;
+  });
+  return { allItems, filteredItems };
+}
 
 export function ChroniclePage() {
   const { data, removePeriod, removeLog } = useCycle();
@@ -60,7 +108,7 @@ export function ChroniclePage() {
 
   const filteredItems = allItems.filter((item) => {
     if (filterType === "periods") return item.isPeriod;
-    if (filterType === "logs") return item.isLog;
+    if (filterType === "logs") return !item.isPeriod && item.isLog;
     return true;
   });
 
