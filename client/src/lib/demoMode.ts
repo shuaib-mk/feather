@@ -40,10 +40,10 @@ export function isDemoActive(): boolean {
   }
 }
 
-export function enterDemoMode(): void {
+export function enterDemoMode(today = todayLocal()): void {
   try {
     const ls = getStorage();
-    const demo = buildDemoData();
+    const demo = buildDemoData(today);
     if (ls) {
       if (!ls.getItem(DEMO_KEY)) {
         ls.setItem(DEMO_KEY, JSON.stringify({ periods: demo.periods, logs: demo.logs }));

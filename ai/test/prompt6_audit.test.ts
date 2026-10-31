@@ -196,7 +196,7 @@ const sessMem: Record<string, string> = {};
 
   // D2 & D3: Period duration derives from period record (startDate..endDate = 5d), and deleting a daily note never shrinks period duration
   (globalThis as any).localStorage.clear();
-  enterDemoMode();
+  enterDemoMode("2026-10-31");
   const beforeDelete = loadCycleData();
   const sep30Before = beforeDelete.periods.find((p) => p.startDate === "2026-09-30")!;
   assert(sep30Before, "Demo mode has Sep 30 period");
