@@ -61,5 +61,21 @@ try {
   check("2 falls back to most recent when no negated match", r2.entry?.date === "2026-10-31" && r2.entry?.flow === "light", JSON.stringify(r2.entry));
 } catch (e: any) { check("2 contrast targeting", false, e.message); }
 
+
+// Batch-3 diagnostic regression: the live failures were a STALE service-worker
+// shell (pre-deploy code served for a whole session), not the card/selector.
+// (a) The exact JSON shape the deployed /api/agent returned for case 1 must
+//     classify as a renderable message (fixture captured from the live API).
+// (b) sw.js must be network-first for navigations under a bumped cache name,
+//     so a cached shell can never pin an old bundle after a deploy again.
+try {
+  const liveApiResponse = { message: "I can't tell if your period is late without a logged start — did it start? Tell me when, or say 'period started today' to log it.", entry: null, needsClarification: true, clarificationQuestion: "I can't tell if your period is late without a logged start — did it start? Tell me when, or say 'period started today' to log it.", activityTrail: [{ step: "Processing Speech", detail: "Extracted keywords from voice transcript", status: "done" }], toolCalls: [], mode: "offline", modeReason: "Offline parser — Meta model not used (late-period question answered directly; no entry created)" };
+  check("3a live API response shape renders as a message card", agentMessageKind(liveApiResponse.message) === "message" && cardHtml(liveApiResponse.message).includes("period started today"));
+  const fs = await import("node:fs");
+  const sw = fs.readFileSync(new URL("../../client/public/sw.js", import.meta.url), "utf-8");
+  check("3b SW cache version bumped past v1", !sw.includes('"feather-shell-v1"') && sw.includes("feather-shell-v2"));
+  check("3b SW is network-first for navigations", sw.includes('e.request.mode === "navigate"') && sw.indexOf('e.request.mode === "navigate"') < sw.indexOf("caches.match(e.request).then((cached)"));
+} catch (e: any) { check("3 stale-shell regression", false, e.message); }
+
 console.log(`\nQABatch2Followup Results: ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);
