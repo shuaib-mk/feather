@@ -30,7 +30,7 @@ async function main() {
     // Fixture A: prose claims the heavy-yesterday note was added; structured output has only the Oct 28 slip.
     mockModel([
       toolMsg([logCall("a1", { date: "2026-10-28", flow: "medium", symptoms: ["cramps", "headache"], kind: "period_started" })]),
-      textMsg("Logged your period start for October 28th with medium flow, plus cramps and headache noted \u2014 and I added your note about heavy flow yesterday."),
+      textMsg("Logged your period start for October 28th with medium flow, plus cramps and headache noted \u2014 and I added your note about heavy flow yesterday. When is the wedding?"),
     ]);
     const a: any = await runLavenderAgent(SENTENCE, { currentDate: TODAY });
     check("A: live mode", a.mode === "live", a.mode);

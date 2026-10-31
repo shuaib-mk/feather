@@ -1619,7 +1619,8 @@ function factIsPlaced(fact, entries, events) {
   return entries.some((e) => e.date === fact.date && (!fact.flow || e.flow === fact.flow) && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym))));
 }
 function ensureFactCoverageDisclosure(result, userPrompt, today) {
-  if (!result || typeof result.message !== "string" || result.needsClarification) return result;
+  if (!result || typeof result.message !== "string") return result;
+  if (!result.entry && !(result.plannedEvents && result.plannedEvents.length > 0)) return result;
   const facts = findStatedDatedFacts(userPrompt, today);
   if (facts.length === 0) return result;
   const entries = structuredEntriesOf(result);

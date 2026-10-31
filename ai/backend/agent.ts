@@ -550,7 +550,12 @@ function factIsPlaced(fact: StatedDatedFact, entries: StructuredEntry[], events:
  * questions are left alone (the user is being asked, not told).
  */
 export function ensureFactCoverageDisclosure<T extends AgentResult>(result: T, userPrompt: string, today: string): T {
-  if (!result || typeof result.message !== "string" || result.needsClarification) return result;
+  if (!result || typeof result.message !== "string") return result;
+  // A pure clarifying question (no slip, no events) is left alone. But a
+  // result that DID return a slip may also end with a question (the live
+  // model routinely asks for an undated event's date in the same reply) -
+  // coverage still applies there; live runs proved the distinction matters.
+  if (!result.entry && !(result.plannedEvents && result.plannedEvents.length > 0)) return result;
   const facts = findStatedDatedFacts(userPrompt, today);
   if (facts.length === 0) return result;
   const entries = structuredEntriesOf(result);
