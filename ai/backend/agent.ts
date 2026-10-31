@@ -814,15 +814,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const passedPlanCandidates: Array<{ name: string; thisYear: string; nextYear: string }> = [];
   {
     let m: RegExpExecArray | null; let prevEnd = 0;
-    const cleanTitle = (seg: string): string => seg
-      .replace(/[,";]+\s*$/g, "")
-      .replace(/^\s*(?:and|&)\s+/i, "")
-      .replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "")
-      .replace(/\bcoming up\s*$/i, "")
-      .replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "")
-      .replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "")
-      .replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s) // keep possessives/names intact
-      .trim();
+    const cleanTitle = (seg: string): string => {
+      let t = seg.replace(/[,";]+\s*$/g, "").trim();
+      t = t.replace(/^\s*(?:and|&)\s+/i, "");
+      t = t.replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+/i, "");
+      let prev = "";
+      while (prev !== t) {
+        prev = t;
+        t = t.replace(/\s*(?:\b(?:is|was|scheduled|planned|happening|coming up|on|at|for|to attend)\b)\s*$/i, "").trim();
+      }
+      t = t.replace(/\bcoming up\b/gi, "").replace(/\s+/g, " ").trim();
+      t = t.replace(/^\s*(?:an?|the)\s+/i, "").trim();
+      return t;
+    };
     while ((m = planDateRe.exec(text)) !== null) {
       const rawDate = m[0];
       const explicitYear = /\b\d{4}\b/.test(rawDate) && !/^\d{4}-/.test(rawDate) ? parseInt(rawDate.match(/\b\d{4}\b/)![0], 10) : (/^\d{4}-/.test(rawDate) ? parseInt(rawDate.slice(0, 4), 10) : null);
@@ -847,12 +851,20 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       eventMatches.push({ name: title, date: resolvedDate });
     }
   }
-  // B2: a trailing dateless event ("...on November 20 and a wedding to attend")
-  // inherits the last dated event's date instead of being silently dropped.
-  if (eventMatches.length > 0) {
-    const trailing = text.match(/\b(?:and|also)\s+(?:a\s+|an\s+)?(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary)\b[^.]*$/i);
-    if (trailing && !eventMatches.some((e) => e.name.toLowerCase().includes(trailing[1].toLowerCase()))) {
-      eventMatches.push({ name: trailing[1].toLowerCase(), date: eventMatches[eventMatches.length - 1].date });
+  const EVENT_NOUNS = [
+    "wedding", "exam", "trip", "interview", "party", "flight",
+    "vacation", "conference", "presentation", "dinner", "meeting",
+    "birthday", "anniversary", "marathon", "race", "appointment"
+  ];
+  const unplacedEvents: string[] = [];
+  const eventNounRe = new RegExp(`\\b(${EVENT_NOUNS.join("|")})\\b`, "gi");
+  let em: RegExpExecArray | null;
+  while ((em = eventNounRe.exec(text)) !== null) {
+    const kw = em[1].toLowerCase();
+    const alreadyMatched = eventMatches.some((e) => e.name.toLowerCase().includes(kw)) ||
+      passedPlanCandidates.some((c) => c.name.toLowerCase().includes(kw));
+    if (!alreadyMatched && !unplacedEvents.includes(kw)) {
+      unplacedEvents.push(kw);
     }
   }
   if (planDateInvalid && eventMatches.length === 0 && extractWithLexicon(text).symptoms.length === 0) {
@@ -884,6 +896,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   // it is the app's landmark-recall shorthand for a period date).
   if (intent === "other" || (!hasLogContent && intent !== "plan_event")) {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
+      if (unplacedEvents.length > 0) {
+        const q = `I couldn't place a date for: ${unplacedEvents.join(", ")}`;
+        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+      }
       const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
       const q = late ? "I can't tell if your period is late without a logged start — did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
@@ -900,7 +916,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     // (legacy landmark-recall shorthand) still falls through to a log entry below.
     const isBareLandmark = eventMatches.length === 0;
     if (!isBareLandmark) {
-      return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+      const msg = unplacedEvents.length > 0
+        ? `I couldn't place a date for: ${unplacedEvents.join(", ")}`
+        : eventMatches.map((e) => `${e.name} on ${e.date}`).join("; ");
+      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
     }
   }
 
@@ -955,7 +974,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
 
   // B2 multi-fact sentences: the date right after "period started ..." wins for
   // the start, "flow was X on the first day" is the start day's flow, and a
-  // different flow "yesterday" is named as unplaced instead of dropped/merged.
+  // different flow or symptoms "yesterday" are named as unplaced instead of dropped/merged.
   let unplacedNote: string | null = null;
   if (extraction.periodStart) {
     const frag = text.match(/period\s+started\s+([^,.]+?)(?=\s+and\s|\s+but\s|,|$)/i)?.[1];
@@ -965,9 +984,27 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     }
     const firstDayFlow = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
     if (firstDayFlow) (extraction as any).flow = firstDayFlow[1];
-    const yesterdayFlow = lower.match(/\b(light|medium|heavy)\s+yesterday\b/);
-    if (yesterdayFlow && yesterdayFlow[1] !== extraction.flow) {
-      unplacedNote = `${yesterdayFlow[1]} flow yesterday (${addDaysToKey(today, -1)}) as a separate day`;
+    const yesterdayFlow = lower.match(/\b(light|medium|heavy)\s+yesterday\b/) || lower.match(/\byesterday\s+(?:flow\s+was\s+)?(light|medium|heavy)\b/);
+
+    const yesterdayKey = addDaysToKey(today, -1);
+    if (entryDate !== yesterdayKey && /\byesterday\b/i.test(text)) {
+      const yesterdayMatch = text.match(/(?:but\s+|and\s+|,)?\s*(?:(?:flow\s+was\s+)?(?:none|spotting|light|medium|heavy)\s+)?yesterday\b[^.]*?(?=\s+and\s+(?:i\s+also\s+have|i\s+have|there\s+is|we\s+have|an?\s+(?:exam|wedding|trip|dinner|flight|party))|\s*\.|$)/i);
+      const yesterdayClause = yesterdayMatch ? yesterdayMatch[0] : "";
+      const yesterdaySymptoms = yesterdayClause ? extractWithLexicon(yesterdayClause).symptoms : [];
+
+      if (yesterdaySymptoms.length > 0) {
+        (extraction as any).symptoms = extraction.symptoms.filter((s: ValidSymptom) => !yesterdaySymptoms.includes(s));
+      }
+
+      const yFlow = yesterdayFlow ? yesterdayFlow[1] : null;
+      if (yFlow || yesterdaySymptoms.length > 0) {
+        const parts: string[] = [];
+        if (yFlow) parts.push(`${yFlow} flow`);
+        if (yesterdaySymptoms.length > 0) parts.push(`with ${yesterdaySymptoms.join(" and ")}`);
+        unplacedNote = `${parts.join(" ")} yesterday (${yesterdayKey}) as a separate day`;
+      }
+    } else if (yesterdayFlow && yesterdayFlow[1] !== extraction.flow) {
+      unplacedNote = `${yesterdayFlow[1]} flow yesterday (${yesterdayKey}) as a separate day`;
     }
   }
 
@@ -978,6 +1015,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   };
   toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   const baseMessage = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
-  const message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} — log that day separately if you want it saved.` : baseMessage;
+  let message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} — log that day separately if you want it saved.` : baseMessage;
+  if (unplacedEvents.length > 0) {
+    message += ` I couldn't place a date for: ${unplacedEvents.join(", ")}.`;
+  }
   return { message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }

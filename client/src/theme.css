@@ -40,9 +40,7 @@ body,
   -webkit-tap-highlight-color: transparent !important;
 }
 
-/* Suppress mobile tap highlights and touch callouts globally */
-html,
-body,
+/* Suppress mobile tap highlights and touch callouts on interactive controls only */
 button,
 a,
 input,
@@ -53,11 +51,6 @@ textarea,
 .liquid-glass-button-dark,
 .liquid-glass-pill,
 .liquid-glass-orb,
-.liquid-glass-card,
-.liquid-glass-card-interactive,
-.liquid-glass-lens,
-.liquid-glass-dock,
-.liquid-glass-topbar,
 .liquid-glass-nav-item,
 .liquid-glass-nav-active,
 .liquid-glass-nav-cta {
@@ -80,27 +73,46 @@ textarea:focus:not(:focus-visible),
   outline-color: transparent !important;
 }
 
-html, body {
+html {
   margin: 0;
   padding: 0;
   width: 100%;
-  max-width: 100vw;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow-x: hidden;
-  overscroll-behavior-y: none;
+  min-height: 100%;
+  overflow-x: clip;
+  overflow-y: auto;
   background-color: #f2eef8;
   font-family: var(--font-sans);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+  background-color: #f2eef8;
+  background-image: 
+    radial-gradient(ellipse 75% 65% at 5% 5%, rgba(244, 114, 182, 0.58) 0%, rgba(244, 114, 182, 0) 70%),
+    radial-gradient(ellipse 70% 60% at 95% 8%, rgba(56, 189, 248, 0.52) 0%, rgba(56, 189, 248, 0) 70%),
+    radial-gradient(ellipse 80% 70% at 50% 48%, rgba(192, 132, 252, 0.45) 0%, rgba(192, 132, 252, 0) 75%),
+    radial-gradient(ellipse 75% 65% at 12% 85%, rgba(129, 140, 248, 0.50) 0%, rgba(129, 140, 248, 0) 72%),
+    radial-gradient(ellipse 70% 60% at 88% 88%, rgba(244, 114, 182, 0.52) 0%, rgba(244, 114, 182, 0) 70%),
+    radial-gradient(ellipse 65% 55% at 50% 92%, rgba(251, 146, 60, 0.38) 0%, rgba(251, 146, 60, 0) 65%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  font-family: var(--font-sans);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   position: relative;
 }
 
 #root {
   width: 100%;
-  max-width: 100vw;
   min-height: 100vh;
   min-height: 100dvh;
   position: relative;
@@ -134,9 +146,6 @@ html, body {
     radial-gradient(ellipse 65% 55% at 50% 92%, rgba(251, 146, 60, 0.38) 0%, rgba(251, 146, 60, 0) 65%);
   background-size: cover;
   background-repeat: no-repeat;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  will-change: transform;
 }
 
 .feather-aura-bg {
@@ -146,7 +155,7 @@ html, body {
   position: relative;
 }
 
-/* Floating Navigation Bars Only (Top Bar, Bottom Dock, Sidebar) */
+/* Floating Navigation Bars Only (Desktop Sidebar) */
 .liquid-glass-lens {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.06) 45%, rgba(255, 255, 255, 0.16) 100%) !important;
   backdrop-filter: blur(14px) saturate(220%) brightness(108%) contrast(104%);
@@ -162,9 +171,6 @@ html, body {
     0 24px 50px -10px rgba(35, 20, 55, 0.18),
     0 8px 18px -4px rgba(35, 20, 55, 0.08),
     0 2px 8px 0 rgba(0, 0, 0, 0.02) !important;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: transform, width, border-radius;
   transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1),
               border-radius 0.18s cubic-bezier(0.16, 1, 0.3, 1),
               box-shadow 0.15s ease,
@@ -184,13 +190,15 @@ html, body {
     0 10px 22px -4px rgba(35, 20, 55, 0.10) !important;
 }
 
-/* Liquid Glass Card System */
+/* Liquid Glass Card System
+   Note: Cards sit directly over the smooth ambient aura background and do NOT use
+   backdrop-filter or translateZ(0). Avoiding per-card GPU backdrop roots prevents
+   fast-scroll tile exhaustion on mobile AND allows the floating bottom navbar
+   (.liquid-glass-dock) to genuinely blur card text scrolling underneath it. */
 .liquid-glass-card {
   position: relative;
   border-radius: 24px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.32) 100%) !important;
-  backdrop-filter: blur(16px) saturate(210%) brightness(107%) contrast(104%);
-  -webkit-backdrop-filter: blur(16px) saturate(210%) brightness(107%) contrast(104%);
   border: 1px solid rgba(255, 255, 255, 0.80) !important;
   box-shadow: 
     inset 0 2px 2px 0 rgba(255, 255, 255, 0.98),
@@ -202,9 +210,7 @@ html, body {
     0 20px 48px -10px rgba(35, 20, 55, 0.14),
     0 6px 16px -4px rgba(35, 20, 55, 0.06),
     0 1px 4px 0 rgba(0, 0, 0, 0.02) !important;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  transition: box-shadow 0.16s ease, background 0.16s ease;
 }
 
 .liquid-glass-card:hover {
@@ -222,9 +228,9 @@ html, body {
 
 /* Mobile Liquid Glass Topbar and Bottom Floating Dock */
 .liquid-glass-topbar {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.40) 45%, rgba(255, 255, 255, 0.58) 100%) !important;
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  background: rgba(255, 255, 255, 0.42) !important;
+  backdrop-filter: blur(8px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
   border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow: 
     inset 0 2px 1.5px 0 rgba(255, 255, 255, 0.98),
@@ -238,7 +244,7 @@ html, body {
 }
 
 .liquid-glass-dock {
-  background: rgba(255, 255, 255, 0.40) !important;
+  background: rgba(255, 255, 255, 0.42) !important;
   backdrop-filter: blur(8px) saturate(130%) !important;
   -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
   border: 1px solid rgba(255, 255, 255, 0.85) !important;
@@ -254,7 +260,8 @@ html, body {
 }
 
 @supports not ((-webkit-backdrop-filter: blur(8px)) or (backdrop-filter: blur(8px))) {
-  .liquid-glass-dock {
+  .liquid-glass-dock,
+  .liquid-glass-topbar {
     background: rgba(255, 255, 255, 0.70) !important;
   }
 }
@@ -279,7 +286,6 @@ html, body {
     inset -1px 0 1.5px 0 rgba(56, 189, 248, 0.22),
     inset 0 -1.5px 2px 0 rgba(20, 10, 35, 0.05),
     0 4px 12px -2px rgba(35, 20, 55, 0.08) !important;
-  transform: translateZ(0);
   transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 
@@ -298,7 +304,9 @@ html, body {
 .fixed.liquid-glass-lens,
 .fixed.liquid-glass-island,
 .fixed.liquid-glass-pill {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+  background: rgba(255, 255, 255, 0.40) !important;
+  backdrop-filter: blur(8px) saturate(130%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(130%) !important;
   border: 1px solid rgba(255, 255, 255, 0.70) !important;
   box-shadow: 
     inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.98),
@@ -308,8 +316,6 @@ html, body {
     inset 0 -1.5px 2px 0 rgba(20, 10, 35, 0.05),
     0 4px 12px -2px rgba(35, 20, 55, 0.08) !important;
   border-radius: 9999px;
-  transform: translateZ(0);
-  backface-visibility: hidden;
   transition: transform 0.12s ease,
               background 0.12s ease,
               box-shadow 0.12s ease;
@@ -318,14 +324,11 @@ html, body {
 /* Liquid Glass Input / Text Box */
 .liquid-glass-input {
   background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(220, 218, 214, 0.65);
   box-shadow: 
     inset 1.5px 1.5px 3px rgba(215, 215, 220, 0.35),
     inset -1.5px -1.5px 3px #ffffff,
     0 2px 4px rgba(0, 0, 0, 0.015);
-  transform: translateZ(0);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
@@ -347,8 +350,6 @@ select,
   position: relative !important;
   border-radius: 9999px !important;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.38) 100%) !important;
-  backdrop-filter: blur(14px) saturate(200%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(200%) !important;
   border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow: 
     inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95),
@@ -410,8 +411,6 @@ select option,
     inset 0 -2px 3px 0 rgba(20, 10, 35, 0.08),
     0 10px 24px -4px rgba(35, 20, 55, 0.12),
     0 3px 8px 0 rgba(0, 0, 0, 0.02) !important;
-  transform: translateZ(0);
-  backface-visibility: hidden;
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
               background 0.15s ease,
               box-shadow 0.15s ease,
@@ -432,12 +431,12 @@ select option,
     inset 0 -2px 3px 0 rgba(20, 10, 35, 0.06),
     0 14px 30px -4px rgba(124, 58, 237, 0.18),
     0 4px 10px 0 rgba(35, 20, 55, 0.06) !important;
-  transform: translateY(-1px) translateZ(0);
+  transform: translateY(-1px);
 }
 
 .liquid-glass-button:active,
 .liquid-glass-button-dark:active {
-  transform: scale(0.96) translateY(0.5px) translateZ(0) !important;
+  transform: scale(0.96) translateY(0.5px) !important;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.18) 60%, rgba(240, 235, 252, 0.35) 100%) !important;
   box-shadow: 
     inset 2px 2px 4px rgba(185, 180, 210, 0.5),
@@ -449,7 +448,7 @@ select option,
 }
 
 .liquid-glass-pill:active {
-  transform: scale(0.96) translateY(0.5px) translateZ(0) !important;
+  transform: scale(0.96) translateY(0.5px) !important;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.30) 100%) !important;
   box-shadow: 
     inset 1.5px 1.5px 3px rgba(195, 190, 215, 0.45),
@@ -482,8 +481,6 @@ a.liquid-glass-pill:active,
 .liquid-glass-orb {
   position: relative;
   background: radial-gradient(circle at 35% 30%, #ffffff 0%, rgba(255, 255, 255, 0.94) 35%, rgba(244, 238, 252, 0.85) 75%, rgba(230, 240, 252, 0.90) 100%) !important;
-  backdrop-filter: blur(20px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
   border: 2px solid rgba(255, 255, 255, 0.95) !important;
   color: #1a1718 !important;
   box-shadow: 
@@ -522,16 +519,12 @@ a.liquid-glass-pill:active,
 .liquid-glass-card-interactive {
   position: relative;
   background-color: rgba(255, 255, 255, 0.84);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 
     inset 2px 2px 4px rgba(220, 220, 225, 0.45),
     inset -2px -2px 4px #ffffff,
     0 8px 22px -4px rgba(70, 60, 90, 0.05),
     0 1px 3px 0 rgba(0, 0, 0, 0.02);
-  transform: translateZ(0);
-  backface-visibility: hidden;
   transition: transform 0.15s ease,
               box-shadow 0.15s ease,
               background-color 0.15s ease;
@@ -539,7 +532,7 @@ a.liquid-glass-pill:active,
 
 .liquid-glass-card-interactive:hover {
   background-color: #ffffff;
-  transform: translateY(-2px) translateZ(0);
+  transform: translateY(-2px);
   box-shadow: 
     inset 2px 2px 5px rgba(210, 210, 220, 0.55),
     inset -2px -2px 5px #ffffff,
@@ -566,8 +559,6 @@ a.liquid-glass-pill:active,
 /* Frosted vellum paper plate */
 .vellum-sheet {
   background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(20px) saturate(170%);
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 14px 40px -10px rgba(28, 25, 23, 0.05), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.95);
 }
@@ -660,8 +651,6 @@ textarea:focus-visible,
   }
 }
 
-
-
 /* ========================================================
    SEAMLESS LIQUID LENS NAV ITEM (ZERO OPAQUE OVERLAY)
    ======================================================== */
@@ -728,7 +717,7 @@ textarea:focus-visible,
 .liquid-glass-nav-item:active,
 .liquid-glass-nav-active:active,
 .liquid-glass-nav-cta:active {
-  transform: scale(0.96) translateZ(0) !important;
+  transform: scale(0.96) !important;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
   border-color: rgba(255, 255, 255, 0.65) !important;
   outline: none !important;
@@ -748,8 +737,6 @@ textarea:focus-visible,
     inset -1px 0 1.5px 0 rgba(56, 189, 248, 0.18),
     inset 0 -1px 2px 0 rgba(20, 10, 35, 0.04),
     0 2px 6px -2px rgba(35, 20, 55, 0.05) !important;
-  transform: translateZ(0);
-  backface-visibility: hidden;
   transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 

@@ -22,50 +22,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <>
-      {/* Fixed Ambient Background Canvas (Hardware-accelerated; eliminates scroll tearing & white void) */}
+      {/* Fixed Ambient Background Canvas (Eliminates scroll tearing & white void) */}
       <div className="feather-fixed-background" aria-hidden="true" />
       <LiquidGlassFilter />
 
-      {/* Navigation Sidebar & Floating Dock (Direct root sibling; never trapped in an ancestor scroll container) */}
-      <Sidebar />
-
-      {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
-      {backupToast && (
-        <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] md:top-[calc(1.5rem+env(safe-area-inset-top,0px))] left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
-          <div className="size-7 rounded-full liquid-glass-pill text-stone-900 flex items-center justify-center shrink-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-              <polyline points="17 21 17 13 7 13 7 21" />
-              <polyline points="7 3 7 8 15 8" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="block font-bold text-stone-900 truncate">Back up your data</span>
-            <span className="text-[11px] text-stone-600 block truncate sm:whitespace-normal">Your entries live only on this device.</span>
-          </div>
-          <button
-            type="button"
-            onClick={exportBackup}
-            className="liquid-glass-button rounded-full px-3.5 py-1 text-xs font-sans font-semibold shrink-0 cursor-pointer shadow-sm"
-          >
-            Export
-          </button>
-          <button
-            type="button"
-            onClick={dismissBackupToast}
-            className="text-stone-400 hover:text-stone-800 p-1 cursor-pointer shrink-0 inline-flex items-center justify-center"
-            aria-label="Close toast"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      )}
-
       {/* Main Content Layout */}
-      <div className="min-h-screen min-h-[100dvh] w-full max-w-[100vw] text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))]">
+      <div className="min-h-screen min-h-[100dvh] w-full text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))]">
         {/* Main Spacious Canvas (Accessible Main Landmark) */}
         <main
           id="main-content"
@@ -132,7 +94,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
 
           {/* Page Content */}
-          <div className="animate-in fade-in duration-200">
+          <div>
             {children}
           </div>
 
@@ -151,6 +113,44 @@ export function AppLayout({ children }: AppLayoutProps) {
           </footer>
         </main>
       </div>
+
+      {/* Navigation Sidebar & Floating Dock (Direct root sibling; never trapped in an ancestor scroll container) */}
+      <Sidebar />
+
+      {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
+      {backupToast && (
+        <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] md:top-[calc(1.5rem+env(safe-area-inset-top,0px))] left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
+          <div className="size-7 rounded-full liquid-glass-pill text-stone-900 flex items-center justify-center shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="block font-bold text-stone-900 truncate">Back up your data</span>
+            <span className="text-[11px] text-stone-600 block truncate sm:whitespace-normal">Your entries live only on this device.</span>
+          </div>
+          <button
+            type="button"
+            onClick={exportBackup}
+            className="liquid-glass-button rounded-full px-3.5 py-1 text-xs font-sans font-semibold shrink-0 cursor-pointer shadow-sm"
+          >
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={dismissBackupToast}
+            className="text-stone-400 hover:text-stone-800 p-1 cursor-pointer shrink-0 inline-flex items-center justify-center"
+            aria-label="Close toast"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
     </>
   );
 }

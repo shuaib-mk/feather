@@ -126,5 +126,56 @@ let passed = 0;
   passed++;
 }
 
+// Test: parseLocally data integrity fixes
+// 1. "exam on Nov 20 and a wedding to attend" -> exam event only, say "I couldn't place a date for: wedding"
+{
+  const res = parseLocally("exam on Nov 20 and a wedding to attend", "2026-10-31", {});
+  assert.strictEqual(res.entry, null, "Plan-only phrase should not produce a cycle log entry");
+  assert.strictEqual(res.plannedEvents?.length, 1, "Only 1 event should be returned");
+  assert.strictEqual(res.plannedEvents?.[0]?.title, "exam", "Title should be 'exam'");
+  assert.strictEqual(res.plannedEvents?.[0]?.date, "2026-11-20", "Date should be 2026-11-20");
+  assert.strictEqual(res.message, "I couldn't place a date for: wedding", "Message should state unplaced date for wedding");
+  console.log("[PASS] parseLocally: dateless event not given date, exam only returned, couldn't place message exact");
+  passed++;
+}
+
+// 2. Clean event title: "exam on Nov 20", "exam coming up on Nov 20", etc. gives "exam", not "exam coming up"
+{
+  const t1 = parseLocally("exam on Nov 20", "2026-10-31", {});
+  assert.strictEqual(t1.plannedEvents?.[0]?.title, "exam");
+
+  const t2 = parseLocally("exam coming up on Nov 20", "2026-10-31", {});
+  assert.strictEqual(t2.plannedEvents?.[0]?.title, "exam");
+
+  const t3 = parseLocally("an exam coming up on November 20", "2026-10-31", {});
+  assert.strictEqual(t3.plannedEvents?.[0]?.title, "exam");
+
+  const t4 = parseLocally("I also have an exam coming up on November 20", "2026-10-31", {});
+  assert.strictEqual(t4.plannedEvents?.[0]?.title, "exam");
+
+  console.log("[PASS] parseLocally: event titles are clean ('exam', never 'exam coming up')");
+  passed++;
+}
+
+// 3. Multi-fact sentence: cramps/headache on yesterday, not start day
+{
+  const res = parseLocally(
+    "my period started three days ago and the flow was medium on the first day but heavy yesterday with bad cramps and a headache and I also have an exam coming up on November 20 and a wedding to attend",
+    "2026-10-31",
+    {}
+  );
+  assert(res.entry, "Start day entry must be present");
+  assert.strictEqual(res.entry?.date, "2026-10-28", "Start date is 3 days ago");
+  assert.strictEqual(res.entry?.flow, "medium", "First day flow is medium");
+  assert.deepStrictEqual(res.entry?.symptoms, [], "Cramps and headache must NOT be attached to start-day entry");
+  assert.strictEqual(res.plannedEvents?.length, 1, "Only exam event returned");
+  assert.strictEqual(res.plannedEvents?.[0]?.title, "exam", "Clean title exam");
+  assert(res.message.includes("couldn't place"), "Message includes couldn't place disclosure");
+  assert(res.message.includes("2026-10-30"), "Message names yesterday's date");
+  assert(res.message.includes("I couldn't place a date for: wedding"), "Message names unplaced wedding");
+  console.log("[PASS] parseLocally: yesterday symptoms not attached to start day, unplaced facts disclosed");
+  passed++;
+}
+
 console.log(`\nQA Regression Suite: All ${passed} test groups passed!`);
 

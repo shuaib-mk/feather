@@ -1,4 +1,4 @@
-﻿/** Batch-2 follow-up tests: Item 1 (message outcomes render) + Item 2 (contrast targeting). */
+/** Batch-2 follow-up tests: Item 1 (message outcomes render) + Item 2 (contrast targeting). */
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { parseLocally } from "../backend/agent";
@@ -30,7 +30,7 @@ try {
 try {
   const r = parseLocally("my period started three days ago and the flow was medium on the first day but heavy yesterday with bad cramps and a headache and I also have an exam coming up on November 20 and a wedding to attend", "2026-10-31", {});
   const html = cardHtml(r.message);
-  check("1c placed facts still place (entry + 2 events)", r.entry?.date === "2026-10-28" && ((r as any).plannedEvents || []).length === 2, JSON.stringify(r.entry));
+  check("1c placed facts still place (entry + 1 event)", r.entry?.date === "2026-10-28" && ((r as any).plannedEvents || []).length === 1 && (r as any).plannedEvents[0].title === "exam", JSON.stringify(r.entry));
   check("1c couldn't-place disclosure is rendered", html.includes("couldn") && html.includes("place:") && html.includes("2026-10-30"), html);
   check("1c disclosure is a message outcome (not a refusal)", agentMessageKind(r.message) === "message");
 } catch (e: any) { check("1c", false, e.message); }

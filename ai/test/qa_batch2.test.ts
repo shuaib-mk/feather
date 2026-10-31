@@ -1,4 +1,4 @@
-﻿/** Deep-audit batch 2 regression tests (Groups A-E). */
+/** Deep-audit batch 2 regression tests (Groups A-E). */
 import { saveCycleData, loadCycleData, saveLogEntry, deletePeriodEntry, deleteDayLog, countDailyNotes, countEntryDates, effectivePeriodDurationDays } from "../../client/src/cycleStorage";
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
@@ -84,15 +84,16 @@ try {
   check("B3 explicit correction still applies", r.entry?.flow === "light" && r.entry?.date === "2026-10-27", JSON.stringify(r.entry));
 } catch (e: any) { check("B3 correction", false, e.message); }
 
-// B2: multi-fact sentence — start = 3 days ago, first-day flow, both events, unplaced named.
+// B2: multi-fact sentence — start = 3 days ago, first-day flow, dated event only (exam), unplaced wedding & yesterday named.
 try {
   const r = parseLocally("my period started three days ago and the flow was medium on the first day but heavy yesterday with bad cramps and a headache and I also have an exam coming up on November 20 and a wedding to attend", "2026-10-31", {});
   check("B2 start date = 3 days ago (2026-10-28)", r.entry?.date === "2026-10-28", JSON.stringify(r.entry));
   check("B2 first-day flow = medium", r.entry?.flow === "medium", r.entry?.flow || "");
+  check("B2 start day symptoms empty (not attached to wrong day)", (r.entry?.symptoms || []).length === 0, JSON.stringify(r.entry?.symptoms));
   const evs = (r as any).plannedEvents || [];
-  check("B2 both events offered", evs.length === 2 && evs.some((e: any) => /exam/i.test(e.title)) && evs.some((e: any) => /wedding/i.test(e.title)), JSON.stringify(evs));
-  check("B2 events dated 2026-11-20", evs.every((e: any) => e.date === "2026-11-20"), JSON.stringify(evs));
+  check("B2 only dated event (clean title 'exam') offered", evs.length === 1 && evs[0].title === "exam" && evs[0].date === "2026-11-20", JSON.stringify(evs));
   check("B2 unplaced fact named, not dropped", /couldn't place/i.test(r.message) && r.message.includes("2026-10-30"), r.message);
+  check("B2 unplaced wedding named", /couldn't place a date for:\s*wedding/i.test(r.message), r.message);
 } catch (e: any) { check("B2", false, e.message); }
 
 

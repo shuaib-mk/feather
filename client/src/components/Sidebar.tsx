@@ -128,8 +128,6 @@ export function Sidebar() {
         className="group/sidebar fixed z-40 left-3 md:left-5 hidden md:flex flex-col gap-2 select-none"
         style={{
           top: "max(1.25rem, calc(env(safe-area-inset-top, 0px) + 1rem))",
-          willChange: "transform, width",
-          transform: "translateZ(0)",
         }}
       >
         <div
@@ -270,7 +268,7 @@ export function Sidebar() {
       >
         <Link
           to="/"
-          className="flex items-center gap-2 rounded-full liquid-glass-pill px-3.5 py-1.5 shadow-xs cursor-pointer border border-white/85 text-stone-900 active:scale-95 transition-transform"
+          className="flex items-center gap-2 rounded-full liquid-glass-topbar px-3.5 py-1.5 shadow-xs cursor-pointer text-stone-900 active:scale-95 transition-transform"
           aria-label="Feather Home"
         >
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-stone-900 shrink-0">
