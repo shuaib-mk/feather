@@ -399,6 +399,163 @@ export function hasAnyLoggingOrPlanningCue(text: string): boolean {
   return stripped.length > 0;
 }
 
+
+// ---- Fact coverage (Prompt 5 follow-up): slips, never prose ----
+// The live model path returns model prose plus structured slips/events. The
+// offline disclosure logic inside parseLocally never runs on that result, so
+// a fact the model mentioned only in prose was silently dropped. Coverage
+// below is computed ONLY from the structured payload actually returned
+// (result.entry, log_entry/update_entry tool results, plannedEvents). The
+// message text is read solely to avoid duplicating a disclosure already
+// appended; placement is never inferred from prose. Undated events are not
+// dated facts and are never flagged here.
+
+export interface StatedDatedFact {
+  date: string;
+  flow?: string | null;
+  symptoms?: string[];
+  eventNoun?: string;
+  label: string;
+}
+
+const COVERAGE_EVENT_NOUNS = [
+  "wedding", "exam", "trip", "interview", "party", "flight",
+  "vacation", "conference", "presentation", "dinner", "meeting",
+  "birthday", "anniversary", "marathon", "race", "appointment",
+];
+const COVERAGE_MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+const COVERAGE_DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${COVERAGE_MONTHS})[a-z]*\\b|\\b(?:${COVERAGE_MONTHS})[a-z]*\\s+\\d{1,2}(?:st|nd|rd|th)?\\b)`, "gi");
+const COVERAGE_FLOW_RE = /\b(none|spotting|light|medium|heavy)\b/i;
+const DAY_WORD_NUMBERS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+
+function clauseAround(text: string, index: number, length: number): string {
+  const start = Math.max(0, text.lastIndexOf(".", index - 1) + 1, text.lastIndexOf("!", index - 1) + 1, text.lastIndexOf("?", index - 1) + 1, text.lastIndexOf(";", index - 1) + 1, text.lastIndexOf("\n", index - 1) + 1);
+  const stops = [text.indexOf(".", index + length), text.indexOf("!", index + length), text.indexOf("?", index + length), text.indexOf(";", index + length), text.indexOf("\n", index + length)].filter((i) => i !== -1);
+  return text.slice(start, stops.length ? Math.min(...stops) : text.length);
+}
+
+/** Dated facts stated in the prompt, resolved deterministically. Undated mentions are excluded. */
+export function findStatedDatedFacts(userPrompt: string, today: string): StatedDatedFact[] {
+  const text = userPrompt || "";
+  const lower = text.toLowerCase();
+  const facts: StatedDatedFact[] = [];
+  const push = (fact: StatedDatedFact) => {
+    if (!isValidDateKey(fact.date)) return;
+    if (!facts.some((f) => f.date === fact.date && f.flow === fact.flow && f.eventNoun === fact.eventNoun)) facts.push(fact);
+  };
+
+  // "heavy yesterday" / "yesterday ... heavy" (established disclosure wording).
+  const yesterdayKey = addDaysToKey(today, -1);
+  const yIdx = lower.search(/\byesterday\b/);
+  if (yIdx !== -1) {
+    const clause = clauseAround(text, yIdx, "yesterday".length);
+    const flowMatch = clause.match(/\b(none|spotting|light|medium|heavy)\s+(?:flow\s+)?yesterday\b/i)
+      || clause.match(/\byesterday\b[^.!?;\n]{0,60}?\b(?:flow\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
+    if (flowMatch) {
+      push({ date: yesterdayKey, flow: flowMatch[1].toLowerCase(), label: `${flowMatch[1].toLowerCase()} flow yesterday (${yesterdayKey}) as a separate day` });
+    } else {
+      const symptoms = extractWithLexicon(clause).symptoms;
+      if (symptoms.length > 0) {
+        push({ date: yesterdayKey, symptoms: [...symptoms], label: `${symptoms.join(" and ")} yesterday (${yesterdayKey}) as a separate day` });
+      }
+    }
+  }
+
+  // Explicit calendar dates (ISO or month-day).
+  COVERAGE_DATE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = COVERAGE_DATE_RE.exec(text)) !== null) {
+    const raw = m[1];
+    const clause = clauseAround(text, m.index, raw.length);
+    const before = text.slice(Math.max(0, m.index - 120), m.index);
+    const nouns = [...before.matchAll(new RegExp(`\\b(${COVERAGE_EVENT_NOUNS.join("|")})\\b`, "gi"))];
+    const eventNoun = nouns.length ? nouns[nouns.length - 1][1].toLowerCase() : undefined;
+    const currentYear = Number(today.slice(0, 4));
+    let resolved: string | null = null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) resolved = isValidDateKey(raw) ? raw : null;
+    else {
+      const noYear = raw.replace(/,?\s+\b\d{4}\b/, "");
+      resolved = parseMonthDay(noYear, currentYear);
+      if (resolved) {
+        if (eventNoun) {
+          // Plan events roll to the next occurrence (existing plan rule).
+          if (resolved < today) resolved = parseMonthDay(noYear, currentYear + 1);
+        } else if (resolved > today) {
+          // Log dates default to the most recent occurrence (existing log rule).
+          resolved = parseMonthDay(noYear, currentYear - 1);
+        }
+      }
+    }
+    if (!resolved) continue;
+    if (eventNoun) {
+      push({ date: resolved, eventNoun, label: `${eventNoun} on ${resolved}` });
+      continue;
+    }
+    const flowMatch = clause.match(COVERAGE_FLOW_RE);
+    if (flowMatch) {
+      push({ date: resolved, flow: flowMatch[1].toLowerCase(), label: `${flowMatch[1].toLowerCase()} flow (${resolved}) as a separate day` });
+    } else if (/\bperiod\s+(started|began|came)\b/i.test(clause)) {
+      push({ date: resolved, label: `period start (${resolved}) as a separate day` });
+    }
+  }
+
+  // "heavy flow 3 days ago" style relative facts.
+  const agoRe = /\b(\d+|one|two|three|four|five|six|seven)\s+days?\s+ago\b/gi;
+  let a: RegExpExecArray | null;
+  while ((a = agoRe.exec(text)) !== null) {
+    const clause = clauseAround(text, a.index, a[0].length);
+    const flowMatch = clause.match(COVERAGE_FLOW_RE);
+    if (!flowMatch) continue;
+    const n = /^\d+$/.test(a[1]) ? Number(a[1]) : DAY_WORD_NUMBERS[a[1].toLowerCase()] || 0;
+    if (n <= 0) continue;
+    const date = addDaysToKey(today, -n);
+    push({ date, flow: flowMatch[1].toLowerCase(), label: `${flowMatch[1].toLowerCase()} flow (${date}) as a separate day` });
+  }
+  return facts;
+}
+
+function structuredEntriesOf(result: AgentResult): StructuredEntry[] {
+  const entries: StructuredEntry[] = [];
+  if (result.entry) entries.push(result.entry);
+  for (const call of result.toolCalls || []) {
+    const entry = (call as any)?.result?.entry;
+    if (entry && typeof entry.date === "string" && !entries.some((e) => e.date === entry.date && e.flow === entry.flow)) entries.push(entry);
+  }
+  return entries;
+}
+
+function factIsPlaced(fact: StatedDatedFact, entries: StructuredEntry[], events: Array<{ title: string; date: string }>): boolean {
+  if (fact.eventNoun) {
+    return events.some((e) => e.date === fact.date && (e.title || "").toLowerCase().includes(fact.eventNoun!));
+  }
+  return entries.some((e) => e.date === fact.date
+    && (!fact.flow || e.flow === fact.flow)
+    && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym as any))));
+}
+
+/**
+ * Append an "I couldn't place:" disclosure for every stated dated fact that
+ * is absent from the structured payload, whatever the prose claims. The
+ * prose itself is never edited and never counts as placement. Clarifying
+ * questions are left alone (the user is being asked, not told).
+ */
+export function ensureFactCoverageDisclosure<T extends AgentResult>(result: T, userPrompt: string, today: string): T {
+  if (!result || typeof result.message !== "string" || result.needsClarification) return result;
+  const facts = findStatedDatedFacts(userPrompt, today);
+  if (facts.length === 0) return result;
+  const entries = structuredEntriesOf(result);
+  const events = result.plannedEvents || [];
+  let message = result.message;
+  for (const fact of facts) {
+    if (factIsPlaced(fact, entries, events)) continue;
+    if (message.includes("couldn't place") && message.includes(fact.date)) continue;
+    message += fact.eventNoun
+      ? ` I couldn't place: ${fact.label} \u2014 add it from the calendar if you want it saved.`
+      : ` I couldn't place: ${fact.label} \u2014 log that day separately if you want it saved.`;
+  }
+  return message === result.message ? result : { ...result, message };
+}
+
 export async function runLavenderAgent(
   userPrompt: string,
   context: AgentContext = {},
@@ -701,7 +858,7 @@ export async function runLavenderAgent(
         : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
     }
 
-    return {
+    return ensureFactCoverageDisclosure({
       message: finalMessage,
       entry: structuredEntry,
       needsClarification,
@@ -713,7 +870,7 @@ export async function runLavenderAgent(
       mode: "live",
       modeReason: null,
       usedPersonalAnchor: usedPersonalAnchorLive,
-    };
+    }, userPrompt, today);
   } catch (err: any) {
     console.error("[Lavender Agent] Error in runLavenderAgent:", err);
     return { ...fallbackResult, mode: "offline", modeReason: `Offline parser — Meta model not used (${err?.message || "Meta API request failed"})` };
