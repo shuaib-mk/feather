@@ -7,6 +7,7 @@
 
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "./guardrail";
+import { buildOwnDataAnswer } from "./ownDataAnswer";
 
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
@@ -117,6 +118,8 @@ export function selectCorrectionTarget(text: string, pending: StructuredEntry | 
 }
 
 export interface AgentResult {
+  kind?: "own_data_answer";
+  usedLiveModel?: boolean;
   mode?: "live" | "offline";
   modeReason?: string | null;
   plannedEvents?: Array<{ title: string; date: string }>;
@@ -606,6 +609,15 @@ export async function runLavenderAgent(
     });
   }
 
+  if (!severeCheck.isSevere) {
+    const ownLive = buildOwnDataAnswer(userPrompt, context);
+    if (ownLive) {
+      activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+      activityTrail.forEach((a) => (a.status = "done"));
+      return { message: ownLive.message, kind: ownLive.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Answered from your own logs, no model call" };
+    }
+  }
+
   // Live path: no regex pre-intercept for corrections. The pending entry is passed
   // to the model, which may call update_entry with a patch (Batch 2.4). Offline mode
   // (parseLocally) is the only place regex corrections run.
@@ -1029,6 +1041,11 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const severeCheck = checkSevereSymptomEscalation(text);
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
+  }
+  const ownData = buildOwnDataAnswer(text, context);
+  if (ownData) {
+    activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+    return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
