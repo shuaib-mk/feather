@@ -60,7 +60,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - Dual-layer defense mechanism:
   - **Layer 1 (Regex)**: Intercepts diagnostic inquiries, medication advice, dosage questions, and pregnancy-risk queries across English, Spanish, Malayalam, and Hindi.
   - **Layer 2 (Model Refusal)**: Enforces fixed refusal message: *"I can only help with logging and planning. For health questions, please talk to a doctor."*
-- 100% precision and 100% recall across 105 samples in the author's own internal regression set (not an independent benchmark) with zero false-positives on valid cycle logs.
+- 100% precision and 100% recall across 177 samples in the author's own internal regression set (not an independent benchmark) with zero false-positives on valid cycle logs.
 
 ### D. User Interface & Judge Experience (`client/src/`)
 - Responsive React 19 + TypeScript + Tailwind v4 client with Liquid Glass design tokens (specular borders, convex lighting, backdrop blur).
@@ -103,7 +103,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - **Batches 1–9, Holdout, QA & Smoke Suites**: **All 18 test suites passed, 0 failed**
 
 ### Evaluation Harness (`npm run eval`)
-- **Total Labelled Samples**: **170 samples** (`author's own internal regression set, not an independent benchmark`)
+- **Total Labelled Samples**: **242 samples** (`author's own internal regression set, not an independent benchmark`)
 - **Landmark Recall Benchmark (65 samples across English, Malayalam, Hindi, and Code-Mixed)**:
   - **resolved to the right date: 32/32** (verified past/present landmarks and explicit plan phrases in `ai/backend/landmarks.json`)
   - **correctly asked for clarification: 33/33** (14 unverified landmarks not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask for clarification with no date)
@@ -124,3 +124,6 @@ Tap **Try Demo** on the first screen. Demo Mode is isolated in `feather_demo_v1`
 
 ## Known limitations
 The offline parser is rule-based; Live Meta calls are not verified against a live key (the ASR request shape follows the owner-provided Meta docs); Malayalam is not in Meta's supported voice languages; festival dates are limited to verified ones; estimates are not medical advice; data is unencrypted unless App Lock is on; Diary Scanner is secondary and optional. Live evaluation results are "Not measured" until run with the owner's key. See README "Known limitations" and PROVENANCE.md.
+
+
+Safety scope (guardrail v2): Feather refuses diagnosis, medication, fertility and pregnancy-risk questions, verdicts about whether a cycle or flow is typical, diet or exercise advice, and cycle-phase interpretation - with a short redirect to what it can do instead. Questions about her own logs ("what is my average cycle", "when is my next period", "how many cycles have I logged") are answered from her own logged numbers only, with no model call, and verdict-style questions show her numbers without judging them. Live-model behaviour is not measured until the live eval is run.

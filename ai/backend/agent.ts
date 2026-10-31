@@ -6,7 +6,8 @@
 // 5. Tool Call Inspection & Observability
 
 import { getConfig } from "./config";
-import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "./guardrail";
+import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE, getGuardrailResponseMessage, checkModelOutputGuard, REDIRECT_MESSAGES } from "./guardrail";
+import { buildOwnDataAnswer } from "./ownDataAnswer";
 
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
@@ -117,6 +118,8 @@ export function selectCorrectionTarget(text: string, pending: StructuredEntry | 
 }
 
 export interface AgentResult {
+  kind?: "own_data_answer";
+  usedLiveModel?: boolean;
   mode?: "live" | "offline";
   modeReason?: string | null;
   plannedEvents?: Array<{ title: string; date: string }>;
@@ -295,6 +298,7 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
 1. STRICT MEDICAL & HEALTH REFUSAL:
    - NEVER give medical advice, interpret symptoms, diagnose conditions, recommend medication or dosages, or provide fertility, contraception, or pregnancy-risk guidance.
    - You MUST NEVER use words like "safe", "guaranteed", "clear window", or anything implying pregnancy or fertility safety.
+   - NEVER state whether a cycle length, period length, flow or symptom is normal, healthy or abnormal. NEVER give ovulation or fertile-window information. For such questions reply only with: "I can't help with that, but I can log how you feel or show your logged cycles."
    - If the user asks ANY question seeking medical diagnosis, symptom interpretation, medication, treatment, or pregnancy risk, you MUST refuse immediately with this exact fixed message and nothing else:
      "I can only help with logging and planning. For health questions, please talk to a doctor."
 
@@ -589,7 +593,7 @@ export async function runLavenderAgent(
       status: "done",
     });
     return {
-      message: MEDICAL_REFUSAL_MESSAGE,
+      message: getGuardrailResponseMessage(userPrompt),
       needsClarification: false,
       activityTrail,
       toolCalls: toolCallsRecorded,
@@ -604,6 +608,15 @@ export async function runLavenderAgent(
       detail: "Red-flag symptom detected — care-seeking signpost prepended",
       status: "done",
     });
+  }
+
+  if (!severeCheck.isSevere) {
+    const ownLive = buildOwnDataAnswer(userPrompt, context);
+    if (ownLive) {
+      activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+      activityTrail.forEach((a) => (a.status = "done"));
+      return { message: ownLive.message, kind: ownLive.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Answered from your own logs, no model call" };
+    }
   }
 
   // Live path: no regex pre-intercept for corrections. The pending entry is passed
@@ -839,6 +852,12 @@ export async function runLavenderAgent(
       }
     }
 
+    // v2 output guard: banned words / verdict phrasing in model text -> fixed redirect.
+    const bannedOut = checkModelOutputGuard(finalMessage);
+    if (bannedOut.blocked) {
+      activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
+      return { message: REDIRECT_MESSAGES.verdict, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "live" as const, modeReason: "Output guard replaced the model reply" };
+    }
     // Server-side check on the final assistant response as secondary guardrail defense
     const outputGuard = checkMedicalAdviceGuardrail(finalMessage);
     if (outputGuard.isRefusal) {
@@ -1024,11 +1043,16 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const offline = { mode: "offline" as const, modeReason: "Offline parser — Meta model not used (offline rule engine)" };
 
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
+    return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
   const severeCheck = checkSevereSymptomEscalation(text);
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
+  }
+  const ownData = buildOwnDataAnswer(text, context);
+  if (ownData) {
+    activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
+    return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";

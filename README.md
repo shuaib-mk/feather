@@ -3,6 +3,8 @@
 ## Pre-existing vs built during the hackathon
 Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, inside the hackathon building period (Oct 27 – Nov 4, 2026); no file's first commit predates the Oct 26 kickoff. No pre-existing code is knowingly included; asset provenance (including one asset whose source is unknown and must be confirmed by the owner) is recorded in [PROVENANCE.md](PROVENANCE.md). History has not been rewritten.
 
+Safety scope (guardrail v2): Feather refuses diagnosis, medication, fertility and pregnancy-risk questions, verdicts about whether a cycle or flow is typical, diet or exercise advice, and cycle-phase interpretation - with a short redirect to what it can do instead. Questions about her own logs ("what is my average cycle", "when is my next period", "how many cycles have I logged") are answered from her own logged numbers only, with no model call, and verdict-style questions show her numbers without judging them. Live-model behaviour is not measured until the live eval is run.
+
 ## Known limitations
 - The offline parser is rule-based (keyword/lexicon matching and deterministic date arithmetic); it does not understand arbitrary phrasing.
 - Meta API request shapes have not been verified against a live key; live results are "Not measured" until the owner runs the live evaluation.
@@ -90,7 +92,7 @@ Feather includes a comprehensive evaluation harness (`author's own internal regr
 ### Part A: Offline Deterministic Engine & Guardrail (Author's Own Internal Regression Set, Not an Independent Benchmark)
 
 ```sh
-# Run offline internal regression suite (170 samples)
+# Run offline internal regression suite (242 samples)
 npm run eval
 
 # Run blind holdout internal regression suite (19 samples)
@@ -105,7 +107,7 @@ npx tsx ai/eval/run-holdout.ts
   - • Hindi (`hi`, 13 samples): date `6/6`, clarification `7/7`
   - • Code-Mixed (`code-mixed`, 12 samples): date `6/6`, clarification `6/6`
   - Latency: Median (`p50`) = `1 ms` | `p95` = `2 ms`
-- **Medical Safety Guardrail Benchmark (105 samples, author's own internal regression set, not an independent benchmark)**:
+- **Medical Safety Guardrail Benchmark (177 samples, author's own internal regression set, not an independent benchmark)**:
   - **Refusal Recall (Sensitivity)**: `100%` (`53/53` medical queries blocked)
   - **Precision**: `100%` (`53/53`)
   - **Specificity (Valid Logging)**: `100%` (`52/52` valid logs allowed)
@@ -200,7 +202,7 @@ feather/
 │   │   ├── transcribe.ts     # Meta Muse Voice Transcribe service
 │   │   └── vision.ts         # Photo diary scanner service using Muse Spark
 │   ├── eval/
-│   │   ├── guardrail.dataset.ts # 105 labelled samples (medical vs. valid logs)
+│   │   ├── guardrail.dataset.ts # 177 labelled samples (medical vs. valid logs)
 │   │   ├── landmarks.dataset.ts # 65 labelled multilingual landmark expressions
 │   │   └── runner.ts            # Automated internal regression suite runner with p50/p95 latency profiling
 │   ├── frontend/
@@ -261,7 +263,7 @@ PORT=3001
 ```sh
 npm test
 
-# Run the 170-sample evaluation harness with latency profiling
+# Run the 242-sample evaluation harness with latency profiling
 npm run eval
 ```
 

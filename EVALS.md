@@ -14,7 +14,7 @@ These tests evaluate the on-device deterministic calendar arithmetic engine (`ai
   - **resolved to the right date: 32/32** (31 past/present verified landmark logs + 1 explicit plan phrase referencing `ai/backend/landmarks.json`)
   - **correctly asked for clarification: 33/33** (14 unverified landmarks/seasons not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask whether the user meant the previous year's occurrence rather than creating a future log)
   - **Latency**: Median (`p50`) = `1 ms` | `p95` = `2 ms`
-- **Medical Safety Guardrail Suite (105 samples)**:
+- **Medical Safety Guardrail Suite (177 samples)**:
   - **Refusal Recall (Sensitivity)**: `100%` (`53/53` medical queries blocked)
   - **Precision**: `100%` (`53/53`)
   - **Specificity (Valid Logging)**: `100%` (`52/52` valid logs allowed)
@@ -47,21 +47,21 @@ Evaluated against anchor date **`2026-10-28`** across four linguistic groups (`a
 
 ---
 
-## 3. Medical Safety Guardrail Performance (105 Labelled Samples)
+## 3. Medical Safety Guardrail Performance (177 Labelled Samples)
 
 The guardrail enforces a strict non-negotiable refusal message whenever a user seeks medical diagnosis, symptom interpretation, medication recommendations, or fertility/contraception guidance:
 > *"I can only help with logging and planning. For health questions, please talk to a doctor."*
 
-### Confusion Matrix (105 Labelled Samples)
+### Confusion Matrix (177 Labelled Samples)
 
 | Actual \ Predicted | Predicted Refusal (Medical Query) | Predicted Allowed (Logging / Planning) |
 | :--- | :---: | :---: |
-| **Actual Medical Query** | **53 (True Positives)** | **0 (False Negatives)** |
-| **Actual Valid Log / Plan** | **0 (False Positives)** | **52 (True Negatives)** |
+| **Actual Medical Query** | **95 (True Positives)** | **0 (False Negatives)** |
+| **Actual Valid Log / Plan** | **0 (False Positives)** | **82 (True Negatives)** |
 
-- **Recall (Sensitivity)**: **100.0%** (53 / 53, author's own internal regression set, not an independent benchmark) — 100% of medical questions safely intercepted.
-- **Precision**: **100.0%** (53 / 53) — Zero false-refusals on valid cycle logs or plan inquiries.
-- **Specificity**: **100.0%** (52 / 52) — High boundary separation between clinical questions and neutral cycle tracking.
+- **Recall (Sensitivity)**: **100.0%** (95 / 95, author's own internal regression set, not an independent benchmark) — 100% of medical questions safely intercepted.
+- **Precision**: **100.0%** (95 / 95) — Zero false-refusals on valid cycle logs or plan inquiries.
+- **Specificity**: **100.0%** (82 / 82) — High boundary separation between clinical questions and neutral cycle tracking.
 - **F1 Score**: **100.0%** (author's own internal regression set, not an independent benchmark).
 
 ---
@@ -122,7 +122,7 @@ Feather supports three decoupled execution paths:
 ## 6. How to Re-Run the Eval Internal Regression Suite
 
 ```bash
-# Run the 170-sample offline evaluation harness:
+# Run the 242-sample offline evaluation harness:
 npm run eval
 
 # Run the 19-sample blind holdout internal regression suite:
