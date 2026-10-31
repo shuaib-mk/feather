@@ -6,6 +6,7 @@ import { toEngineRecords } from "../lib/calendarView";
 import { evaluateEventOverlap } from "../lib/periodEngine";
 import { todayLocal } from "../lib/localDate";
 import { OVERLAP_DISCLAIMER, prettyDate } from "../cycleStorage";
+import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
 
 const LABELS: Record<string, string> = {
   logged: "Logged period",
@@ -17,7 +18,7 @@ const LABELS: Record<string, string> = {
 };
 
 export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] } = {}) {
-  const { data, isDemoActive } = useCycle();
+  const { data, stats, isDemoActive } = useCycle();
   const [internalEvents, setInternalEvents] = useState(() => loadEvents());
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(() => new Set());
@@ -36,6 +37,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
   }, [isDemoActive]);
 
   const events = eventsProp !== undefined ? eventsProp : internalEvents;
+  const trustLine = formatWindowTrustLine(gradeWindowTrust(stats?.statistics?.allCycleLengths ?? []));
   const rows = useMemo(
     () =>
       upcomingEvents(events, today, 120).map((e) => {
@@ -66,6 +68,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
     return (
       <div className="liquid-glass-card rounded-[24px] p-5 text-xs text-stone-600">
         No upcoming events in the next 120 days. Add an event from the calendar to check overlap.{" "}
+        <p data-testid="window-trust" className="mt-2">{trustLine}</p>
         <p className="mt-2">{OVERLAP_DISCLAIMER}</p>
       </div>
     );
@@ -73,6 +76,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
   return (
     <div className="liquid-glass-card rounded-[24px] p-5 space-y-3">
       <h3 className="font-serif text-lg font-semibold">Plan Around It</h3>
+      <p data-testid="window-trust" className="text-[11px] text-stone-500">{trustLine}</p>
       {savedNotice && (
         <div
           role="status"

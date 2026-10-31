@@ -7,6 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { diffDays, prettyDate, todayStr, effectivePeriodEndDate } from "../cycleStorage";
 import { useDiscreetMode } from "../lib/discreetMode";
+import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
 
 export function DashboardPage() {
   const { data, stats, loadDemo, isDemoActive } = useCycle();
@@ -173,6 +174,7 @@ export function DashboardPage() {
                         : `${Math.abs(daysUntilNext)}d past est.`
                       : "Based on logs"}
                   </span>
+                  <span data-testid="window-trust" className="font-sans text-[11px] text-stone-500 block truncate">{formatWindowTrustLine(gradeWindowTrust(stats.statistics?.allCycleLengths ?? []))}</span>
                 </>
               )}
             </div>

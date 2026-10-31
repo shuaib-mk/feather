@@ -9,6 +9,7 @@ import { buildICS, buildCycleCalendarICS, parseICS } from "../lib/ics";
 import { PlanAroundIt } from "../components/PlanAroundIt";
 import { todayLocal } from "../lib/localDate";
 import { addDays } from "../lib/periodEngine";
+import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
 
 export function buildWeekdayHeader(weekStart: 0 | 1, locale = "en-US"): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -62,6 +63,7 @@ export function CalendarPage(){
         <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-stone-700 inline-block" /> Log / event</span>
       </div>
       <p className="text-[11px] text-stone-500">Shaded days are estimates from your logged cycles. Not medical advice.</p>
+      <p data-testid="window-trust" className="text-[11px] text-stone-500">{formatWindowTrustLine(gradeWindowTrust(stats.statistics?.allCycleLengths ?? []))}</p>
     </div>
     {sel && <div className="liquid-glass-card rounded-[24px] p-5 space-y-3" aria-label="Day details">
       <h3 className="font-serif font-semibold">{sel.label}</h3>
