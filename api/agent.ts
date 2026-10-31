@@ -1198,6 +1198,25 @@ var VALID_SYMPTOMS = [
   "dizziness",
   "appetite_change"
 ];
+function negatedFlowValue(text) {
+  const lower = text.toLowerCase();
+  const m1 = lower.match(/\b(none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/);
+  if (m1) return m1[2];
+  const m2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\b[^.]*?\b(none|spotting|light|medium|heavy)\b/);
+  if (m2) return m2[1];
+  return null;
+}
+function selectCorrectionTarget(text, pending, recent, candidates) {
+  if (pending) return pending;
+  const pool = candidates && candidates.length ? candidates : recent ? [recent] : [];
+  if (!pool.length) return recent ?? null;
+  const neg = negatedFlowValue(text);
+  if (neg) {
+    const hit = pool.find((e) => (e.flow || "").toLowerCase() === neg);
+    if (hit) return hit;
+  }
+  return pool[0] ?? recent ?? null;
+}
 var TOOLS = [
   {
     type: "function",
@@ -1426,7 +1445,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (Meta API key not configured)" };
   }
   const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
-  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
+  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? selectCorrectionTarget(userPrompt, null, context.recentEntry, context.recentEntries) : null);
   let livePlannedEvents = [];
   if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
     return {
@@ -1585,7 +1604,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          const entryToPatch = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
+          const entryToPatch = targetEntry;
           if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
@@ -1790,7 +1809,7 @@ function parseLocally(text, today, context) {
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
   const isExplicitCorrection = /^\s*no[,.!?\s]/i.test(text) || /\bactually\b/i.test(text) || /\bmake it\b/i.test(text) || /\bchange\s+(?:the\s+)?(?:date|flow|mood|energy|it|to)\b/i.test(text) || /\b(?:add|remove|delete)\b/i.test(text) || /\balso had\b/i.test(text) || /\bset\s+(?:the\s+)?date\b/i.test(text) || /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) || /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
-  const targetSlip = context.pendingEntry || (isExplicitCorrection ? context.recentEntry : null);
+  const targetSlip = context.pendingEntry || (isExplicitCorrection ? selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries) : null);
   if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
     const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {

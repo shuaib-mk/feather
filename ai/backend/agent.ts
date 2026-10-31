@@ -90,9 +90,30 @@ export interface AgentContext {
   provider?: "meta" | "baseten";
   pendingEntry?: StructuredEntry | null;
   recentEntry?: StructuredEntry | null;
+  recentEntries?: StructuredEntry[];
   locale?: string;
   matchedEvents?: Array<{ title: string; date: string }>;
   cycleStatsIsDefault?: boolean;
+}
+
+export function negatedFlowValue(text: string): string | null {
+  const lower = text.toLowerCase();
+  const m1 = lower.match(/\b(none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/);
+  if (m1) return m1[2];
+  const m2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\b[^.]*?\b(none|spotting|light|medium|heavy)\b/);
+  if (m2) return m2[1];
+  return null;
+}
+export function selectCorrectionTarget(text: string, pending: StructuredEntry | null | undefined, recent: StructuredEntry | null | undefined, candidates?: StructuredEntry[] | null): StructuredEntry | null {
+  if (pending) return pending;
+  const pool: StructuredEntry[] = (candidates && candidates.length ? candidates : (recent ? [recent] : []));
+  if (!pool.length) return recent ?? null;
+  const neg = negatedFlowValue(text);
+  if (neg) {
+    const hit = pool.find((e) => (e.flow || "").toLowerCase() === neg);
+    if (hit) return hit;
+  }
+  return pool[0] ?? recent ?? null;
 }
 
 export interface AgentResult {
@@ -372,7 +393,7 @@ export async function runLavenderAgent(
   const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
   // B3: a recent (already-saved) entry is only a correction target on explicit
   // correction language; a pending slip is always available to patch.
-  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
+  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? selectCorrectionTarget(userPrompt, null, context.recentEntry, context.recentEntries) : null);
   let livePlannedEvents: Array<{ title: string; date: string }> = [];
 
   if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
@@ -536,7 +557,7 @@ export async function runLavenderAgent(
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          const entryToPatch = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
+          const entryToPatch = targetEntry;
           if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
@@ -753,7 +774,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     /\bset\s+(?:the\s+)?date\b/i.test(text) ||
     /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) ||
     /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
-  const targetSlip = context.pendingEntry || (isExplicitCorrection ? context.recentEntry : null);
+  const targetSlip = context.pendingEntry || (isExplicitCorrection ? selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries) : null);
   if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
     const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {

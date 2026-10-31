@@ -3,6 +3,7 @@ import React from "react";
 import { renderToString } from "react-dom/server";
 import { parseLocally } from "../backend/agent";
 import { AgentMessageCard } from "../../client/src/components/AgentMessageCard";
+import { saveCycleData, loadCycleData, saveLogEntry } from "../../client/src/cycleStorage";
 import { agentMessageKind } from "../../client/src/lib/voiceMessage";
 
 let passed = 0, failed = 0;
@@ -40,6 +41,25 @@ try {
   check("guardrail exact refusal, no entry", r.message === "I can only help with logging and planning. For health questions, please talk to a doctor." && !r.entry, r.message);
   check("refusal is not rendered by the message card", cardHtml(r.message) === "", cardHtml(r.message));
 } catch (e: any) { check("guardrail", false, e.message); }
+
+
+// Item 2: contrast correction targets the entry with the negated flow (Oct 30 heavy, not the most recent Oct 31 medium).
+try {
+  const oct31: any = { date: "2026-10-31", flow: "medium", symptoms: [], mood: null, energy: null, sleep: null, notes: null, landmarkName: null, isApproximate: false, kind: "period_started" };
+  const oct30: any = { date: "2026-10-30", flow: "heavy", symptoms: [], mood: null, energy: null, sleep: null, notes: null, landmarkName: null, isApproximate: false, kind: "period_started" };
+  const r = parseLocally("actually it was light, not heavy", "2026-10-31", { recentEntry: oct31, recentEntries: [oct31, oct30] });
+  check("2 targets the heavy entry (Oct 30), sets light", r.entry?.date === "2026-10-30" && r.entry?.flow === "light", JSON.stringify(r.entry));
+  // Save simulation exactly as the confirm flow does: applying the correction must edit Oct 30 in place, leave Oct 31 medium, add nothing.
+  saveCycleData({ periods: [], logs: [] });
+  saveLogEntry({ logDate: "2026-10-30", flow: "heavy", kind: "period_started", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null });
+  saveLogEntry({ logDate: "2026-10-31", flow: "medium", kind: "period_started", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null });
+  saveLogEntry({ logDate: r.entry!.date, flow: r.entry!.flow as any, kind: r.entry!.kind, symptoms: r.entry!.symptoms || [], mood: r.entry!.mood || null, energy: r.entry!.energy || null, sleepHours: r.entry!.sleep ?? null, notes: r.entry!.notes || null });
+  const d = loadCycleData();
+  check("2 save edits Oct 30 to light, Oct 31 stays medium, no duplicate", d.logs.length === 2 && d.logs.find((l:any)=>l.logDate==="2026-10-30")?.flow==="light" && d.logs.find((l:any)=>l.logDate==="2026-10-31")?.flow==="medium", JSON.stringify(d.logs));
+  // Fallback: no candidate has the negated value -> most recent entry is corrected.
+  const r2 = parseLocally("actually it was light, not heavy", "2026-10-31", { recentEntry: oct31, recentEntries: [oct31] });
+  check("2 falls back to most recent when no negated match", r2.entry?.date === "2026-10-31" && r2.entry?.flow === "light", JSON.stringify(r2.entry));
+} catch (e: any) { check("2 contrast targeting", false, e.message); }
 
 console.log(`\nQABatch2Followup Results: ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);

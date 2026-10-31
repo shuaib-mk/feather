@@ -122,6 +122,21 @@ export function VoiceFlowPage() {
     const sortedLogs = [...data.logs].sort((a, b) => b.logDate.localeCompare(a.logDate));
     const recentLog = sortedLogs[0];
     const recentPeriod = recentLog ? data.periods.find((p) => p.startDate === recentLog.logDate) : data.periods[0];
+    const recentEntries: StructuredEntry[] = sortedLogs.slice(0, 10).map((log) => {
+      const per = data.periods.find((p) => p.startDate === log.logDate);
+      return {
+        date: log.logDate,
+        flow: log.flow || null,
+        symptoms: (log.symptoms || []) as ValidSymptom[],
+        mood: log.mood || null,
+        energy: log.energy || null,
+        sleep: log.sleepHours || null,
+        notes: log.notes || null,
+        landmarkName: per?.landmarkName || null,
+        isApproximate: per?.isApproximate || false,
+        kind: log.kind || (per ? "period_started" : "daily_log"),
+      };
+    });
     const recentEntry: StructuredEntry | null = recentLog
       ? {
           date: recentLog.logDate,
@@ -163,6 +178,7 @@ export function VoiceFlowPage() {
           currentDate: todayStr(),
           pendingEntry: pending,
           recentEntry,
+          recentEntries,
           locale: typeof navigator !== "undefined" ? navigator.language : "en",
           matchedEvents: (()=>{ try { if (localStorage.getItem("feather_allow_matched_events")!=="true") return []; return fuzzyMatchEvents(promptText, loadEvents()).map((e)=>({title:e.title,date:e.date})); } catch { return []; } })(),
         },
