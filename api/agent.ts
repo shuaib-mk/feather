@@ -26,6 +26,7 @@ function getConfig() {
 
 // ai/backend/guardrail.ts
 var MEDICAL_REFUSAL_MESSAGE = "I can only help with logging and planning. For health questions, please talk to a doctor.";
+var SEVERE_SYMPTOM_ESCALATION_MESSAGE = "Important safety notice: Symptoms like fainting, chest pain, soaking through pads hourly, severe pain, high fever, or thoughts of self-harm need prompt medical care \u2014 if this is happening right now, please seek urgent or emergency medical help.";
 var MEDICAL_ADVICE_PATTERNS = [
   // English: Questions asking if a symptom/situation is normal, safe, okay, bad, or concerning
   /\b(?:is\s+(?:this|it|that|there)\s+(?:normal|abnormal|bad|dangerous|concerning|okay|safe))\b/i,
@@ -69,8 +70,43 @@ var MEDICAL_ADVICE_PATTERNS = [
   // Hindi: Advice, prescription requests, illness inquiries, pregnancy risk, delay etiology
   /(?:दर्द\s+के\s+लिए\s+कौन\s+सी\s+दवा|क्या\s+दवा\s+लूँ|कौन\s+सी\s+दवा|दवा\s+लेनी\s+चाहिए|डॉक्टर\s+को\s+दिखाना\s+चाहिए|डॉक्टर\s+के\s+पास\s+जाना|क्या\s+मुझे\s+कोई\s+बीमारी|क्या\s+यह\s+सामान्य\s+है|क्या\s+मुझे\s+चिंता\s+करनी\s+चाहिए|क्या\s+मैं\s+गर्भवती|कितनी\s+खुराक|खुराक\s+कितनी|इलाज\s+कैसे|पीसीओडी|पीसीओएस|खतरनाक|बीमारी\s+है|पीरियड\s+(?:लेट|देर)\s+क्यों|लेट\s+क्यों\s+हो\s+रहा)/i,
   // Code-Mixed: Advice, medication, pregnancy risk, diagnostic queries
-  /(?:which\s+medicine\s+should\s+i\s+take|tablet\s+ethu\s+kazhikkanam|doctor\s+ko\s+dikhana\s+chahiye|risk\s+of\s+pregnancy\s+undo|normal\s+hai\s+ya\s+doctor)/i
+  /(?:which\s+medicine\s+should\s+i\s+take|tablet\s+ethu\s+kazhikkanam|doctor\s+ko\s+dikhana\s+chahiye|risk\s+of\s+pregnancy\s+undo|normal\s+hai\s+ya\s+doctor)/i,
+  // Disguised medical advice: third-party attribution ("my friend said..."), declarative "I should take...", or "log that..." around medication / cycle manipulation
+  /\b(?:i|you|we|she)\s+should\s+(?:take|use|try|start|stop)\s+(?:[\w\s]{0,25}?\s+)?(?:pill|pills|tablet|tablets|medicine|medication|drug|hormone|norethisterone|primolut|ibuprofen|paracetamol|meftal|advil|tylenol|aspirin|naproxen|antibiotic|contraceptive|supplement)\b/i,
+  /\b(?:take|taking|use|using|try|trying|eat|drink)\s+(?:this|that|a|an|some|the|any|my)?\s*(?:[\w\s]{0,15}?\s+)?(?:pill|pills|tablet|tablets|medicine|medication|drug|remedy|herb)s?\s+to\s+(?:delay|postpone|stop|skip|induce|start|bring\s+on|regulate|end)\s+(?:my|the|a|her)?\s*(?:period|cycle|bleeding|menses|flow)\b/i,
+  /\b(?:how\s+to|can\s+i|ways\s+to|pill\s+to|medicine\s+to|tablet\s+to)\s+(?:delay|postpone|stop|skip|induce)\s+(?:my|a|the)?\s*period\b/i,
+  /\b(?:friend|mom|mother|sister|aunt|partner|coworker|someone|people|internet|tiktok|google|reddit)\s+(?:said|told\s+me|suggested|recommended|says|thinks)\s+(?:that\s+)?(?:i\s+should|to\s+take|to\s+use|taking|it'?s\s+(?:normal|safe|okay|bad|dangerous))\b/i,
+  /\b(?:log|note|record|save|remember)\s+that\s+i\s+(?:should|need\s+to|ought\s+to|can)\s+(?:take|use|try|stop|start)\s+(?:this|that|a|an|the|my|some)?\s*(?:pill|pills|tablet|tablets|medicine|medication|drug|painkiller|antibiotic|dose|dosage)\b/i
 ];
+var SEVERE_SYMPTOM_PATTERNS = [
+  // Fainting / passed out / syncope
+  /\b(?:faint(?:ed|ing|s)?|passed\s+out|passing\s+out|blacked\s+out|blacking\s+out|lost\s+consciousness|unconscious|syncope)\b/i,
+  // Chest pain / breathing difficulty
+  /\b(?:chest\s+(?:pain|tightness|pressure|hurts)|short(?:ness)?\s+of\s+breath|trouble\s+breathing|difficulty\s+breathing|can'?t\s+breathe)\b/i,
+  // Severe / heavy bleeding soaking through pads or tampons
+  /\b(?:soak(?:ed|ing|s)?\s+through\s+(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)|bleed(?:ing)?\s+through\s+(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)|hemorrhag(?:e|ing)|flooding\s+(?:through\s+)?(?:pad|pads|tampon|tampons))\b/i,
+  // Severe / unbearable / excruciating pain
+  /\b(?:severe\s+(?:pain|abdominal\s+pain|pelvic\s+pain|stomach\s+pain|cramp|cramps)|unbearable\s+(?:pain|cramp|cramps)|excruciating\s+(?:pain|cramp|cramps)|worst\s+pain\s+of\s+my\s+life)\b/i,
+  // High fever with pain, chills, or discharge
+  /\b(?:high\s+fever|fever\s+(?:with|and)\s+(?:[\w\s]{0,20}?\s+)?(?:pain|cramps|chills|discharge|bleeding|vomiting|dizziness)|(?:pain|cramps|chills|discharge|bleeding)\s+(?:with|and)\s+(?:a\s+)?(?:high\s+)?fever)\b/i,
+  // Suicidal thoughts / self-harm
+  /\b(?:suicid(?:al|e)|thoughts?\s+of\s+(?:self[-\s]?harm|hurting\s+myself|ending\s+my\s+life|dying)|want(?:ing)?\s+to\s+(?:die|hurt\s+myself|end\s+it\s+all)|self[-\s]?harm)\b/i
+];
+function checkSevereSymptomEscalation(input) {
+  const normalized = input.trim();
+  if (!normalized) {
+    return { isSevere: false, escalationMessage: null };
+  }
+  for (const pattern of SEVERE_SYMPTOM_PATTERNS) {
+    if (pattern.test(normalized)) {
+      return {
+        isSevere: true,
+        escalationMessage: SEVERE_SYMPTOM_ESCALATION_MESSAGE
+      };
+    }
+  }
+  return { isSevere: false, escalationMessage: null };
+}
 function checkMedicalAdviceGuardrail(input) {
   const normalized = input.trim();
   if (!normalized) {
@@ -1011,14 +1047,14 @@ function resolveDateExpression(text, today) {
 
 // ai/backend/intent.ts
 var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
-var LOG_WORDS = ["flow", "cramps", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
+var LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
 function classifyIntent(text, hasPendingEntry = false) {
   const lower = ` ${text.toLowerCase().trim()} `;
   if (checkMedicalAdviceGuardrail(text).isRefusal) return "medical_question";
   if (hasPendingEntry && /\b(change|make it|actually|remove|add|instead|no,|correction|update)\b/.test(lower)) return "correction";
   if (/\bperiod\s+(is\s+)?late\b|\blate\s+period\b|\bmissed\s+(my\s+)?period\b/.test(lower) && !/started|flow|log/.test(lower)) return "other";
   const hasEvent = EVENT_WORDS.some((w) => new RegExp(`\\b${w}\\b`, "i").test(lower));
-  const hasLog = LOG_WORDS.some((w) => lower.includes(w)) || /\benergy\s*[1-5]\b/.test(lower);
+  const hasLog = LOG_WORDS.some((w) => lower.includes(w)) || /\benergy\s*[1-5]\b/.test(lower) || checkSevereSymptomEscalation(text).isSevere;
   if (hasEvent && !hasLog) return "plan_event";
   if (/\bperiod\s+(ended|stopped|finished)\b|\bflow\s+stopped\b/.test(lower)) return "period_end";
   if (/\bperiod\s+(started|began|came)\b|\bstarted\s+my\s+period\b|\bgot\s+my\s+period\b/.test(lower)) return "period_start";
@@ -1417,6 +1453,16 @@ function evaluateContextOverlaps(events, context, today) {
     };
   });
 }
+function hasAnyLoggingOrPlanningCue(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (/^[\s\d\/\-\.,:;]+$/.test(trimmed)) return false;
+  const stripped = trimmed.toLowerCase().replace(/\b\d+(?:st|nd|rd|th)?\b/g, " ").replace(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|today|yesterday|tomorrow|tonight|morning|evening|night|day|days|week|weeks|month|months|year|years|ago|back|last|this|next|on|the|of|in|at|for|to|from|and|or)\b/g,
+    " "
+  ).replace(/[\s\d\/\-\.,:;'"!?()]+/g, "").trim();
+  return stripped.length > 0;
+}
 async function runLavenderAgent(userPrompt, context = {}, conversationHistory = []) {
   const startTime = Date.now();
   const activityTrail = [];
@@ -1436,12 +1482,23 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     };
   }
   const today = context.currentDate || todayLocal();
+  const severeCheck = checkSevereSymptomEscalation(userPrompt);
+  if (severeCheck.isSevere) {
+    activityTrail.push({
+      step: "Safety Escalation",
+      detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended",
+      status: "done"
+    });
+  }
   activityTrail.push({
     step: "Processing Speech",
     detail: "Parsing voice input with Muse Spark",
     status: "pending"
   });
   const fallbackResult = parseLocally(userPrompt, today, context);
+  if (!hasAnyLoggingOrPlanningCue(userPrompt)) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (bare numbers or date without cycle/event cue)" };
+  }
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (late-period question answered directly; no entry created)" };
   }
@@ -1656,6 +1713,13 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
       needsClarification = true;
       clarificationQuestion = finalMessage;
     }
+    if (severeCheck.isSevere) {
+      if (!structuredEntry && fallbackResult.entry) {
+        structuredEntry = fallbackResult.entry;
+      }
+      const cleanTail = !finalMessage.trim() || finalMessage.includes("talk to a doctor") ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.` : finalMessage.trim();
+      finalMessage = cleanTail.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE) ? cleanTail : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
+    }
     return {
       message: finalMessage,
       entry: structuredEntry,
@@ -1818,6 +1882,14 @@ function parseLocally(text, today, context) {
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
+  const severeCheck = checkSevereSymptomEscalation(text);
+  if (severeCheck.isSevere) {
+    activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended", status: "done" });
+  }
+  if (!hasAnyLoggingOrPlanningCue(text)) {
+    const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+  }
   const isExplicitCorrection = /^\s*no[,.!?\s]/i.test(text) || /\bactually\b/i.test(text) || /\bmake it\b/i.test(text) || /\bchange\s+(?:the\s+)?(?:date|flow|mood|energy|it|to)\b/i.test(text) || /\b(?:add|remove|delete)\b/i.test(text) || /\balso had\b/i.test(text) || /\bset\s+(?:the\s+)?date\b/i.test(text) || /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) || /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
   const targetSlip = context.pendingEntry || (isExplicitCorrection ? selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries) : null);
   if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
@@ -1855,16 +1927,26 @@ function parseLocally(text, today, context) {
     let m;
     let prevEnd = 0;
     const cleanTitle = (seg) => {
-      let t = seg.replace(/[,";]+\s*$/g, "").trim();
-      t = t.replace(/^\s*(?:and|&)\s+/i, "");
-      t = t.replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+/i, "");
+      let t = seg.split(/[.!?\n;]+/).pop() || seg;
+      t = t.split(/,|\band\b/i).pop() || t;
+      t = t.replace(/[,";]+\s*$/g, "").trim();
+      t = t.replace(/^[\s,.;:!?\-&]+/, "").trim();
+      t = t.replace(/^\s*(?:and|&|also|plus|then)\s+/i, "");
+      let prevLead = "";
+      while (prevLead !== t) {
+        prevLead = t;
+        t = t.replace(
+          /^\s*(?:i\s+also\s+have|i\s+have|i've\s+got|ive\s+got|i\s+got|there\s+is|there's|we\s+have|we've\s+got|i\s+am\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|i'm\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|im\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|worried\s+about|nervous\s+about|excited\s+for|preparing\s+for|planning\s+for|going\s+to)\s+/i,
+          ""
+        ).trim();
+      }
       let prev = "";
       while (prev !== t) {
         prev = t;
         t = t.replace(/\s*(?:\b(?:is|was|scheduled|planned|happening|coming up|on|at|for|to attend)\b)\s*$/i, "").trim();
       }
       t = t.replace(/\bcoming up\b/gi, "").replace(/\s+/g, " ").trim();
-      t = t.replace(/^\s*(?:an?|the)\s+/i, "").trim();
+      t = t.replace(/^\s*(?:an?|the|my|our|his|her|their)\s+/i, "").trim();
       return t;
     };
     while ((m = planDateRe.exec(text)) !== null) {
@@ -1877,9 +1959,31 @@ function parseLocally(text, today, context) {
         resolvedDate = parseMonthDay(dateNoYear, explicitYear ?? currentYear);
       }
       const seg = text.slice(prevEnd, m.index);
+      const sentenceStart = Math.max(
+        0,
+        text.lastIndexOf(".", m.index - 1) + 1,
+        text.lastIndexOf("!", m.index - 1) + 1,
+        text.lastIndexOf("?", m.index - 1) + 1,
+        text.lastIndexOf("\n", m.index - 1) + 1,
+        text.lastIndexOf(";", m.index - 1) + 1
+      );
+      const nextStops = [
+        text.indexOf(".", m.index + rawDate.length),
+        text.indexOf("!", m.index + rawDate.length),
+        text.indexOf("?", m.index + rawDate.length),
+        text.indexOf("\n", m.index + rawDate.length),
+        text.indexOf(";", m.index + rawDate.length)
+      ].filter((idx) => idx !== -1);
+      const sentenceEnd = nextStops.length > 0 ? Math.min(...nextStops) : text.length;
+      const localSentence = text.slice(sentenceStart, sentenceEnd);
+      const clauseBeforeDate = text.slice(Math.max(prevEnd, sentenceStart), m.index);
       prevEnd = m.index + rawDate.length;
-      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(seg) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(seg)) continue;
-      const title = cleanTitle(seg.split(/\band\b/i).pop() || seg) || "Event";
+      const hasEventNounInClauseOrSentence = /\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|plan|planning)\b/i.test(localSentence);
+      const hasCycleOrSymptomInSentence = /\b(period|flow|spotting|bleeding|menstruat|cramps|headache|nausea|fatigue|bloating|back pain|tender breasts|mood|acne|insomnia|cravings|diarrhea|constipation|dizziness|hot flashes)\b/i.test(localSentence);
+      const cleanedCandidate = cleanTitle(clauseBeforeDate);
+      if (!hasEventNounInClauseOrSentence && (cleanedCandidate === "" || hasCycleOrSymptomInSentence)) continue;
+      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(clauseBeforeDate) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(clauseBeforeDate)) continue;
+      const title = cleanedCandidate || "Event";
       if (!resolvedDate || !isValidDateKey(resolvedDate)) {
         planDateInvalid = true;
         continue;
@@ -1939,7 +2043,7 @@ function parseLocally(text, today, context) {
     }
     toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   }
-  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd;
+  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd || severeCheck.isSevere;
   const matchedEvent = findMatchedEvent(text, context.matchedEvents);
   const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
   const earlyLandmark = resolveLandmarkExpression(text, today);
@@ -2036,7 +2140,7 @@ function parseLocally(text, today, context) {
   }
   let unplacedNote = null;
   if (extraction.periodStart) {
-    const frag = text.match(/period\s+started\s+([^,.]+?)(?=\s+and\s|\s+but\s|,|$)/i)?.[1];
+    const frag = text.match(/(?:period\s+(?:started|began|came)|started\s+my\s+period|got\s+my\s+period)\s+([^,.;!?\n]+?)(?=\s+and\s|\s+but\s|\s+with\s|[,.;!?\n]|$)/i)?.[1];
     if (frag) {
       const r = resolveDateExpression(`period started ${frag}`, today);
       if (r.date) {
@@ -2066,6 +2170,70 @@ function parseLocally(text, today, context) {
       unplacedNote = `${yesterdayFlow[1]} flow yesterday (${yesterdayKey}) as a separate day`;
     }
   }
+  {
+    const clauseParts = logDateText.split(
+      /(?:[.!?\n;]+|,\s*(?=(?:and\s+|but\s+)?(?:on\s+|yesterday\b|today\b|last\s+night\b|day\s+before\s+yesterday\b|the\s+next\s+day\b|day\s*[2-7]\b|\d+\s+days?\s+ago\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\b|\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b))|\b(?:and|but)\s+(?=(?:on\s+|yesterday\b|today\b|last\s+night\b|the\s+next\s+day\b|day\s*[2-7]\b|\d+\s+days?\s+ago\b)))/i
+    ).map((s) => s.trim()).filter(Boolean);
+    if (clauseParts.length >= 2) {
+      const parsedClauses = clauseParts.map((cl) => {
+        const clRes = resolveDateExpression(cl, today);
+        let clDate = clRes.date;
+        const clExplanation = clRes.explanation;
+        if (!clDate && entryDate) {
+          if (/\b(?:the\s+next\s+day|on\s+day\s*2|on\s+the\s+(?:2nd|second)\s+day|day\s*2)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 1);
+          else if (/\b(?:on\s+day\s*3|on\s+the\s+(?:3rd|third)\s+day|day\s*3)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 2);
+          else if (/\b(?:on\s+day\s*4|on\s+the\s+(?:4th|fourth)\s+day|day\s*4)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 3);
+        }
+        const clExt = extractWithLexicon(cl);
+        const hasClLog = clExt.periodStart || clExt.periodEnd || clExt.flow !== null || clExt.symptoms.length > 0 || clExt.mood !== null;
+        return { text: cl, date: clDate, explanation: clExplanation, ext: clExt, hasClLog };
+      });
+      const datedLogClauses = parsedClauses.filter((c) => c.hasClLog && c.date !== null && c.date <= today);
+      if (datedLogClauses.length >= 2) {
+        const primaryClause = datedLogClauses.find((c) => c.ext.periodStart) || datedLogClauses[0];
+        if (!extraction.periodStart && primaryClause.date) {
+          entryDate = primaryClause.date;
+          dateExplanation = primaryClause.explanation || dateExplanation;
+        }
+        const otherDated = datedLogClauses.filter((c) => c.date !== entryDate);
+        const yesterdayKey = addDaysToKey(today, -1);
+        const isMultiOrNonYesterday = otherDated.length > 1 || otherDated.length === 1 && (otherDated[0].date !== yesterdayKey || !unplacedNote);
+        if (otherDated.length > 0 && isMultiOrNonYesterday) {
+          const sameDateClauses = parsedClauses.filter((c) => c.date === entryDate || c.date === null && c.hasClLog);
+          const sameDateFlows = sameDateClauses.map((c) => c.ext.flow).filter(Boolean);
+          const firstDayFlowMatch = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
+          extraction.flow = firstDayFlowMatch ? firstDayFlowMatch[1] : sameDateFlows[0] ?? null;
+          const sameDateSymptoms = [];
+          for (const c of sameDateClauses) {
+            for (const s of c.ext.symptoms) {
+              if (!sameDateSymptoms.includes(s)) sameDateSymptoms.push(s);
+            }
+          }
+          extraction.symptoms = sameDateSymptoms;
+          const sameDateMoods = sameDateClauses.map((c) => c.ext.mood).filter(Boolean);
+          extraction.mood = sameDateMoods[0] ?? null;
+          const unplacedDescriptions = [];
+          for (const c of otherDated) {
+            const parts = [];
+            if (c.ext.flow) parts.push(`${c.ext.flow} flow`);
+            if (c.ext.symptoms.length > 0) {
+              const symLabels = c.ext.symptoms.map((s) => s.replace(/_/g, " ")).join(" and ");
+              parts.push(c.ext.flow ? `with ${symLabels}` : symLabels);
+            }
+            if (c.ext.mood) parts.push(`mood ${c.ext.mood.toLowerCase()}`);
+            if (parts.length === 0 && c.ext.periodEnd) parts.push("period ended");
+            if (parts.length > 0) {
+              const dayWord = /\byesterday\b/i.test(c.text) ? `yesterday (${c.date})` : /\btoday\b/i.test(c.text) ? `today (${c.date})` : `(${c.date})`;
+              unplacedDescriptions.push(`${parts.join(" ")} ${dayWord}`);
+            }
+          }
+          if (unplacedDescriptions.length > 0) {
+            unplacedNote = `${unplacedDescriptions.join("; ")} as ${unplacedDescriptions.length === 1 ? "a separate day" : "separate days"}`;
+          }
+        }
+      }
+    }
+  }
   const kind = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
   const entry = {
     date: entryDate,
@@ -2086,6 +2254,9 @@ function parseLocally(text, today, context) {
   let message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} \u2014 log that day separately if you want it saved.` : baseMessage;
   if (unplacedEvents.length > 0) {
     message += ` I couldn't place a date for: ${unplacedEvents.join(", ")}.`;
+  }
+  if (severeCheck.isSevere && !message.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
+    message = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
   return { message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }

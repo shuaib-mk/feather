@@ -280,12 +280,16 @@ function DiagnosticsPanel() {
       } catch {}
     };
     window.addEventListener("feather_api_call_made", handler);
-    return () => window.removeEventListener("feather_api_call_made", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("feather_api_call_made", handler);
+      window.removeEventListener("storage", handler);
+    };
   }, []);
 
   const testMeta = async () => {
     if (sessionCalls >= MAX_TEST_CALLS) {
-      setTest(`API call cap reached (${MAX_TEST_CALLS} this session). Reload to reset.`);
+      setTest(`API call cap reached (${MAX_TEST_CALLS} this session). Close tab to reset.`);
       return;
     }
     const t0 = performance.now();

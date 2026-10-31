@@ -335,6 +335,22 @@ function evaluateContextOverlaps(events: Array<{ name: string; date: string }>, 
   });
 }
 
+export function hasAnyLoggingOrPlanningCue(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (/^[\s\d\/\-\.,:;]+$/.test(trimmed)) return false;
+  const stripped = trimmed
+    .toLowerCase()
+    .replace(/\b\d+(?:st|nd|rd|th)?\b/g, " ")
+    .replace(
+      /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|today|yesterday|tomorrow|tonight|morning|evening|night|day|days|week|weeks|month|months|year|years|ago|back|last|this|next|on|the|of|in|at|for|to|from|and|or)\b/g,
+      " ",
+    )
+    .replace(/[\s\d\/\-\.,:;'"!?()]+/g, "")
+    .trim();
+  return stripped.length > 0;
+}
+
 export async function runLavenderAgent(
   userPrompt: string,
   context: AgentContext = {},
@@ -381,6 +397,10 @@ export async function runLavenderAgent(
 
   // Fallback pattern parser for offline / test environments
   const fallbackResult = parseLocally(userPrompt, today, context);
+
+  if (!hasAnyLoggingOrPlanningCue(userPrompt)) {
+    return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (bare numbers or date without cycle/event cue)" };
+  }
 
   // C1: "my period is late" is a deterministic clarifying intent in BOTH paths.
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
@@ -619,10 +639,13 @@ export async function runLavenderAgent(
       if (!structuredEntry && fallbackResult.entry) {
         structuredEntry = fallbackResult.entry;
       }
-      if (!finalMessage.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
-        const tail = finalMessage.trim() || `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.`;
-        finalMessage = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${tail}`;
-      }
+      const cleanTail =
+        !finalMessage.trim() || finalMessage.includes("talk to a doctor")
+          ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.`
+          : finalMessage.trim();
+      finalMessage = cleanTail.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)
+        ? cleanTail
+        : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
     }
 
     return {
@@ -781,6 +804,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const severeCheck = checkSevereSymptomEscalation(text);
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
+  }
+  if (!hasAnyLoggingOrPlanningCue(text)) {
+    const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
   }
 
   // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
@@ -1154,7 +1181,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
             const parts: string[] = [];
             if (c.ext.flow) parts.push(`${c.ext.flow} flow`);
             if (c.ext.symptoms.length > 0) {
-              parts.push(c.ext.flow ? `with ${c.ext.symptoms.join(" and ")}` : c.ext.symptoms.join(" and "));
+              const symLabels = c.ext.symptoms.map((s) => s.replace(/_/g, " ")).join(" and ");
+              parts.push(c.ext.flow ? `with ${symLabels}` : symLabels);
             }
             if (c.ext.mood) parts.push(`mood ${c.ext.mood.toLowerCase()}`);
             if (parts.length === 0 && c.ext.periodEnd) parts.push("period ended");

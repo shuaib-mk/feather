@@ -3,7 +3,7 @@ import { enterDemoMode, exitDemoMode, isDemoActive, DEMO_EVENTS_KEY } from "../.
 import { loadEvents, upsertEvent, deleteEvent, REAL_EVENTS_KEY, getEventsKey } from "../../client/src/lib/events";
 import { buildCycleCalendarICS } from "../../client/src/lib/ics";
 import { loadCycleData, computeCycleStats, exportCycleDataJSON, importCycleDataJSON, effectivePeriodEndDate, deleteDayLog, countDailyNotes } from "../../client/src/cycleStorage";
-import { parseLocally } from "../backend/agent";
+import { parseLocally, runLavenderAgent, hasAnyLoggingOrPlanningCue } from "../backend/agent";
 import { checkMedicalAdviceGuardrail, checkSevereSymptomEscalation, MEDICAL_REFUSAL_MESSAGE, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "../backend/guardrail";
 import { agentMessageKind } from "../../client/src/lib/voiceMessage";
 import { buildAndFilterChronicleItems } from "../../client/src/pages/ChroniclePage";
@@ -11,6 +11,8 @@ import { buildWeekdayHeader } from "../../client/src/pages/CalendarPage";
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
 import { isDiscreetModeEnabled, setDiscreetModeEnabled, isQuickHideActive, setQuickHideActive } from "../../client/src/lib/discreetMode";
+import { loadVoicePendingSession, saveVoicePendingSession, clearVoicePendingSession } from "../../client/src/pages/VoiceFlowPage";
+import { getSessionApiCalls, recordSessionApiCall } from "../frontend/aiClient";
 
 console.log("=== Prompt 6 Audit Regression Suite ===");
 
@@ -243,3 +245,45 @@ const sessMem: Record<string, string> = {};
 
   console.log("[PASS] Group E: Discreet Mode & Quick-Hide state management");
 }
+
+// Group F: Bare numbers rejected, Voice session persistence & discard, API counter persistence
+{
+  // F1: Bare numbers / dates without cycle or event cues must never create an entry
+  for (const bare of ["28 5 2026", "28/5/2026", "2026-05-28", "12345", "28 May 2026"]) {
+    assert.strictEqual(hasAnyLoggingOrPlanningCue(bare), false, `Expected no cue for "${bare}"`);
+    const p = parseLocally(bare, "2026-10-31", {});
+    assert.strictEqual(p.entry, null, `parseLocally("${bare}") must not create an entry`);
+    assert(p.message.includes("I didn't catch anything I can log from that"), `Expected didn't-understand message for "${bare}"`);
+  }
+  const liveBare = await runLavenderAgent("28 5 2026", { currentDate: "2026-10-31" });
+  assert.strictEqual(liveBare.entry, null, "runLavenderAgent('28 5 2026') must not create an entry");
+  assert(liveBare.message.includes("I didn't catch anything I can log from that"));
+
+  // F2: Pending voice session persists in sessionStorage and clears completely on Discard
+  (globalThis as any).sessionStorage.clear();
+  assert.strictEqual(loadVoicePendingSession(), null);
+  saveVoicePendingSession({
+    transcript: "period started yesterday",
+    agentMessage: "I've prepared your log for 2026-10-30.",
+    confirmEntry: { date: "2026-10-30", flow: "medium", symptoms: ["cramps"], mood: null, energy: null, sleep: null, notes: "period started yesterday" },
+    plannedEventsState: [],
+    planOverlaps: null,
+    agentMode: { mode: "offline" },
+    isOfflineFallback: true,
+  });
+  const loadedSession = loadVoicePendingSession();
+  assert(loadedSession !== null, "Pending voice session should be restored from sessionStorage");
+  assert.strictEqual(loadedSession?.confirmEntry?.date, "2026-10-30");
+  clearVoicePendingSession();
+  assert.strictEqual(loadVoicePendingSession(), null, "Discard clears pending voice session from sessionStorage");
+
+  // F3: Session API call counter persists in sessionStorage across page reloads
+  (globalThis as any).sessionStorage.clear();
+  assert.strictEqual(getSessionApiCalls(), 0);
+  recordSessionApiCall();
+  recordSessionApiCall();
+  assert.strictEqual(getSessionApiCalls(), 2, "API call counter persists in sessionStorage");
+
+  console.log("[PASS] Group F: Bare numbers rejected, Voice session persistence & discard, API counter persistence");
+}
+console.log("\nAll Prompt 6 Audit Regression Groups (A–F) PASSED!");
