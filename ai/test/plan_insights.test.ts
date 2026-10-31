@@ -69,5 +69,52 @@ const phase2Texts = [clearLine, "Nov 14 overlaps less (estimate)", "Both look si
 check("phase2 text: no banned words", phase2Texts.every((t) => !/\b(should|expect|normal|irregular|abnormal|healthy|guaranteed)\b/i.test(t)), phase2Texts.join(" | "));
 check("phase2 text: guardrail + escalation clean", phase2Texts.every((t) => !checkMedicalAdviceGuardrail(t).isRefusal && !checkSevereSymptomEscalation(t).isSevere), phase2Texts.join(" | "));
 check("phase2 text: no symptom/flow words (Discreet-safe)", phase2Texts.every((t) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(t)), phase2Texts.join(" | "));
+
+// ---- Phase 3: day position + past heavier-days pattern ----
+import { dayPosition, flowPattern, formatEventPositionLine } from "../../client/src/lib/planInsights";
+const win = { start: "2026-11-21", end: "2026-12-01" };
+check("position: window start is near the start", dayPosition("2026-11-21", win)?.position === "near_start", JSON.stringify(dayPosition("2026-11-21", win)));
+check("position: 2026-11-24 (fraction 0.3) near start", dayPosition("2026-11-24", win)?.position === "near_start");
+check("position: 2026-11-26 (fraction 0.5) in the middle", dayPosition("2026-11-26", win)?.position === "middle" && dayPosition("2026-11-26", win)?.phrase === "in the middle of the estimated window");
+check("position: window end is near the end", dayPosition("2026-12-01", win)?.position === "near_end");
+check("position: before window -> null", dayPosition("2026-11-14", win) === null);
+check("position: after window -> null", dayPosition("2026-12-05", win) === null);
+check("position: no window -> null", dayPosition("2026-11-24", null) === null && dayPosition("2026-11-24", undefined) === null);
+// Periods starting Jan 5, Feb 2, Mar 2, Mar 30 2026 -> first three are completed.
+const fpPeriods: any[] = ["2026-01-05", "2026-02-02", "2026-03-02", "2026-03-30"].map((startDate) => ({ startDate }));
+const fpLogs: any[] = [
+  { logDate: "2026-01-05", flow: "heavy" }, { logDate: "2026-01-06", flow: "heavy" }, { logDate: "2026-01-07", flow: "medium" },
+  { logDate: "2026-02-02", flow: "medium" }, { logDate: "2026-02-03", flow: "heavy" }, { logDate: "2026-02-04", flow: "heavy" },
+  { logDate: "2026-03-02", flow: "heavy" }, { logDate: "2026-03-03", flow: "light" },
+  { logDate: "2026-03-30", flow: "heavy" },
+];
+const pattern = flowPattern(fpPeriods, fpLogs);
+check("flow pattern: modal heavier days are 1-2 over 3 completed periods", !!pattern && JSON.stringify(pattern.patternDays) === "[1,2]" && pattern.periodsUsed === 3, JSON.stringify(pattern));
+check("flow pattern: exact past-tense sentence", pattern?.sentence === "In your past logs, heavier flow showed up around days 1-2.", pattern?.sentence);
+check("flow pattern: fewer than 2 completed with flow -> null", flowPattern(fpPeriods.slice(0, 2), fpLogs) === null);
+check("flow pattern: flow only in latest (open) period -> null", flowPattern(fpPeriods.slice(0, 3), [{ logDate: "2026-03-02", flow: "heavy" }]) === null);
+check("flow pattern: spotting never counts as heaviest", flowPattern(fpPeriods, fpLogs.map((l) => ({ ...l, flow: "spotting" }))) === null);
+const singleLogs: any[] = [
+  { logDate: "2026-01-05", flow: "heavy" }, { logDate: "2026-01-06", flow: "medium" },
+  { logDate: "2026-02-02", flow: "heavy" }, { logDate: "2026-03-02", flow: "heavy" },
+];
+check("flow pattern: single modal day wording", flowPattern(fpPeriods, singleLogs)?.sentence === "In your past logs, heavier flow showed up around day 1.", flowPattern(fpPeriods, singleLogs)?.sentence);
+check("event line: near start + pattern -> combined sentence", formatEventPositionLine("2026-11-22", win, pattern) === "This event is near the start of the estimated window, where your past logs show heavier days (estimate).", formatEventPositionLine("2026-11-22", win, pattern));
+check("event line: middle -> position only", formatEventPositionLine("2026-11-26", win, pattern) === "This event is in the middle of the estimated window.");
+check("event line: near end -> position only", formatEventPositionLine("2026-12-01", win, pattern) === "This event is near the end of the estimated window.");
+check("event line: near start without pattern -> position only", formatEventPositionLine("2026-11-22", win, null) === "This event is near the start of the estimated window.");
+check("event line: outside window -> empty", formatEventPositionLine("2026-11-14", win, pattern) === "");
+const phase3Texts = [
+  "This event is near the start of the estimated window.",
+  "This event is in the middle of the estimated window.",
+  "This event is near the end of the estimated window.",
+  "This event is near the start of the estimated window, where your past logs show heavier days (estimate).",
+  pattern?.sentence || "",
+];
+check("phase3 text: no banned words", phase3Texts.every((x) => !/\b(should|expect|normal|irregular|abnormal|healthy|guaranteed)\b/i.test(x)), phase3Texts.join(" | "));
+check("phase3 text: guardrail + escalation clean", phase3Texts.every((x) => !checkMedicalAdviceGuardrail(x).isRefusal && !checkSevereSymptomEscalation(x).isSevere), phase3Texts.join(" | "));
+check("phase3 UI lines: no symptom/flow words (Discreet-safe)", phase3Texts.slice(0, 4).every((x) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(x)), phase3Texts.slice(0, 4).join(" | "));
+check("phase3 pattern sentence is past-tense only", !!pattern && pattern.sentence.startsWith("In your past logs"), pattern?.sentence);
+
 console.log("\nPlanInsights Results: " + passed + " passed, " + failed + " failed.");
 if (failed) process.exit(1);
