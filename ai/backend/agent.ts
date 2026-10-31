@@ -1287,7 +1287,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
         return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
       const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
-      const q = late ? "I can't tell if your period is late without a logged start — did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
+      const lastStart = [...(context.periods || [])].map((x) => x.startDate).filter(Boolean).sort().pop() || context.cycleStats?.lastPeriodStart || null;
+      const q = late ? (lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it.") :
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }

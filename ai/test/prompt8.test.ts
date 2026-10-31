@@ -44,5 +44,12 @@ check("position before window", pi.describeEventPosition("2026-11-23", win) === 
 check("position inside window", pi.describeEventPosition("2026-11-26", win).includes("near the start of the estimated window"), pi.describeEventPosition("2026-11-26", win));
 check("no window -> no position line", pi.describeEventPosition("2026-12-12", null) === "");
 
+
+// Group E1: late-period message is state-aware.
+const lateWith = parseLocally("my period is late", TODAY, { periods: [{ startDate: "2026-09-30" }] } as any);
+check("late with history references last start", lateWith.message.includes("Your last logged period started Sep 30") && lateWith.needsClarification && !lateWith.entry, lateWith.message);
+const lateWithout = parseLocally("my period is late", TODAY, {} as any);
+check("late without history keeps original wording", lateWithout.message.includes("without a logged start"), lateWithout.message);
+
 console.log("Prompt8A Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
