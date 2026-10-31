@@ -5,7 +5,7 @@ import { NextThirtyDaysStrip } from "./CalendarPage";
 import { PlanAroundIt } from "../components/PlanAroundIt";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
-import { diffDays, prettyDate, todayStr } from "../cycleStorage";
+import { diffDays, prettyDate, todayStr, effectivePeriodEndDate } from "../cycleStorage";
 
 export function DashboardPage() {
   const { data, stats, loadDemo, isDemoActive } = useCycle();
@@ -221,8 +221,8 @@ export function DashboardPage() {
                         {prettyDate(latestPeriod.startDate)}
                       </div>
                       <span className="text-xs text-stone-500">
-                        {latestPeriod.endDate
-                          ? `To ${prettyDate(latestPeriod.endDate)} (${diffDays(latestPeriod.startDate, latestPeriod.endDate) + 1} days)`
+                        {effectivePeriodEndDate(latestPeriod, data.periods, data.logs) !== latestPeriod.startDate
+                          ? `To ${prettyDate(effectivePeriodEndDate(latestPeriod, data.periods, data.logs))} (${diffDays(latestPeriod.startDate, effectivePeriodEndDate(latestPeriod, data.periods, data.logs)) + 1} days)`
                           : "Start date logged"}
                       </span>
                     </div>

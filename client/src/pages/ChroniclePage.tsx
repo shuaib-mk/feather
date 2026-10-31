@@ -4,7 +4,7 @@ import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { prettyDate, diffDays } from "../cycleStorage";
+import { prettyDate, countDailyNotes, effectivePeriodDurationDays } from "../cycleStorage";
 
 export function ChroniclePage() {
   const { data, removePeriod, removeLog } = useCycle();
@@ -99,7 +99,7 @@ export function ChroniclePage() {
             {[
               { id: "all", label: `All Entries (${allItems.length})` },
               { id: "periods", label: `Periods (${periods.length})` },
-              { id: "logs", label: `Daily Notes (${logs.length})` },
+              { id: "logs", label: `Daily Notes (${countDailyNotes(periods, logs)})` },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -148,7 +148,7 @@ export function ChroniclePage() {
           {filteredItems.map((item) => {
             const p = item.periodItem;
             const l = item.logItem;
-            const duration = p && p.endDate ? diffDays(p.startDate, p.endDate) + 1 : null;
+            const duration = p ? effectivePeriodDurationDays(p, periods, logs) : null;
 
             return (
               <div

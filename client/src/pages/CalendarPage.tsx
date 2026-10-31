@@ -16,6 +16,7 @@ export function CalendarPage(){
   const [cursor, setCursor] = useState(()=>{ const [y,m]=today.split("-").map(Number); return {y,m}; });
   const [selected, setSelected] = useState<string>(today);
   const [events, setEvents] = useState<CalendarEvent[]>(()=>loadEvents());
+  useEffect(() => { const handler = () => setEvents(loadEvents()); window.addEventListener("feather_events_changed", handler); return () => window.removeEventListener("feather_events_changed", handler); }, []);
   const [newTitle, setNewTitle] = useState("");
   const [icsTitle, setIcsTitle] = useState("Private");
   const [importPreview, setImportPreview] = useState<CalendarEvent[]|null>(null);

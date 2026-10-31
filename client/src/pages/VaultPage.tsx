@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { prettyDate } from "../cycleStorage";
+import { prettyDate , countDailyNotes } from "../cycleStorage";
 
 export function VaultPage() {
   const {
@@ -24,7 +24,7 @@ export function VaultPage() {
   const [importStatusMessage, setImportStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   const periodsCount = data.periods.length;
-  const logsCount = data.logs.length;
+  const logsCount = countDailyNotes(data.periods, data.logs);
 
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

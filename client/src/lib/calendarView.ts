@@ -17,7 +17,7 @@ export function buildMonthDayStates(year:number, month:number, periods:Period[],
   const leadingBlanks = (firstDow - weekStart + 7) % 7;
   const days = cal.map((d)=>{
     const log = logs.find((l)=>l.logDate===d.date) || null;
-    const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started") : !!d.bleeding;
+    const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started") : false; // A3: only a real log may claim "period day logged"
     const spotting = log?.flow==="spotting";
     const predicted = !!(prediction.earliestStart && prediction.latestStart && d.date >= prediction.earliestStart && d.date <= addDays(prediction.latestStart, 4) && d.date >= today);
     const evs = eventsOnDate(events, d.date);

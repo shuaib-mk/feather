@@ -73,7 +73,7 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const newStats = computeCycleStats(data.periods, data.logs);
     setStats(newStats);
-  }, [data.periods.length, data.logs.length]);
+  }, [data]);
 
   const savePeriod = useCallback((p: Omit<Period, "id"> & { id?: number }): Period | null => {
     try {

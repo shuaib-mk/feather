@@ -422,15 +422,55 @@ export function addOrUpdateLog(log: Omit<DayLog, "id"> & { id?: number }): DayLo
   return result.log;
 }
 
+export function countEntryDates(periods: Period[], logs: DayLog[]): number {
+  const dates = new Set<string>();
+  for (const per of periods || []) dates.add(per.startDate);
+  for (const l of logs || []) dates.add(l.logDate);
+  return dates.size;
+}
+
+export function countDailyNotes(periods: Period[], logs: DayLog[]): number {
+  const periodStarts = new Set((periods || []).map((x) => x.startDate));
+  return Math.max(0, countEntryDates(periods, logs) - periodStarts.size);
+}
+
+/** Effective (derived) end of a period: last remaining bleeding log day, never a stale stored end. */
+export function effectivePeriodEndDate(period: Period, periods: Period[], logs: DayLog[]): string {
+  const sorted = [...(periods || [])].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const idx = sorted.findIndex((x) => x.id === period.id || x.startDate === period.startDate);
+  const nextStart = idx >= 0 ? sorted.slice(idx + 1).find((x) => x.startDate > period.startDate)?.startDate : undefined;
+  const bleedingDays = (logs || [])
+    .filter((l) => l.logDate >= period.startDate && (!nextStart || l.logDate < nextStart) && (isBleedingFlow(l.flow) || l.kind === "period_started"))
+    .map((l) => l.logDate)
+    .sort();
+  if (bleedingDays.length) return bleedingDays[bleedingDays.length - 1];
+  const stored = period.endDate || period.startDate;
+  return stored >= period.startDate ? stored : period.startDate;
+}
+
+export function effectivePeriodDurationDays(period: Period, periods: Period[], logs: DayLog[]): number {
+  return dayDifference(period.startDate, effectivePeriodEndDate(period, periods, logs)) + 1;
+}
+
 export function deleteDayLog(logDate: string): void {
   const data = loadCycleData();
   data.logs = data.logs.filter((l) => l.logDate !== logDate);
+  // A2: shrink any period whose stored end was this (now deleted) bleeding day.
+  for (const per of data.periods) {
+    const storedEnd = per.endDate || per.startDate;
+    if (per.startDate <= logDate && logDate <= storedEnd) {
+      per.endDate = effectivePeriodEndDate(per, data.periods, data.logs);
+    }
+  }
   saveCycleData(data);
 }
 
 export function deletePeriodEntry(id: number): void {
   const data = loadCycleData();
+  const target = data.periods.find((p) => p.id === id);
   data.periods = data.periods.filter((p) => p.id !== id);
+  // A1: "Delete period" removes the record entirely, including the log saved on its start date.
+  if (target) data.logs = data.logs.filter((l) => l.logDate !== target.startDate);
   saveCycleData(data);
 }
 
