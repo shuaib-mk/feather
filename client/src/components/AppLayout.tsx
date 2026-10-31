@@ -91,9 +91,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
         {/* Gentle 14-Day Export Overdue Reminder Banner */}
         {showOverdueBanner && (
-          <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-800 shadow-xs border border-amber-300 bg-amber-50/70">
+          <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-800 shadow-xs border border-amber-200/80 bg-amber-50/40">
             <div className="flex items-center gap-2.5">
-              <div className="size-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0 text-amber-800">
+              <div className="size-6 rounded-full bg-amber-200/40 border border-amber-300/40 flex items-center justify-center shrink-0 text-amber-800">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                   <line x1="12" y1="9" x2="12" y2="13" />

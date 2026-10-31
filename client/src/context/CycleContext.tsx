@@ -176,9 +176,9 @@ export function CycleProvider({ children }: { children: ReactNode }) {
       }}
     >
       {errorToast && (
-        <div role="alert" className="fixed top-4 left-3 right-3 sm:left-auto sm:right-8 z-[60] max-w-md ml-auto rounded-[16px] bg-rose-50 border border-rose-300 px-4 py-3 font-sans text-xs text-rose-900 shadow-xl flex items-start gap-2">
+        <div role="alert" className="fixed top-4 left-3 right-3 sm:left-auto sm:right-8 z-[60] max-w-md ml-auto rounded-[20px] liquid-glass-card border border-rose-200/80 bg-rose-50/70 px-4 py-3 font-sans text-xs text-rose-950 shadow-xl flex items-start gap-2.5">
           <span className="flex-1">{errorToast}</span>
-          <button type="button" onClick={() => setErrorToast(null)} aria-label="Dismiss error" className="font-semibold cursor-pointer">x</button>
+          <button type="button" onClick={() => setErrorToast(null)} aria-label="Dismiss error" className="liquid-glass-pill size-6 rounded-full flex items-center justify-center font-bold text-xs text-stone-700 cursor-pointer">×</button>
         </div>
       )}
       {children}

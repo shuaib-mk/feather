@@ -283,18 +283,18 @@ export function VoiceFlowPage() {
 
       {/* Offline Mode Banner */}
       {isOfflineFallback && (
-        <div className="rounded-[16px] bg-amber-50/90 border border-amber-300 px-4 py-2 text-xs text-amber-900 font-mono flex items-center justify-between shadow-xs">
+        <div className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-2.5 text-xs text-amber-950 font-mono flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-amber-600 animate-pulse" />
+            <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
             <span className="font-bold">Offline mode: rules engine, not Muse</span>
           </div>
-          <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-sans">Local Fallback</span>
+          <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-amber-900 border border-amber-200/70">Local Fallback</span>
         </div>
       )}
 
       {/* Rate Limit Notice */}
       {rateLimitNotice && (
-        <div className="rounded-[16px] bg-rose-50 border border-rose-200 p-3 text-xs text-rose-800 font-sans flex items-center gap-2 shadow-xs">
+        <div className="rounded-[18px] liquid-glass-card border border-rose-200/80 bg-rose-50/40 p-3.5 text-xs text-rose-900 font-sans flex items-center gap-2.5 shadow-xs">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-rose-700 shrink-0">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
@@ -306,12 +306,12 @@ export function VoiceFlowPage() {
 
       {/* Success Notification */}
       {savedSuccessMessage && (
-        <div className="rounded-[16px] bg-emerald-50 border border-emerald-300 p-3 text-xs text-emerald-900 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
+        <div className="rounded-[18px] liquid-glass-card border border-emerald-200/80 bg-emerald-50/40 p-3.5 text-xs text-emerald-950 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-emerald-500" />
-            <span className="font-bold">{savedSuccessMessage}</span>
+            <span className="font-semibold">{savedSuccessMessage}</span>
           </div>
-          <Link to="/chronicle" className="font-mono text-[10px] uppercase font-bold underline text-emerald-800">
+          <Link to="/chronicle" className="liquid-glass-pill rounded-full px-3 py-1 font-mono text-[10px] uppercase font-bold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
             View in Chronicle →
           </Link>
         </div>
@@ -441,8 +441,8 @@ export function VoiceFlowPage() {
 
       {/* Medical Guardrail Refusal Alert */}
       {agentMessage && agentMessage.includes("talk to a doctor") && (
-        <div className="rounded-[22px] bg-amber-50/90 border border-amber-300 p-5 space-y-2 shadow-xs">
-          <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
+        <div className="rounded-[22px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 p-5 space-y-2 shadow-xs">
+          <div className="flex items-center gap-2 text-amber-950 font-bold text-sm">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-800 shrink-0">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
@@ -451,7 +451,7 @@ export function VoiceFlowPage() {
           <p className="font-sans text-xs text-amber-950 leading-relaxed">
             {agentMessage}
           </p>
-          <span className="font-sans text-[11px] text-amber-700 block pt-1">
+          <span className="font-sans text-[11px] text-amber-800/80 block pt-1">
             Feather is strictly for cycle date logging and event milestone planning. It does not provide medical advice.
           </span>
         </div>
@@ -470,8 +470,8 @@ export function VoiceFlowPage() {
                   <span className="font-semibold text-stone-900 block font-sans truncate">{item.name || item.eventName} ({prettyDate(item.eventDate || item.date)})</span>
                   <span className="text-stone-600 text-[11px] block">{item.overlapNote || item.note}</span>
                 </div>
-                <span className={`font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full self-start sm:self-auto shrink-0 ${
-                  item.overlap === "likely" ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                <span className={`liquid-glass-pill font-sans text-[11px] font-semibold px-2.5 py-1 rounded-full self-start sm:self-auto shrink-0 border ${
+                  item.overlap === "likely" ? "bg-rose-50/60 text-rose-900 border-rose-200/80" : "bg-emerald-50/60 text-emerald-900 border-emerald-200/80"
                 }`}>
                   {item.overlap === "likely" ? "Likely overlap" : item.overlap === "possible" ? "Possible overlap" : item.overlap === "period-day" || item.overlap === "logged" ? "Logged period" : item.overlap === "past" ? "Past" : item.overlap === "unknown" ? "Not enough data yet" : "Unlikely to overlap (estimate)"}
                 </span>
@@ -654,7 +654,7 @@ export function VoiceFlowPage() {
 
           {/* Save & Discard Actions */}
           {longPeriodWarning && (
-            <div role="alert" className="rounded-[14px] bg-amber-50 border border-amber-300 px-3.5 py-2.5 text-xs text-amber-900 font-sans flex flex-col sm:flex-row sm:items-center gap-2">
+            <div role="alert" className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center gap-2 shadow-xs">
               <span className="flex-1">{longPeriodWarning}</span>
               <button type="button" onClick={() => handleSaveConfirmed(true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">Save anyway</button>
             </div>

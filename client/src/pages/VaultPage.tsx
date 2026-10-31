@@ -138,8 +138,8 @@ export function VaultPage() {
         </p>
 
         {importStatusMessage && (
-          <div className={`p-3 rounded-xl text-xs font-sans ${
-            importStatusMessage.isError ? "bg-rose-50 text-rose-800 border border-rose-200" : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+          <div className={`p-3.5 rounded-[18px] liquid-glass-card text-xs font-sans shadow-xs border ${
+            importStatusMessage.isError ? "bg-rose-50/40 text-rose-900 border-rose-200/80" : "bg-emerald-50/40 text-emerald-900 border-emerald-200/80"
           }`}>
             {importStatusMessage.text}
           </div>
@@ -221,7 +221,7 @@ export function VaultPage() {
           </div>
 
           {/* Purge Local Storage */}
-          <div className="p-4 rounded-[18px] bg-rose-50/50 border border-rose-200/70 space-y-2">
+          <div className="p-4 rounded-[18px] liquid-glass-card bg-rose-50/40 border border-rose-200/80 space-y-2 shadow-xs">
             <span className="font-bold text-rose-900 block">Purge Local Vault</span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
               Erase all periods and logs from this browser's localStorage. This cannot be undone unless you have a backup.

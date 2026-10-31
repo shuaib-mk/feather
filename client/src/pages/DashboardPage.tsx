@@ -133,12 +133,12 @@ export function DashboardPage() {
                   Next Estimate
                 </span>
                 {stats.predictionStatus === "overdue" && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-amber-100 text-amber-800 shrink-0">
+                  <span className="liquid-glass-pill px-2 py-0.5 rounded-full text-[10px] font-sans font-medium text-amber-900 border border-amber-200/80 shrink-0">
                     Past Expected
                   </span>
                 )}
                 {stats.predictionStatus === "provisional" && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-sans font-medium bg-stone-100 text-stone-600 shrink-0">
+                  <span className="liquid-glass-pill px-2 py-0.5 rounded-full text-[10px] font-sans font-medium text-stone-700 border border-stone-200/80 shrink-0">
                     Provisional
                   </span>
                 )}

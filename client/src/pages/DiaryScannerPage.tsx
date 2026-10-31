@@ -100,12 +100,12 @@ export function DiaryScannerPage() {
       </div>
 
       {successCount != null && (
-        <div className="rounded-[20px] bg-emerald-50 border border-emerald-300 p-4 text-xs text-emerald-900 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
+        <div className="rounded-[20px] liquid-glass-card border border-emerald-200/80 bg-emerald-50/40 p-4 text-xs text-emerald-950 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-emerald-500" />
             <span className="font-semibold">Successfully imported {successCount} cycle periods to your vault!</span>
           </div>
-          <Link to="/chronicle" className="font-sans text-xs font-semibold underline text-emerald-800">
+          <Link to="/chronicle" className="liquid-glass-pill rounded-full px-3 py-1 font-sans text-xs font-semibold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
             View in Chronicle →
           </Link>
         </div>
@@ -170,7 +170,7 @@ export function DiaryScannerPage() {
         )}
 
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 text-rose-800 text-xs border border-rose-200 text-left font-sans">
+          <div className="p-3.5 rounded-[18px] liquid-glass-card border border-rose-200/80 bg-rose-50/40 text-rose-900 text-xs text-left font-sans shadow-xs">
             {error}
           </div>
         )}
