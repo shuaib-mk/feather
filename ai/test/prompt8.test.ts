@@ -35,5 +35,14 @@ const after = cs.loadCycleData();
 check("day log deleted", !after.logs.some((l: any) => l.logDate === "2026-10-31"));
 check("duration recalculates to 1d after delete", cs.effectivePeriodDurationDays(after.periods[0], after.periods, after.logs) === 1, JSON.stringify(after.periods));
 
+
+// Group C1: position line for every event, computed against the verdict window.
+const pi = await import("../../client/src/lib/planInsights");
+const win = { start: "2026-11-25", end: "2026-12-07" };
+check("position after window", pi.describeEventPosition("2026-12-12", win) === "This event is 5 days after the estimated window ends.", pi.describeEventPosition("2026-12-12", win));
+check("position before window", pi.describeEventPosition("2026-11-23", win) === "This event is 2 days before the estimated window starts.", pi.describeEventPosition("2026-11-23", win));
+check("position inside window", pi.describeEventPosition("2026-11-26", win).includes("near the start of the estimated window"), pi.describeEventPosition("2026-11-26", win));
+check("no window -> no position line", pi.describeEventPosition("2026-12-12", null) === "");
+
 console.log("Prompt8A Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);

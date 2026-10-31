@@ -60,10 +60,10 @@ export function CalendarPage(){
       <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-600">
         <span className="flex items-center gap-1.5"><span className="size-3 rounded-md bg-rose-500 inline-block shadow-2xs" /> Logged bleeding day</span>
         <span className="flex items-center gap-1.5"><span className="size-3 rounded-md border-2 border-rose-400 bg-rose-50/60 inline-block" /> Spotting</span>
-        <span className="flex items-center gap-1.5"><span className="size-3 rounded-md bg-violet-300/40 border border-violet-400/50 inline-block" /> Shaded = predicted window</span>
+        <span className="flex items-center gap-1.5"><span className="size-3 rounded-md bg-violet-300/40 border border-violet-400/50 inline-block" /> Shaded = core window (estimate)</span>
         <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-stone-700 inline-block" /> Log / event</span>
       </div>
-      <p className="text-[11px] text-stone-500">Shaded days are estimates from your logged cycles. Not medical advice.</p>
+      <p className="text-[11px] text-stone-500">Shaded days are the core window estimate from your logged cycles (same window as the Dashboard core window). Plan Around It uses a wider estimate window per event. Not medical advice.</p>
       <p data-testid="window-trust" className="text-[11px] text-stone-500">{formatWindowTrustLine(gradeWindowTrust(stats.statistics?.allCycleLengths ?? []))}</p>
     </div>
     {sel && <div className="liquid-glass-card rounded-[24px] p-5 space-y-3" aria-label="Day details">

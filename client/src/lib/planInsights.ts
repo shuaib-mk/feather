@@ -275,6 +275,16 @@ export function formatEventPositionLine(
   return `This event is ${pos.phrase}.`;
 }
 
+/** Prompt 8 C1: position line for EVERY event with a window, inside or outside.
+ * Inside: the Phase 3 thirds phrase. Outside: whole days before/after the window. */
+export function describeEventPosition(eventDate: string, window: EstimatedWindow | null | undefined): string {
+  if (!window || !window.start || !window.end) return "";
+  if (eventDate < window.start) { const n = dayDifference(eventDate, window.start); return `This event is ${n} day${n === 1 ? "" : "s"} before the estimated window starts.`; }
+  if (eventDate > window.end) { const n = dayDifference(window.end, eventDate); return `This event is ${n} day${n === 1 ? "" : "s"} after the estimated window ends.`; }
+  const pos = dayPosition(eventDate, window);
+  return pos ? `This event is ${pos.phrase}.` : "";
+}
+
 // ---- Phase 4: prediction back-test on her own history ----
 
 /** Completed periods (period starts) required as targets before a back-test is reported. */

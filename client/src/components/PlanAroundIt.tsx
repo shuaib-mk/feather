@@ -6,7 +6,7 @@ import { toEngineRecords } from "../lib/calendarView";
 import { evaluateEventOverlap } from "../lib/periodEngine";
 import { todayLocal } from "../lib/localDate";
 import { OVERLAP_DISCLAIMER, prettyDate } from "../cycleStorage";
-import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine, symptomEcho, formatSymptomEchoLine, shouldShowClearDates } from "../lib/planInsights";
+import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine, describeEventPosition, symptomEcho, formatSymptomEchoLine, shouldShowClearDates } from "../lib/planInsights";
 import { useDiscreetMode } from "../lib/discreetMode";
 
 const LABELS: Record<string, string> = {
@@ -94,13 +94,13 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
       )}
       {rows.map(({ e, r }) => {
         const clearLine = shouldShowClearDates(r.status) ? formatClearDatesLine(suggestClearDates(e.date, toEngineRecords(data.periods), today, stats?.statistics?.allCycleLengths ?? [])) : "";
-        const positionLine = formatEventPositionLine(e.date, r.window, pastPattern);
+        const positionLine = formatEventPositionLine(e.date, r.window, pastPattern) || describeEventPosition(e.date, r.window);
         const echoLine = isDiscreet ? "" : formatSymptomEchoLine(e.date, r.window, pastEcho);
         const cleanNote = (r.note || "").replace(
           /^(Likely overlap|Possible overlap|Unlikely to overlap \(estimate\)):\s*/i,
           "",
         );
-        const isConfirmed = savedIds.has(e.id);
+        const isConfirmed = savedIds.has(e.id) || internalEvents.some((x) => x.title === e.title && x.date === e.date);
         return (
           <div
             key={e.id}
@@ -111,19 +111,19 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
               <span className="text-stone-500">{e.date}</span>
               <span className="block text-stone-600">
                 {LABELS[r.status] || r.status}
-                {cleanNote ? ` · ${cleanNote}` : r.window ? ` · window ${r.window.start} to ${r.window.end}` : ""}
+                {cleanNote ? ` · ${cleanNote}` : ""}{r.window ? ` · wider estimate window ${r.window.start} to ${r.window.end}` : ""}
               </span>
               {clearLine && <span className="block text-stone-600">{clearLine}</span>}
               {positionLine && <span className="block text-stone-600">{positionLine}</span>}
               {echoLine && <span className="block text-stone-600">{echoLine}</span>}
             </div>
-            <button
-              type="button"
-              className="liquid-glass-button rounded-full px-3 py-1.5 min-h-[44px]"
-              onClick={() => handleSaveToCalendar(e)}
-            >
-              {isConfirmed ? "Saved to calendar ✓" : "Add to calendar"}
-            </button>
+            {isConfirmed ? (
+              <span className="text-emerald-800 font-semibold px-3 py-1.5">Saved to calendar ✓</span>
+            ) : (
+              <button type="button" className="liquid-glass-button rounded-full px-3 py-1.5 min-h-[44px]" onClick={() => handleSaveToCalendar(e)}>
+                Add to calendar
+              </button>
+            )}
           </div>
         );
       })}
