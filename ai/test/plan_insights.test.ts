@@ -26,6 +26,48 @@ check("no banned words in trust text", texts.every((t) => !banned.test(t)), text
 check("no trust sentence triggers medical guardrail", texts.every((t) => !checkMedicalAdviceGuardrail(t).isRefusal), texts.join(" | "));
 check("no trust sentence triggers severe-symptom escalation", texts.every((t) => !checkSevereSymptomEscalation(t).isSevere), texts.join(" | "));
 check("no symptom/flow words (Discreet-safe)", texts.every((t) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(t)), texts.join(" | "));
+
+// ---- Phase 2: nearby clearer dates + compare two dates ----
+import { suggestClearDates, formatClearDatesLine, formatClearDate } from "../../client/src/lib/planInsights";
+import { toEngineRecords } from "../../client/src/lib/calendarView";
+import { parseLocally, runLavenderAgent, isCompareIntent } from "../backend/agent";
+// Regular 28-day history: starts Aug 4, Sep 1, Sep 29, Oct 27 2026 (3 completed cycles of 28).
+const regularPeriods: any[] = ["2026-08-04", "2026-09-01", "2026-09-29", "2026-10-27"].map((startDate, i) => ({ id: 100 + i, startDate, endDate: null, isApproximate: false }));
+const regularRecords = toEngineRecords(regularPeriods as any);
+const regularLengths = [28, 28, 28];
+const today2 = "2026-11-01";
+check("clear dates: nearest unlikely around a likely Nov 24 event", JSON.stringify(suggestClearDates("2026-11-24", regularRecords, today2, regularLengths)) === JSON.stringify(["2026-11-18", "2026-11-19", "2026-11-20"]), JSON.stringify(suggestClearDates("2026-11-24", regularRecords, today2, regularLengths)));
+check("clear dates: never past, never the event itself", suggestClearDates("2026-11-02", regularRecords, today2, regularLengths).every((d) => d >= today2 && d !== "2026-11-02"));
+check("clear dates: trust not_enough -> none", suggestClearDates("2026-11-24", regularRecords, today2, [28, 30]).length === 0);
+// Wide-window history (21/35 alternating): every date within +/-10 of Oct 23 is inside the window -> none.
+const widePeriods: any[] = ["2026-06-05", "2026-06-26", "2026-07-31", "2026-08-21", "2026-09-25"].map((startDate, i) => ({ id: 200 + i, startDate, endDate: null, isApproximate: false }));
+check("clear dates: none when whole +/-10 range overlaps window", suggestClearDates("2026-10-23", toEngineRecords(widePeriods as any), "2026-10-10", [21, 35, 21, 35]).length === 0, JSON.stringify(suggestClearDates("2026-10-23", toEngineRecords(widePeriods as any), "2026-10-10", [21, 35, 21, 35])));
+check("clear date format is Sat Nov 14 style", formatClearDate("2026-11-14") === "Sat Nov 14", formatClearDate("2026-11-14"));
+const clearLine = formatClearDatesLine(["2026-11-14", "2026-11-15"]);
+check("clear line exact spec wording", clearLine === "Nearby dates that look clearer (estimate): Sat Nov 14, Sun Nov 15.", clearLine);
+check("empty clear list -> empty line (shows nothing)", formatClearDatesLine([]) === "");
+// Compare intent: offline parser, both verdicts + summary, nothing saved, guardrail-safe.
+const ctx2: any = { periods: regularPeriods.map((p) => ({ startDate: p.startDate, endDate: null })), currentDate: today2 };
+try {
+  const r: any = parseLocally("which is safer, Nov 14 or Nov 21", today2, ctx2);
+  check("compare: both verdicts shown", !!r.comparison && r.comparison.dates.length === 2 && r.message.includes("Nov 14") && r.message.includes("Nov 21"), r.message);
+  check("compare: Nov 14 overlaps less (estimate)", r.comparison.summary === "Nov 14 overlaps less (estimate)", r.comparison.summary);
+  check("compare: nothing saved (no entry, no events)", !r.entry && !(r.plannedEvents && r.plannedEvents.length), JSON.stringify(r.entry));
+  check("compare: verdict wording frozen labels", r.message.includes("Unlikely to overlap (estimate)") && r.message.includes("Possible overlap"), r.message);
+} catch (e: any) { check("compare offline", false, e.message); }
+try {
+  const r: any = parseLocally("compare Nov 14 and Nov 15", today2, ctx2);
+  check("compare: similar dates -> Both look similar", !!r.comparison && r.comparison.summary === "Both look similar.", r.message);
+} catch (e: any) { check("compare similar", false, e.message); }
+try {
+  const r: any = await runLavenderAgent("which is safer, Nov 14 or Nov 21", ctx2, []);
+  check("compare: agent path returns comparison, nothing saved", !!r.comparison && !r.entry && r.message.includes("overlaps less (estimate)"), r.message);
+} catch (e: any) { check("compare agent path", false, e.message); }
+check("compare intent detected", isCompareIntent("which is safer, Nov 14 or Nov 21") && isCompareIntent("compare Nov 14 and Nov 21") && !isCompareIntent("period started today"));
+check("'safer' about dates does NOT trigger medical guardrail", !checkMedicalAdviceGuardrail("which is safer, Nov 14 or Nov 21").isRefusal && !checkMedicalAdviceGuardrail("compare Nov 14 and Nov 21").isRefusal);
+const phase2Texts = [clearLine, "Nov 14 overlaps less (estimate)", "Both look similar.", "Nov 14: Unlikely to overlap (estimate) - Nov 21: Possible overlap"];
+check("phase2 text: no banned words", phase2Texts.every((t) => !/\b(should|expect|normal|irregular|abnormal|healthy|guaranteed)\b/i.test(t)), phase2Texts.join(" | "));
+check("phase2 text: guardrail + escalation clean", phase2Texts.every((t) => !checkMedicalAdviceGuardrail(t).isRefusal && !checkSevereSymptomEscalation(t).isSevere), phase2Texts.join(" | "));
+check("phase2 text: no symptom/flow words (Discreet-safe)", phase2Texts.every((t) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(t)), phase2Texts.join(" | "));
 console.log("\nPlanInsights Results: " + passed + " passed, " + failed + " failed.");
 if (failed) process.exit(1);
-

@@ -1453,6 +1453,47 @@ function evaluateContextOverlaps(events, context, today) {
     };
   });
 }
+var OVERLAP_RANK = { past: 0, unlikely: 1, unknown: 2, possible: 3, likely: 4, "period-day": 5 };
+var OVERLAP_VERDICT_LABELS = { logged: "Logged period", "period-day": "Logged period", likely: "Likely overlap", possible: "Possible overlap", unlikely: "Unlikely to overlap (estimate)", past: "Past", unknown: "Not enough data yet" };
+var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function shortDateLabel(dateKey2) {
+  const m = parseInt(dateKey2.slice(5, 7), 10);
+  const d = parseInt(dateKey2.slice(8, 10), 10);
+  return `${SHORT_MONTHS[(m || 1) - 1]} ${d}`;
+}
+function isCompareIntent(text) {
+  return /\b(which is safer|which date is safer|which is better|which date is better|compare|safer)\b/i.test(text);
+}
+function scanComparisonDates(text, today) {
+  const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+  const re = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
+  const currentYear = parseInt(today.slice(0, 4), 10);
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[0];
+    let resolved;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) resolved = isValidDateKey(raw) ? raw : null;
+    else {
+      const explicitYear = /\b\d{4}\b/.test(raw) ? parseInt(raw.match(/\b\d{4}\b/)[0], 10) : null;
+      const noYear = raw.replace(/,?\s+\b\d{4}\b/, "");
+      resolved = parseMonthDay(noYear, explicitYear ?? currentYear);
+      if (resolved && explicitYear === null && resolved < today) resolved = parseMonthDay(noYear, currentYear + 1);
+    }
+    if (resolved && isValidDateKey(resolved) && !out.includes(resolved)) out.push(resolved);
+  }
+  return out;
+}
+function buildDateComparison(text, today, context) {
+  const dates = scanComparisonDates(text, today);
+  if (dates.length < 2) return null;
+  const pair = dates.slice(0, 2);
+  const overlaps = evaluateContextOverlaps(pair.map((d) => ({ name: shortDateLabel(d), date: d })), context, today);
+  const verdicts = overlaps.map((o) => ({ date: o.eventDate, label: shortDateLabel(o.eventDate), status: o.overlap, note: o.overlapNote, window: o.window ?? null }));
+  const summary = (OVERLAP_RANK[verdicts[0].status] ?? 2) === (OVERLAP_RANK[verdicts[1].status] ?? 2) ? "Both look similar." : `${(OVERLAP_RANK[verdicts[0].status] ?? 2) < (OVERLAP_RANK[verdicts[1].status] ?? 2) ? verdicts[0].label : verdicts[1].label} overlaps less (estimate)`;
+  const message = `${verdicts.map((v) => `${v.label}: ${OVERLAP_VERDICT_LABELS[v.status] || v.status}`).join("\xB7")}. ${summary}`;
+  return { dates: verdicts, summary, message };
+}
 function hasAnyLoggingOrPlanningCue(text) {
   const trimmed = text.trim();
   if (!trimmed) return false;
@@ -1501,6 +1542,9 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   }
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (late-period question answered directly; no entry created)" };
+  }
+  if (fallbackResult.comparison) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (date comparison answered directly; nothing saved)" };
   }
   const config = getConfig();
   const isBaseten = context.provider === "baseten" || config.useBaseten;
@@ -1910,6 +1954,16 @@ function parseLocally(text, today, context) {
       toolCalls: [],
       ...offline
     };
+  }
+  if (isCompareIntent(text)) {
+    const comparison = buildDateComparison(text, today, context);
+    if (!comparison) {
+      const q = "Which two dates should I compare? Give both dates, like Nov 14 and Nov 21.";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+    }
+    activityTrail.push({ step: "Date Comparison", detail: comparison.message, status: "done" });
+    toolCalls.push({ id: "call_compare_" + Date.now(), toolName: "check_overlap", args: { dates: comparison.dates.map((d) => d.date) }, result: { comparison }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return { message: comparison.message, entry: null, needsClarification: false, activityTrail, toolCalls, comparison: { dates: comparison.dates, summary: comparison.summary }, plannedEvents: [], ...offline };
   }
   const intent = classifyIntent(text, !!targetSlip && (Boolean(context.pendingEntry) || isExplicitCorrection));
   const extraction = extractWithLexicon(text);

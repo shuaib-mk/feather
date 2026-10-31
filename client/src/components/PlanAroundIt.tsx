@@ -6,7 +6,7 @@ import { toEngineRecords } from "../lib/calendarView";
 import { evaluateEventOverlap } from "../lib/periodEngine";
 import { todayLocal } from "../lib/localDate";
 import { OVERLAP_DISCLAIMER, prettyDate } from "../cycleStorage";
-import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
+import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine } from "../lib/planInsights";
 
 const LABELS: Record<string, string> = {
   logged: "Logged period",
@@ -89,6 +89,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
         </div>
       )}
       {rows.map(({ e, r }) => {
+        const clearLine = formatClearDatesLine(suggestClearDates(e.date, toEngineRecords(data.periods), today, stats?.statistics?.allCycleLengths ?? []));
         const cleanNote = (r.note || "").replace(
           /^(Likely overlap|Possible overlap|Unlikely to overlap \(estimate\)):\s*/i,
           "",
@@ -106,6 +107,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
                 {LABELS[r.status] || r.status}
                 {cleanNote ? ` · ${cleanNote}` : r.window ? ` · window ${r.window.start} to ${r.window.end}` : ""}
               </span>
+              {clearLine && <span className="block text-stone-600">{clearLine}</span>}
             </div>
             <button
               type="button"

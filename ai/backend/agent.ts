@@ -127,6 +127,10 @@ export interface AgentResult {
   clarificationQuestion?: string | null;
   activityTrail: ActivityStep[];
   toolCalls?: ToolCallRecord[];
+  comparison?: {
+    dates: Array<{ date: string; label: string; status: string; note: string; window: { start: string; end: string } | null }>;
+    summary: string;
+  };
   planOverlaps?: Array<{
     name: string;
     eventDate: string;
@@ -335,6 +339,50 @@ function evaluateContextOverlaps(events: Array<{ name: string; date: string }>, 
   });
 }
 
+const OVERLAP_RANK: Record<string, number> = { past: 0, unlikely: 1, unknown: 2, possible: 3, likely: 4, "period-day": 5 };
+const OVERLAP_VERDICT_LABELS: Record<string, string> = { logged: "Logged period", "period-day": "Logged period", likely: "Likely overlap", possible: "Possible overlap", unlikely: "Unlikely to overlap (estimate)", past: "Past", unknown: "Not enough data yet" };
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function shortDateLabel(dateKey: string): string {
+  const m = parseInt(dateKey.slice(5, 7), 10);
+  const d = parseInt(dateKey.slice(8, 10), 10);
+  return `${SHORT_MONTHS[(m || 1) - 1]} ${d}`;
+}
+export function isCompareIntent(text: string): boolean {
+  return /\b(which is safer|which date is safer|which is better|which date is better|compare|safer)\b/i.test(text);
+}
+export function scanComparisonDates(text: string, today: string): string[] {
+  const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+  const re = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
+  const currentYear = parseInt(today.slice(0, 4), 10);
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[0];
+    let resolved: string | null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) resolved = isValidDateKey(raw) ? raw : null;
+    else {
+      const explicitYear = /\b\d{4}\b/.test(raw) ? parseInt(raw.match(/\b\d{4}\b/)![0], 10) : null;
+      const noYear = raw.replace(/,?\s+\b\d{4}\b/, "");
+      resolved = parseMonthDay(noYear, explicitYear ?? currentYear);
+      if (resolved && explicitYear === null && resolved < today) resolved = parseMonthDay(noYear, currentYear + 1);
+    }
+    if (resolved && isValidDateKey(resolved) && !out.includes(resolved)) out.push(resolved);
+  }
+  return out;
+}
+export function buildDateComparison(text: string, today: string, context: AgentContext) {
+  const dates = scanComparisonDates(text, today);
+  if (dates.length < 2) return null;
+  const pair = dates.slice(0, 2);
+  const overlaps = evaluateContextOverlaps(pair.map((d) => ({ name: shortDateLabel(d), date: d })), context, today);
+  const verdicts = overlaps.map((o) => ({ date: o.eventDate, label: shortDateLabel(o.eventDate), status: o.overlap as string, note: o.overlapNote, window: o.window ?? null }));
+  const summary = (OVERLAP_RANK[verdicts[0].status] ?? 2) === (OVERLAP_RANK[verdicts[1].status] ?? 2)
+    ? "Both look similar."
+    : `${(OVERLAP_RANK[verdicts[0].status] ?? 2) < (OVERLAP_RANK[verdicts[1].status] ?? 2) ? verdicts[0].label : verdicts[1].label} overlaps less (estimate)`;
+  const message = `${verdicts.map((v) => `${v.label}: ${OVERLAP_VERDICT_LABELS[v.status] || v.status}`).join("·")}. ${summary}`;
+  return { dates: verdicts, summary, message };
+}
+
 export function hasAnyLoggingOrPlanningCue(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
@@ -405,6 +453,11 @@ export async function runLavenderAgent(
   // C1: "my period is late" is a deterministic clarifying intent in BOTH paths.
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (late-period question answered directly; no entry created)" };
+  }
+
+  // Phase 2: date comparison is deterministic in BOTH paths; nothing is saved.
+  if ((fallbackResult as any).comparison) {
+    return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (date comparison answered directly; nothing saved)" };
   }
 
   const config = getConfig();
@@ -843,6 +896,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       toolCalls: [],
       ...offline,
     };
+  }
+
+  // Phase 2: compare two dates ("which is safer, Nov 14 or Nov 21"). Read-only:
+  // no entry, no planned event is created, and "safer" here is about dates.
+  if (isCompareIntent(text)) {
+    const comparison = buildDateComparison(text, today, context);
+    if (!comparison) {
+      const q = "Which two dates should I compare? Give both dates, like Nov 14 and Nov 21.";
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+    }
+    activityTrail.push({ step: "Date Comparison", detail: comparison.message, status: "done" });
+    toolCalls.push({ id: "call_compare_" + Date.now(), toolName: "check_overlap", args: { dates: comparison.dates.map((d) => d.date) }, result: { comparison }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return { message: comparison.message, entry: null, needsClarification: false, activityTrail, toolCalls, comparison: { dates: comparison.dates, summary: comparison.summary }, plannedEvents: [], ...offline };
   }
 
   const intent = classifyIntent(text, !!targetSlip && (Boolean(context.pendingEntry) || isExplicitCorrection));
