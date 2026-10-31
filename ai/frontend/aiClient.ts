@@ -104,6 +104,9 @@ export async function transcribeAudioBlob(
   const audioBase64 = await base64Promise;
 
   try {
+    // Group E: transcription uploads are large on mobile data. Give /api/transcribe
+    // its own 60-second timeout and never retry it - a retry doubles the wait and
+    // the upload. (The agent call above keeps its text-sized timeout.)
     const res = await fetchWithTimeoutAndRetry("/api/transcribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -112,13 +115,16 @@ export async function transcribeAudioBlob(
         mimeType: blob.type || "audio/webm",
         languageHint,
       }),
-    });
+    }, 60000, 0);
 
     if (res.ok) {
       return await res.json();
     }
 
     const errData = await res.json().catch(() => ({}));
+    if (res.status === 413) {
+      return { text: "", error: "That recording was too long to upload — try a shorter one, or type your entry instead." };
+    }
     if (res.status === 429) {
       return {
         text: "",
@@ -133,7 +139,7 @@ export async function transcribeAudioBlob(
   } catch (err: any) {
     console.warn("Backend /api/transcribe unavailable or timed out, running in client-only mode.");
     if (err.name === "AbortError") {
-      return { text: "", error: "Couldn't hear that — try again or type it" };
+      return { text: "", error: "That recording took too long to upload — try a shorter one, or type your entry instead." };
     }
   }
 

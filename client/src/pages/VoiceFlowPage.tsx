@@ -386,7 +386,7 @@ export function VoiceFlowPage() {
           <div className="space-y-1">
             <span className="font-sans text-xs font-semibold text-stone-800 block">
               {isRecording
-                ? `Recording 0:${durationSeconds < 10 ? `0${durationSeconds}` : durationSeconds} / 0:30`
+                ? `Recording ${durationSeconds}s / 60s`
                 : isProcessing
                 ? (processingSource === "text" ? "Reading your text…" : "Processing voice audio...")
                 : "Tap microphone to speak"}

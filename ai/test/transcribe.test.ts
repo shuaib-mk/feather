@@ -33,6 +33,20 @@ async function main() {
   check("resample 48k -> 24k halves length", resampleMono(new Float32Array(4800), 48000).length === 2400);
   check("wavDurationSeconds 1s", Math.abs((wavDurationSeconds(wav) || 0) - 1) < 0.01);
 
+  // Group E transport sizes: generated WAVs at 15/30/45/60s (24 kHz mono 16-bit)
+  for (const secs of [15, 30, 45, 60]) {
+    const w = makeWav(secs);
+    const payloadBytes = Buffer.byteLength(JSON.stringify({ audioBase64: w.toString("base64"), mimeType: "audio/wav" }));
+    check(`E ${secs}s WAV data size`, w.readUInt32LE(40) === secs * 48000, String(w.readUInt32LE(40)));
+    check(`E ${secs}s base64 JSON payload under the ~4.5 MB Vercel body limit`, payloadBytes < 4.5 * 1024 * 1024, String(payloadBytes));
+    check(`E ${secs}s duration measured`, Math.abs((wavDurationSeconds(w) || 0) - secs) < 0.05);
+  }
+  {
+    (globalThis as any).fetch = async () => ({ ok: true, status: 200, json: async () => ({ transcript: "long clip ok" }), text: async () => "" });
+    const r: any = await transcribeAudio(makeWav(60), "audio/wav");
+    check("E 60s WAV transcribes via mocked transport", r.text === "long clip ok" && !r.error, JSON.stringify(r));
+  }
+
   // Request payload shape (pure)
   const req = buildTranscribeRequest("muse-voice-transcribe-1.0");
   check("request payload matches docs", JSON.stringify(req) === JSON.stringify({
