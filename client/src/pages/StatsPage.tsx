@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { toStatsView, barHeight } from "../lib/statsView";
+import { backTest } from "../lib/planInsights";
 
 export function StatsPage() {
-  const { stats } = useCycle();
+  const { stats, data } = useCycle();
+  const back = backTest(data.periods);
   const view = toStatsView(stats.statistics);
   const maxLen = view.last12Lengths.length ? Math.max(...view.last12Lengths) : 0;
   return (
@@ -32,6 +34,10 @@ export function StatsPage() {
               {view.last12Lengths.map((len, i) => { const h = barHeight(len, maxLen); const x = 8 + i * 29; return (<g key={i}><rect x={x} y={110 - h} width="18" height={h} rx="3" fill="#8b5cf6" opacity="0.75"><title>{`Cycle ${i + 1}: ${len} days`}</title></rect><text x={x + 9} y={119} textAnchor="middle" fontSize="7" fill="#57534e">{len}</text></g>); })}
             </svg>
             {view.variabilityDays !== null && <p className="font-sans text-xs text-stone-600">Variability: {view.variabilityDays} days between your shortest and longest completed cycles.</p>}
+          </div>
+          <div className="liquid-glass-card rounded-[24px] p-6 space-y-2">
+            <h2 className="font-serif text-lg font-semibold text-stone-900">Prediction back-test</h2>
+            <p data-testid="prediction-back-test" className="font-sans text-xs text-stone-600">{back.sentence}</p>
           </div>
         </>
       )}

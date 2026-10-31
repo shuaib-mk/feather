@@ -116,5 +116,27 @@ check("phase3 text: guardrail + escalation clean", phase3Texts.every((x) => !che
 check("phase3 UI lines: no symptom/flow words (Discreet-safe)", phase3Texts.slice(0, 4).every((x) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(x)), phase3Texts.slice(0, 4).join(" | "));
 check("phase3 pattern sentence is past-tense only", !!pattern && pattern.sentence.startsWith("In your past logs"), pattern?.sentence);
 
+
+// ---- Phase 4: prediction back-test ----
+import { backTest, BACKTEST_MIN_COMPARISONS } from "../../client/src/lib/planInsights";
+const btStarts = ["2026-01-01", "2026-01-29", "2026-02-26", "2026-03-28", "2026-04-25", "2026-05-25", "2026-06-22"];
+const btPeriods: any[] = btStarts.map((startDate) => ({ startDate }));
+const bt = backTest(btPeriods);
+check("back-test: min comparisons constant is 3", BACKTEST_MIN_COMPARISONS === 3);
+check("back-test: targets run from the 4th period start onward", bt.comparisons.length === 4 && bt.comparisons[0].targetStart === "2026-03-28" && bt.comparisons[3].targetStart === "2026-06-22", JSON.stringify(bt.comparisons));
+check("back-test: first prediction uses only earlier cycles (Feb 26 + 28d = Mar 26, off by 2)", bt.comparisons[0].predictedStart === "2026-03-26" && bt.comparisons[0].daysOff === 2, JSON.stringify(bt.comparisons[0]));
+check("back-test: days off are 2, 0, 2, 0 with average 1.0", JSON.stringify(bt.comparisons.map((c) => c.daysOff)) === "[2,0,2,0]" && bt.averageDaysOff === 1, JSON.stringify(bt));
+check("back-test: exact sentence", bt.sentence === "Back-tested on your own history: off by 2, 0, 2, 0 days (average 1.0).", bt.sentence);
+check("back-test: unsorted input gives the same result", backTest([...btPeriods].reverse()).sentence === bt.sentence);
+check("back-test: later periods never change an earlier comparison", backTest(btPeriods.slice(0, 5)).comparisons[0].predictedStart === "2026-03-26");
+check("back-test: 5 starts -> only 2 comparisons -> not enough", backTest(btPeriods.slice(0, 5)).comparisons.length === 2 && backTest(btPeriods.slice(0, 5)).sentence === "Not enough history to check yet." && backTest(btPeriods.slice(0, 5)).averageDaysOff === null);
+check("back-test: 3 starts -> no comparisons -> not enough", backTest(btPeriods.slice(0, 3)).comparisons.length === 0 && backTest(btPeriods.slice(0, 3)).sentence === "Not enough history to check yet.");
+check("back-test: no data -> not enough, no throw", backTest([]).sentence === "Not enough history to check yet.");
+const phase4Texts = [bt.sentence, "Not enough history to check yet.", "Prediction back-test"];
+check("phase4 text: labelled back-test, never live accuracy", bt.sentence.startsWith("Back-tested on your own history") && !/live accuracy|accuracy/i.test(bt.sentence.replace("Back-tested", "")), bt.sentence);
+check("phase4 text: no banned words", phase4Texts.every((x) => !/\b(should|expect|normal|irregular|abnormal|healthy|guaranteed)\b/i.test(x)), phase4Texts.join(" | "));
+check("phase4 text: guardrail + escalation clean", phase4Texts.every((x) => !checkMedicalAdviceGuardrail(x).isRefusal && !checkSevereSymptomEscalation(x).isSevere), phase4Texts.join(" | "));
+check("phase4 text: no symptom/flow words (Discreet-safe)", phase4Texts.every((x) => !/\b(cramps?|flow|symptoms?|bleeding|headache|fatigue)\b/i.test(x)), phase4Texts.join(" | "));
+
 console.log("\nPlanInsights Results: " + passed + " passed, " + failed + " failed.");
 if (failed) process.exit(1);

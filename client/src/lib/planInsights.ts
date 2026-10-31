@@ -8,9 +8,10 @@
  * Phase 3: where an event sits inside the estimated window, and the
  * period-days that most often carried the heaviest logged flow in past
  * completed periods. Both are read-only descriptions of existing data.
+ * Phase 4: prediction back-test against the user's own earlier cycles.
  */
 
-import { evaluateEventOverlap, addDays, dayDifference, type PeriodRecord } from "./periodEngine";
+import { evaluateEventOverlap, getPrediction, addDays, dayDifference, type PeriodRecord } from "./periodEngine";
 
 
 /** Spread thresholds in days: at or below high = "high", at or below medium = "medium", above = "low". Change trust grading here only. */
@@ -266,4 +267,73 @@ export function formatEventPositionLine(
     return "This event is near the start of the estimated window, where your past logs show heavier days (estimate).";
   }
   return `This event is ${pos.phrase}.`;
+}
+
+// ---- Phase 4: prediction back-test on her own history ----
+
+/** Completed periods (period starts) required as targets before a back-test is reported. */
+export const BACKTEST_MIN_COMPARISONS = 3;
+/** First target, counting period starts from 1: the 4th period start onward. */
+export const BACKTEST_FIRST_TARGET_INDEX = 3;
+
+export interface BackTestComparison {
+  /** Real logged period start that was predicted. */
+  targetStart: string;
+  /** Start the existing engine produced from earlier cycles only. */
+  predictedStart: string;
+  /** Absolute difference in days between predicted and real start. */
+  daysOff: number;
+}
+
+export interface BackTestResult {
+  comparisons: BackTestComparison[];
+  /** Mean days off to one decimal, or null when there are no comparisons. */
+  averageDaysOff: number | null;
+  sentence: string;
+}
+
+/**
+ * Back-test the existing engine on the user's own history: for each period
+ * start from the 4th onward, run getPrediction on ONLY the period starts
+ * logged before it (as of the day before the real start) and compare the
+ * predicted start with the real one. This replay uses the engine exactly as
+ * it runs for future estimates; no engine maths is changed here. It is a
+ * back-test on logged history, never a live accuracy claim. Fewer than
+ * BACKTEST_MIN_COMPARISONS comparisons cannot support a summary.
+ */
+export function backTest(periods: ReadonlyArray<PeriodStartLike>): BackTestResult {
+  const starts = [...new Set(periods.map((p) => p?.startDate).filter((d): d is string => typeof d === "string" && !!d))].sort();
+  const comparisons: BackTestComparison[] = [];
+  for (let i = BACKTEST_FIRST_TARGET_INDEX; i < starts.length; i++) {
+    const targetStart = starts[i];
+    const earlier: PeriodRecord[] = starts.slice(0, i).map((startDate, j) => ({
+      id: `backtest-${j}`,
+      startDate,
+      confirmed: true,
+      source: "manual",
+      createdAt: "",
+      updatedAt: "",
+    }));
+    try {
+      const prediction = getPrediction(earlier, addDays(targetStart, -1));
+      if (!prediction.expectedStart || prediction.isDefault) continue;
+      comparisons.push({
+        targetStart,
+        predictedStart: prediction.expectedStart,
+        daysOff: Math.abs(dayDifference(prediction.expectedStart, targetStart)),
+      });
+    } catch {
+      continue;
+    }
+  }
+  if (comparisons.length < BACKTEST_MIN_COMPARISONS) {
+    return { comparisons, averageDaysOff: null, sentence: "Not enough history to check yet." };
+  }
+  const average = comparisons.reduce((sum, c) => sum + c.daysOff, 0) / comparisons.length;
+  const averageDaysOff = Math.round(average * 10) / 10;
+  return {
+    comparisons,
+    averageDaysOff,
+    sentence: `Back-tested on your own history: off by ${comparisons.map((c) => c.daysOff).join(", ")} days (average ${averageDaysOff.toFixed(1)}).`,
+  };
 }
