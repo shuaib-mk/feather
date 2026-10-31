@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { LiquidGlassFilter } from "./LiquidGlassFilter";
 import { useCycle } from "../context/CycleContext";
 import { isDemoActive as isDemoModeActive } from "../lib/demoMode";
+import { useDiscreetMode } from "../lib/discreetMode";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -19,6 +20,42 @@ export function AppLayout({ children }: AppLayoutProps) {
     isDemoActive,
     clearDemo,
   } = useCycle();
+  const { isDiscreet, isQuickHidden, toggleQuickHide } = useDiscreetMode();
+
+  if (isQuickHidden) {
+    return (
+      <>
+        <div className="feather-fixed-background" aria-hidden="true" />
+        <div className="min-h-screen min-h-[100dvh] w-full text-stone-900 px-4 py-8 max-w-2xl mx-auto space-y-4 font-sans">
+          <div className="flex items-center justify-between border-b border-stone-300/60 pb-3">
+            <div>
+              <h1 className="font-serif text-xl font-semibold text-stone-900">Notes</h1>
+              <p className="text-xs text-stone-500">Personal scratchpad</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleQuickHide}
+              className="liquid-glass-button rounded-full px-4 py-2 text-xs font-sans font-semibold cursor-pointer shadow-xs"
+            >
+              Restore view
+            </button>
+          </div>
+          <div className="liquid-glass-card rounded-[20px] p-5 space-y-2">
+            <h2 className="text-sm font-semibold text-stone-800">Weekly errands</h2>
+            <ul className="text-xs text-stone-600 space-y-1 list-disc pl-4">
+              <li>Pick up groceries and herbal tea</li>
+              <li>Reply to study group messages</li>
+              <li>Review calendar for next month</li>
+            </ul>
+          </div>
+          <div className="liquid-glass-card rounded-[20px] p-5 space-y-2">
+            <h2 className="text-sm font-semibold text-stone-800">Reading list</h2>
+            <p className="text-xs text-stone-600">Chapter 4 notes and bookmarks saved locally.</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -33,6 +70,23 @@ export function AppLayout({ children }: AppLayoutProps) {
           id="main-content"
           className="min-h-[85vh] min-h-[85dvh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-24 lg:pl-28 md:pr-8 space-y-5 pb-[calc(7.5rem+env(safe-area-inset-bottom,20px))] md:pb-12"
         >
+          {/* Persistent Discreet Mode Quick-Hide Bar */}
+          {isDiscreet && (
+            <div role="status" className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-stone-300/80">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-stone-700 shrink-0" />
+                <span className="font-medium text-stone-800">Discreet Mode on · Sensitive values masked (tap to reveal)</span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleQuickHide}
+                className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer shadow-xs shrink-0"
+              >
+                Quick hide
+              </button>
+            </div>
+          )}
+
           {/* Persistent Demo Mode Banner */}
           {(isDemoActive || isDemoModeActive()) && (
             <div role="status" className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">

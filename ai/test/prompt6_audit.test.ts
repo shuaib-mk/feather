@@ -10,6 +10,7 @@ import { buildAndFilterChronicleItems } from "../../client/src/pages/ChroniclePa
 import { buildWeekdayHeader } from "../../client/src/pages/CalendarPage";
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
+import { isDiscreetModeEnabled, setDiscreetModeEnabled, isQuickHideActive, setQuickHideActive } from "../../client/src/lib/discreetMode";
 
 console.log("=== Prompt 6 Audit Regression Suite ===");
 
@@ -19,6 +20,13 @@ const mem: Record<string, string> = {};
   setItem: (k: string, v: string) => { mem[k] = String(v); },
   removeItem: (k: string) => { delete mem[k]; },
   clear: () => { for (const k of Object.keys(mem)) delete mem[k]; },
+};
+const sessMem: Record<string, string> = {};
+(globalThis as any).sessionStorage = {
+  getItem: (k: string) => (k in sessMem ? sessMem[k] : null),
+  setItem: (k: string, v: string) => { sessMem[k] = String(v); },
+  removeItem: (k: string) => { delete sessMem[k]; },
+  clear: () => { for (const k of Object.keys(sessMem)) delete sessMem[k]; },
 };
 
 // Group A: Demo events must never leak into real vault, and real events never leak into demo
@@ -208,4 +216,30 @@ const mem: Record<string, string> = {};
   exitDemoMode();
 
   console.log("[PASS] Group D: Offline multi-fact disclosure, clean event titles, & period duration invariance on note delete");
+}
+
+// Group E: Discreet Mode & Quick-Hide state management
+{
+  (globalThis as any).localStorage.clear();
+  (globalThis as any).sessionStorage.clear();
+
+  assert.strictEqual(isDiscreetModeEnabled(), false);
+  assert.strictEqual(isQuickHideActive(), false);
+
+  setDiscreetModeEnabled(true);
+  assert.strictEqual(isDiscreetModeEnabled(), true);
+  assert.strictEqual(isQuickHideActive(), false);
+
+  setQuickHideActive(true);
+  assert.strictEqual(isQuickHideActive(), true, "Quick-hide activates when Discreet Mode is on");
+
+  setQuickHideActive(false);
+  assert.strictEqual(isQuickHideActive(), false, "Quick-hide restores on second tap");
+
+  setQuickHideActive(true);
+  setDiscreetModeEnabled(false);
+  assert.strictEqual(isDiscreetModeEnabled(), false);
+  assert.strictEqual(isQuickHideActive(), false, "Turning off Discreet Mode also clears Quick-Hide");
+
+  console.log("[PASS] Group E: Discreet Mode & Quick-Hide state management");
 }

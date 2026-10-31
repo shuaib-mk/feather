@@ -5,6 +5,7 @@ import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { prettyDate, countDailyNotes, effectivePeriodDurationDays, type Period, type DayLog } from "../cycleStorage";
+import { useDiscreetMode } from "../lib/discreetMode";
 
 export interface TimelineItem {
   id: string;
@@ -56,6 +57,8 @@ export function buildAndFilterChronicleItems(
 
 export function ChroniclePage() {
   const { data, removePeriod, removeLog } = useCycle();
+  const { isDiscreet } = useDiscreetMode();
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
   const [filterType, setFilterType] = useState<"all" | "periods" | "logs">("all");
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "period" | "log";
@@ -63,54 +66,13 @@ export function ChroniclePage() {
     date: string;
   } | null>(null);
 
+  const toggleRevealItem = (id: string) => {
+    setRevealedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const periods = data.periods;
   const logs = data.logs;
-
-  // Build unified chronological timeline
-  interface TimelineItem {
-    id: string;
-    date: string;
-    isPeriod: boolean;
-    periodItem?: (typeof periods)[0];
-    isLog: boolean;
-    logItem?: (typeof logs)[0];
-  }
-
-  const dateMap = new Map<string, TimelineItem>();
-
-  periods.forEach((p) => {
-    const existing = dateMap.get(p.startDate) || {
-      id: `p-${p.id || p.startDate}`,
-      date: p.startDate,
-      isPeriod: true,
-      periodItem: p,
-      isLog: false,
-    };
-    existing.isPeriod = true;
-    existing.periodItem = p;
-    dateMap.set(p.startDate, existing);
-  });
-
-  logs.forEach((l) => {
-    const existing = dateMap.get(l.logDate) || {
-      id: `l-${l.id || l.logDate}`,
-      date: l.logDate,
-      isPeriod: false,
-      isLog: true,
-      logItem: l,
-    };
-    existing.isLog = true;
-    existing.logItem = l;
-    dateMap.set(l.logDate, existing);
-  });
-
-  const allItems = Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-
-  const filteredItems = allItems.filter((item) => {
-    if (filterType === "periods") return item.isPeriod;
-    if (filterType === "logs") return !item.isPeriod && item.isLog;
-    return true;
-  });
+  const { allItems, filteredItems } = buildAndFilterChronicleItems(periods, logs, filterType);
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
@@ -197,6 +159,7 @@ export function ChroniclePage() {
             const p = item.periodItem;
             const l = item.logItem;
             const duration = p ? effectivePeriodDurationDays(p, periods, logs) : null;
+            const isItemMasked = isDiscreet && !revealedIds[item.id];
 
             return (
               <div
@@ -209,60 +172,77 @@ export function ChroniclePage() {
                       {prettyDate(item.date)}
                     </span>
 
-                    {item.isPeriod && (
-                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-semibold bg-rose-50/90 text-rose-700 border border-rose-200/80">
-                        Period Start {duration ? `(${duration}d)` : ""}
-                      </span>
-                    )}
+                    {isItemMasked ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleRevealItem(item.id)}
+                        className="liquid-glass-pill rounded-full px-3 py-0.5 text-[11px] font-sans font-medium text-violet-700 cursor-pointer"
+                      >
+                        ••• · Tap to reveal details
+                      </button>
+                    ) : (
+                      <>
+                        {item.isPeriod && (
+                          <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-semibold bg-rose-50/90 text-rose-700 border border-rose-200/80">
+                            Period Start {duration ? `(${duration}d)` : ""}
+                          </span>
+                        )}
 
-                    {item.isPeriod && (!l?.flow || l.flow === "none") ? (
-                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
-                        flow not noted
-                      </span>
-                    ) : l?.flow && l.flow !== "none" ? (
-                      <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-violet-50/90 text-violet-700 border border-violet-200/80">
-                        {l.flow === "spotting" ? "spotting" : `${l.flow} flow`}
-                      </span>
-                    ) : null}
+                        {item.isPeriod && (!l?.flow || l.flow === "none") ? (
+                          <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                            flow not noted
+                          </span>
+                        ) : l?.flow && l.flow !== "none" ? (
+                          <span className="px-2.5 py-0.5 rounded-full font-sans text-[11px] font-medium bg-violet-50/90 text-violet-700 border border-violet-200/80">
+                            {l.flow === "spotting" ? "spotting" : `${l.flow} flow`}
+                          </span>
+                        ) : null}
 
-                    {p?.landmarkName && (
-                      <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-stone-700 inline-flex items-center gap-1.5">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
-                          <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
-                          <path d="M7 7h.01" />
-                        </svg>
-                        <span>{p.landmarkName}</span>
-                      </span>
+                        {p?.landmarkName && (
+                          <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-stone-700 inline-flex items-center gap-1.5">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-600">
+                              <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                              <path d="M7 7h.01" />
+                            </svg>
+                            <span>{p.landmarkName}</span>
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
                   {/* Symptoms & Notes Row */}
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-stone-600">
-                    {l?.symptoms && l.symptoms.length > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {l.symptoms.map((sym) => (
-                          <span
-                            key={sym}
-                            className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] text-stone-600 font-sans"
-                          >
-                            {sym}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                  {!isItemMasked && (
+                    <div
+                      className={`flex items-center gap-2 flex-wrap text-xs text-stone-600 ${isDiscreet ? "cursor-pointer" : ""}`}
+                      onClick={isDiscreet ? () => toggleRevealItem(item.id) : undefined}
+                    >
+                      {l?.symptoms && l.symptoms.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {l.symptoms.map((sym) => (
+                            <span
+                              key={sym}
+                              className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] text-stone-600 font-sans"
+                            >
+                              {sym}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
-                    {l?.notes && (
-                      <span className="text-[11px] text-stone-600 italic">
-                        "{l.notes}"
-                      </span>
-                    )}
+                      {l?.notes && (
+                        <span className="text-[11px] text-stone-600 italic">
+                          "{l.notes}"
+                        </span>
+                      )}
 
-                    {l?.energy != null && (
-                      <span className="font-sans text-[11px] text-stone-500">
-                        Energy: {l.energy}/5
-                      </span>
-                    )}
-                  </div>
+                      {l?.energy != null && (
+                        <span className="font-sans text-[11px] text-stone-500">
+                          Energy: {l.energy}/5
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Delete Entry Control */}
