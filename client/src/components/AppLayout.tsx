@@ -20,11 +20,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   } = useCycle();
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden feather-aura-bg text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(4.75rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))] pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden feather-aura-bg text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))] pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
       <LiquidGlassFilter />
       {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
       {backupToast && (
-        <div className="fixed top-[calc(4.75rem+env(safe-area-inset-top,0px))] md:top-[calc(1.5rem+env(safe-area-inset-top,0px))] left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
+        <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] md:top-[calc(1.5rem+env(safe-area-inset-top,0px))] left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
           <div className="size-7 rounded-full liquid-glass-pill text-stone-900 flex items-center justify-center shrink-0">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />

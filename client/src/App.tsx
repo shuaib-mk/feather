@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { CycleProvider, useCycle } from "./context/CycleContext";
 import { AppLayout } from "./components/AppLayout";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -26,6 +27,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <LockGate>
       <CycleProvider>
         <AppLayout>

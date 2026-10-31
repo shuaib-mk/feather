@@ -260,16 +260,20 @@ export function Sidebar() {
       </aside>
 
       {/* ========================================================
-          MOBILE TOP BAR (Safe-Area Aware)
+          MOBILE BRAND CAPSULE (Discreet Floating Liquid Glass Pill)
           ======================================================== */}
-      <header
-        className="fixed left-3 right-3 z-40 flex items-center justify-between rounded-[22px] liquid-glass-topbar px-4 py-2.5 md:hidden max-w-lg mx-auto"
+      <div
+        className="fixed left-3.5 z-40 md:hidden pointer-events-auto"
         style={{
-          top: "max(0.6rem, env(safe-area-inset-top, 0.6rem))",
+          top: "max(0.65rem, env(safe-area-inset-top, 0.65rem))",
         }}
       >
-        <Link to="/" className="flex items-center gap-2 cursor-pointer">
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-stone-900">
+        <Link
+          to="/"
+          className="flex items-center gap-2 rounded-full liquid-glass-pill px-3.5 py-1.5 shadow-xs cursor-pointer border border-white/85 text-stone-900 active:scale-95 transition-transform"
+          aria-label="Feather Home"
+        >
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-stone-900 shrink-0">
             <line x1="3" y1="17" x2="3" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             <line x1="3" y1="7" x2="3" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             <line x1="10" y1="17" x2="10" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -280,33 +284,12 @@ export function Sidebar() {
             <circle cx="10" cy="7" r="2" fill="currentColor" />
             <circle cx="17" cy="11" r="2" fill="currentColor" />
           </svg>
-          <span className="font-serif text-base font-semibold tracking-tight text-stone-900">
+          <span className="font-serif text-sm font-semibold tracking-tight text-stone-900">
             Feather
           </span>
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
         </Link>
-
-        <div className="flex items-center gap-1.5">
-          <Link
-            to="/voice"
-            className="liquid-glass-button px-3.5 py-1.5 font-sans text-xs font-semibold text-stone-900 flex items-center gap-1.5 cursor-pointer rounded-full"
-            aria-label="Voice Capture"
-          >
-            <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
-            <span>Voice</span>
-          </Link>
-          <Link
-            to="/settings"
-            className="liquid-glass-tile p-2 text-stone-700 hover:text-stone-950 cursor-pointer rounded-full flex items-center justify-center"
-            aria-label="Settings"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </Link>
-        </div>
-      </header>
+      </div>
 
       {/* ========================================================
           MOBILE BOTTOM FLOATING DOCK (Safe-Area Aware)
