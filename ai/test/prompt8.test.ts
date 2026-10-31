@@ -19,5 +19,21 @@ for (const [text, date] of probes) {
 const log = parseLocally("my period started 2 days before Christmas", TODAY, ctx);
 check("log-intent future landmark still clarifies", log.needsClarification === true && !log.entry && !(log.plannedEvents || []).length, log.message);
 check("clarification mentions Christmas", /Christmas/.test(log.message), log.message);
+
+// Group B (storage level): deleting a period day from Calendar uses the same
+// deleteDayLog as Chronicle; duration is derived and shrinks 2d -> 1d.
+const store: Record<string, string> = {};
+(globalThis as any).localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = String(v); }, removeItem: (k: string) => { delete store[k]; }, clear: () => { for (const k in store) delete store[k]; } };
+const cs = await import("../../client/src/cycleStorage");
+cs.saveCycleData({ periods: [{ id: 1, startDate: "2026-10-30", endDate: "2026-10-31" } as any], logs: [
+  { logDate: "2026-10-30", flow: "heavy", kind: "period_started", symptoms: [], mood: null, energy: null, sleepHours: null, notes: "" } as any,
+  { logDate: "2026-10-31", flow: "heavy", kind: "daily_log", symptoms: [], mood: null, energy: null, sleepHours: null, notes: "" } as any,
+] });
+check("duration 2d before delete", cs.effectivePeriodDurationDays(cs.loadCycleData().periods[0], cs.loadCycleData().periods, cs.loadCycleData().logs) === 2);
+cs.deleteDayLog("2026-10-31");
+const after = cs.loadCycleData();
+check("day log deleted", !after.logs.some((l: any) => l.logDate === "2026-10-31"));
+check("duration recalculates to 1d after delete", cs.effectivePeriodDurationDays(after.periods[0], after.periods, after.logs) === 1, JSON.stringify(after.periods));
+
 console.log("Prompt8A Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
