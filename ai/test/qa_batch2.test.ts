@@ -51,5 +51,44 @@ try {
   check("A4 demo periods = 7", demo.periods.length === 7);
 } catch (e: any) { check("A4", false, e.message); }
 
+
+// B1: symptom note dated today, no invented flow, even when a recent entry exists.
+try {
+  const recent: any = { date: "2026-10-30", flow: "heavy", symptoms: ["cramps"], mood: null, energy: null, sleep: null, notes: null, kind: "period_started" };
+  const r = parseLocally("cramps and headache today", "2026-10-31", { recentEntry: recent });
+  check("B1 date is today, not the recent entry date", r.entry?.date === "2026-10-31", JSON.stringify(r.entry));
+  check("B1 no invented flow", r.entry?.flow === null || r.entry?.flow === undefined, JSON.stringify(r.entry));
+  check("B1 is a daily note, not merged into the old period", r.entry?.kind === "daily_log", r.entry?.kind);
+} catch (e: any) { check("B1", false, e.message); }
+
+// B3: no symptom/flow inheritance into fresh entries; period-start "today" is a period.
+try {
+  const recent: any = { date: "2026-10-30", flow: "heavy", symptoms: ["cramps", "headache"], mood: null, energy: null, sleep: null, notes: null, kind: "period_started" };
+  const r = parseLocally("period started today, medium flow", "2026-10-31", { recentEntry: recent });
+  check("B3 fresh period-start today is a period", r.entry?.kind === "period_started", JSON.stringify(r.entry));
+  check("B3 no inherited symptoms", JSON.stringify(r.entry?.symptoms || []) === "[]", JSON.stringify(r.entry?.symptoms));
+  check("B3 flow is the stated medium", r.entry?.flow === "medium", r.entry?.flow || "");
+  const r2 = parseLocally("period started today, medium flow", "2026-10-31", {});
+  check("B3 period-start today (clean context) is a period", r2.entry?.kind === "period_started" && r2.entry?.date === "2026-10-31", JSON.stringify(r2.entry));
+} catch (e: any) { check("B3", false, e.message); }
+
+// B3 guard: explicit corrections still edit the recent entry in place (batch-1 golden).
+try {
+  const recent: any = { date: "2026-10-27", flow: "heavy", symptoms: ["cramps"], mood: "Okay", energy: 3, sleep: 7, notes: null, kind: "period_started" };
+  const r = parseLocally("actually it was light, not heavy", "2026-10-28", { recentEntry: recent });
+  check("B3 explicit correction still applies", r.entry?.flow === "light" && r.entry?.date === "2026-10-27", JSON.stringify(r.entry));
+} catch (e: any) { check("B3 correction", false, e.message); }
+
+// B2: multi-fact sentence — start = 3 days ago, first-day flow, both events, unplaced named.
+try {
+  const r = parseLocally("my period started three days ago and the flow was medium on the first day but heavy yesterday with bad cramps and a headache and I also have an exam coming up on November 20 and a wedding to attend", "2026-10-31", {});
+  check("B2 start date = 3 days ago (2026-10-28)", r.entry?.date === "2026-10-28", JSON.stringify(r.entry));
+  check("B2 first-day flow = medium", r.entry?.flow === "medium", r.entry?.flow || "");
+  const evs = (r as any).plannedEvents || [];
+  check("B2 both events offered", evs.length === 2 && evs.some((e: any) => /exam/i.test(e.title)) && evs.some((e: any) => /wedding/i.test(e.title)), JSON.stringify(evs));
+  check("B2 events dated 2026-11-20", evs.every((e: any) => e.date === "2026-11-20"), JSON.stringify(evs));
+  check("B2 unplaced fact named, not dropped", /couldn't place/i.test(r.message) && r.message.includes("2026-10-30"), r.message);
+} catch (e: any) { check("B2", false, e.message); }
+
 console.log(`\nQABatch2 Results: ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);

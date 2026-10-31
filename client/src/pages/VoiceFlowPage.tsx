@@ -111,7 +111,7 @@ export function VoiceFlowPage() {
     setRateLimitNotice(null);
     setSavedSuccessMessage(null);
 
-    const pending = activePendingEntry !== undefined ? activePendingEntry : confirmEntry;
+    const pending = activePendingEntry !== undefined ? activePendingEntry : null; // B3: only the slip-correction box passes a pending entry; new messages start clean
 
     // Resolve most recent saved entry for standalone corrections
     const sortedLogs = [...data.logs].sort((a, b) => b.logDate.localeCompare(a.logDate));

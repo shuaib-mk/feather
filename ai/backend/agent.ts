@@ -364,10 +364,12 @@ export async function runLavenderAgent(
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser — Meta model not used (Meta API key not configured)" };
   }
 
-  const targetEntry = context.pendingEntry || context.recentEntry;
+  const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
+  // B3: a recent (already-saved) entry is only a correction target on explicit
+  // correction language; a pending slip is always available to patch.
+  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
   let livePlannedEvents: Array<{ title: string; date: string }> = [];
 
-  const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
   if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
     return {
       message: "I couldn't find a recent entry to correct.",
@@ -529,7 +531,7 @@ export async function runLavenderAgent(
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          const entryToPatch = context.pendingEntry || context.recentEntry;
+          const entryToPatch = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
           if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
@@ -734,8 +736,20 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   }
 
   // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
-  const targetSlip = context.pendingEntry || context.recentEntry;
-  if (targetSlip) {
+  // B3: previous entries may ONLY be corrected on explicit correction language;
+  // a new log sentence must never inherit their date/flow/symptoms.
+  const isExplicitCorrection =
+    /^\s*no[,.!?\s]/i.test(text) ||
+    /\bactually\b/i.test(text) ||
+    /\bmake it\b/i.test(text) ||
+    /\bchange\s+(?:the\s+)?(?:date|flow|mood|energy|it|to)\b/i.test(text) ||
+    /\b(?:add|remove|delete)\b/i.test(text) ||
+    /\balso had\b/i.test(text) ||
+    /\bset\s+(?:the\s+)?date\b/i.test(text) ||
+    /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) ||
+    /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
+  const targetSlip = context.pendingEntry || (isExplicitCorrection ? context.recentEntry : null);
+  if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
     const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
@@ -756,7 +770,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     };
   }
 
-  const intent = classifyIntent(text, !!targetSlip);
+  const intent = classifyIntent(text, !!targetSlip && (Boolean(context.pendingEntry) || isExplicitCorrection));
   const extraction = extractWithLexicon(text);
   const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
   const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
@@ -777,7 +791,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     const cleanTitle = (seg: string): string => seg
       .replace(/[,";]+\s*$/g, "")
       .replace(/^\s*(?:and|&)\s+/i, "")
-      .replace(/^\s*(?:i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "")
+      .replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "")
+      .replace(/\bcoming up\s*$/i, "")
       .replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "")
       .replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "")
       .replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s) // keep possessives/names intact
@@ -804,6 +819,14 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       }
       planDateSpans.push({ index: m.index, length: rawDate.length });
       eventMatches.push({ name: title, date: resolvedDate });
+    }
+  }
+  // B2: a trailing dateless event ("...on November 20 and a wedding to attend")
+  // inherits the last dated event's date instead of being silently dropped.
+  if (eventMatches.length > 0) {
+    const trailing = text.match(/\b(?:and|also)\s+(?:a\s+|an\s+)?(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary)\b[^.]*$/i);
+    if (trailing && !eventMatches.some((e) => e.name.toLowerCase().includes(trailing[1].toLowerCase()))) {
+      eventMatches.push({ name: trailing[1].toLowerCase(), date: eventMatches[eventMatches.length - 1].date });
     }
   }
   if (planDateInvalid && eventMatches.length === 0 && extractWithLexicon(text).symptoms.length === 0) {
@@ -904,12 +927,31 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }
 
+  // B2 multi-fact sentences: the date right after "period started ..." wins for
+  // the start, "flow was X on the first day" is the start day's flow, and a
+  // different flow "yesterday" is named as unplaced instead of dropped/merged.
+  let unplacedNote: string | null = null;
+  if (extraction.periodStart) {
+    const frag = text.match(/period\s+started\s+([^,.]+?)(?=\s+and\s|\s+but\s|,|$)/i)?.[1];
+    if (frag) {
+      const r = resolveDateExpression(`period started ${frag}`, today);
+      if (r.date) { entryDate = r.date; dateExplanation = r.explanation || dateExplanation; }
+    }
+    const firstDayFlow = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
+    if (firstDayFlow) (extraction as any).flow = firstDayFlow[1];
+    const yesterdayFlow = lower.match(/\b(light|medium|heavy)\s+yesterday\b/);
+    if (yesterdayFlow && yesterdayFlow[1] !== extraction.flow) {
+      unplacedNote = `${yesterdayFlow[1]} flow yesterday (${addDaysToKey(today, -1)}) as a separate day`;
+    }
+  }
+
   const kind: StructuredEntry["kind"] = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
   const entry: StructuredEntry = {
     date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, sleep, notes: text,
     isApproximate, landmarkName, kind, dateExplanation, dateWindow,
   };
   toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-  const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  const baseMessage = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  const message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} — log that day separately if you want it saved.` : baseMessage;
   return { message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
