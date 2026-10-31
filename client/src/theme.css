@@ -33,12 +33,16 @@
   --gradient-invent-hover: linear-gradient(78deg, #daa7d2 0%, #a9bad1 51.923%, #4986b4 71.593%, #daa7d2 100%);
 }
 
+html,
+body,
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent !important;
 }
 
 /* Suppress mobile tap highlights and touch callouts globally */
+html,
+body,
 button,
 a,
 input,
@@ -53,20 +57,27 @@ textarea,
 .liquid-glass-card-interactive,
 .liquid-glass-lens,
 .liquid-glass-dock,
-.liquid-glass-topbar {
+.liquid-glass-topbar,
+.liquid-glass-nav-item,
+.liquid-glass-nav-active,
+.liquid-glass-nav-cta {
   -webkit-tap-highlight-color: transparent !important;
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
 
 /* Remove unwanted browser outline when clicking/tapping elements */
+:focus:not(:focus-visible),
 button:focus:not(:focus-visible),
 a:focus:not(:focus-visible),
 input:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
 [tabindex]:focus:not(:focus-visible) {
   outline: none !important;
-  box-shadow: none !important;
+  outline-width: 0 !important;
+  outline-color: transparent !important;
 }
 
 html, body {
@@ -336,11 +347,11 @@ html, body {
 
 .liquid-glass-button:hover,
 .liquid-glass-button-dark:hover {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.52) 0%, rgba(255, 255, 255, 0.22) 60%, rgba(255, 255, 255, 0.35) 100%) !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.54) 0%, rgba(255, 255, 255, 0.22) 60%, rgba(255, 255, 255, 0.38) 100%) !important;
   color: #0c0b0c !important;
-  border-color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.90) !important;
   box-shadow: 
-    inset 0 2.5px 2px 0 #ffffff,
+    inset 0 2.5px 2px 0 rgba(255, 255, 255, 0.95),
     inset 1px 1px 3px 0 rgba(255, 255, 255, 0.85),
     inset 0 0 0 1px rgba(255, 255, 255, 0.55),
     inset 2px 0 2.5px 0 rgba(244, 114, 182, 0.30),
@@ -351,47 +362,40 @@ html, body {
   transform: translateY(-1px) translateZ(0);
 }
 
-.liquid-glass-button:hover,
-.liquid-glass-button-dark:hover {
-  background: linear-gradient(145deg, #ffffff 0%, rgba(250, 248, 255, 0.96) 100%) !important;
-  color: #0c0b0c !important;
-  border-color: #ffffff !important;
-  box-shadow: 
-    inset 2px 2px 4px rgba(210, 210, 225, 0.7),
-    inset -2px -2px 4px #ffffff,
-    0 12px 28px -4px rgba(124, 58, 237, 0.14),
-    0 4px 10px 0 rgba(70, 60, 90, 0.04) !important;
-  transform: translateY(-1px) translateZ(0);
-}
-
 .liquid-glass-button:active,
 .liquid-glass-button-dark:active {
-  transform: scale(0.95) translateY(1px) translateZ(0) !important;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 235, 252, 0.95) 100%) !important;
+  transform: scale(0.96) translateY(0.5px) translateZ(0) !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.18) 60%, rgba(240, 235, 252, 0.35) 100%) !important;
   box-shadow: 
-    inset 2.5px 2.5px 5px rgba(185, 180, 210, 0.6),
-    inset -2px -2px 4px #ffffff,
-    0 2px 8px -2px rgba(124, 58, 237, 0.22) !important;
+    inset 2px 2px 4px rgba(185, 180, 210, 0.5),
+    inset -2px -2px 4px rgba(255, 255, 255, 0.8),
+    0 2px 8px -2px rgba(124, 58, 237, 0.18) !important;
   outline: none !important;
-  border-color: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.85) !important;
   transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.08s ease-out !important;
 }
 
 .liquid-glass-pill:active {
-  transform: scale(0.95) translateY(1px) translateZ(0) !important;
-  background-color: rgba(255, 255, 255, 0.98) !important;
+  transform: scale(0.96) translateY(0.5px) translateZ(0) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.30) 100%) !important;
   box-shadow: 
-    inset 2px 2px 3.5px rgba(195, 190, 215, 0.55),
-    inset -1px -1px 2.5px #ffffff,
-    0 1px 4px -1px rgba(70, 60, 90, 0.1) !important;
+    inset 1.5px 1.5px 3px rgba(195, 190, 215, 0.45),
+    inset -1px -1px 2px rgba(255, 255, 255, 0.85),
+    0 1px 4px -1px rgba(70, 60, 90, 0.08) !important;
   outline: none !important;
-  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background-color 0.08s ease-out !important;
+  border-color: rgba(255, 255, 255, 0.85) !important;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, background 0.08s ease-out !important;
 }
 
 /* Universal silky tactile feel on touch for all interactive elements */
 button:active:not(:disabled),
+a:active,
+[role="button"]:active,
 a.liquid-glass-button:active,
-a.liquid-glass-pill:active {
+a.liquid-glass-pill:active,
+.liquid-glass-nav-item:active,
+.liquid-glass-nav-active:active,
+.liquid-glass-nav-cta:active {
   outline: none !important;
 }
 
@@ -540,47 +544,35 @@ a.liquid-glass-pill:active {
    ACCESSIBILITY: VISIBLE FOCUS & REDUCED MOTION SUPPORT
    ======================================================== */
 
-/* Subtle glass focus ring strictly for physical KEYBOARD navigation on desktop */
-@media (hover: hover) and (pointer: fine) {
-  :focus-visible {
-    outline: 2px solid rgba(124, 58, 237, 0.6) !important;
-    outline-offset: 2px !important;
-    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12) !important;
-  }
-
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  a:focus-visible {
-    outline: 2px solid rgba(124, 58, 237, 0.6) !important;
-    outline-offset: 2px !important;
-    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12) !important;
-  }
+/* Remove browser default focus outline for mouse, touch, and pointer interactions */
+:focus:not(:focus-visible),
+* :focus:not(:focus-visible),
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible),
+[tabindex]:focus:not(:focus-visible) {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-color: transparent !important;
 }
 
-/* Mobile & Touch: Guaranteed zero outline, zero black border on tap, ever */
-@media (hover: none), (pointer: coarse) {
-  *,
-  *:focus,
-  *:focus-visible,
-  *:focus-within,
-  *:active,
-  button:focus,
-  button:focus-visible,
-  button:active,
-  a:focus,
-  a:focus-visible,
-  a:active,
-  input:focus,
-  input:focus-visible,
-  [tabindex]:focus,
-  [tabindex]:focus-visible {
-    outline: none !important;
-    outline-width: 0 !important;
-    outline-offset: 0 !important;
-    outline-color: transparent !important;
-    -webkit-tap-highlight-color: transparent !important;
-  }
+/* Subtle, accessible glass focus ring strictly for physical KEYBOARD navigation (Tab / Arrow keys)
+   Always visible across all devices for keyboard accessibility, using theme lavender accent with clean offset.
+   Strictly never black and never the browser default outline. */
+:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.70) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.16) !important;
 }
 
 /* User preference for reduced motion: disables heavy transforms & transitions */
@@ -658,6 +650,15 @@ a.liquid-glass-pill:active {
     0 4px 12px -2px rgba(35, 20, 55, 0.09) !important;
   color: #0c0b0c !important;
   transform: translateY(-0.5px);
+}
+
+.liquid-glass-nav-item:active,
+.liquid-glass-nav-active:active,
+.liquid-glass-nav-cta:active {
+  transform: scale(0.96) translateZ(0) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.12) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.65) !important;
+  outline: none !important;
 }
 
 /* ========================================================
