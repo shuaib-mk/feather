@@ -6,7 +6,7 @@
 // 5. Tool Call Inspection & Observability
 
 import { getConfig } from "./config";
-import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE } from "./guardrail";
+import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "./guardrail";
 
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
@@ -361,6 +361,14 @@ export async function runLavenderAgent(
   }
 
   const today = context.currentDate || todayLocal();
+  const severeCheck = checkSevereSymptomEscalation(userPrompt);
+  if (severeCheck.isSevere) {
+    activityTrail.push({
+      step: "Safety Escalation",
+      detail: "Red-flag symptom detected — care-seeking signpost prepended",
+      status: "done",
+    });
+  }
 
   // Live path: no regex pre-intercept for corrections. The pending entry is passed
   // to the model, which may call update_entry with a patch (Batch 2.4). Offline mode
@@ -607,6 +615,16 @@ export async function runLavenderAgent(
       clarificationQuestion = finalMessage;
     }
 
+    if (severeCheck.isSevere) {
+      if (!structuredEntry && fallbackResult.entry) {
+        structuredEntry = fallbackResult.entry;
+      }
+      if (!finalMessage.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
+        const tail = finalMessage.trim() || `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.`;
+        finalMessage = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${tail}`;
+      }
+    }
+
     return {
       message: finalMessage,
       entry: structuredEntry,
@@ -760,6 +778,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
+  const severeCheck = checkSevereSymptomEscalation(text);
+  if (severeCheck.isSevere) {
+    activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
+  }
 
   // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
   // B3: previous entries may ONLY be corrected on explicit correction language;
@@ -885,7 +907,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
   }
 
-  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd;
+  const hasLogContent = extraction.symptoms.length > 0 || extraction.flow !== null || extraction.mood !== null || energy !== null || sleep !== null || extraction.periodStart || extraction.periodEnd || severeCheck.isSevere;
 
   // Personal landmark recall (client-matched events only, Batch 5.5 wiring is honoured here too)
   const matchedEvent = findMatchedEvent(text, context.matchedEvents);
@@ -1047,6 +1069,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   let message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} — log that day separately if you want it saved.` : baseMessage;
   if (unplacedEvents.length > 0) {
     message += ` I couldn't place a date for: ${unplacedEvents.join(", ")}.`;
+  }
+  if (severeCheck.isSevere && !message.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
+    message = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
   return { message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }

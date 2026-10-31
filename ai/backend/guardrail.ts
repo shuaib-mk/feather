@@ -6,6 +6,9 @@
 export const MEDICAL_REFUSAL_MESSAGE =
   "I can only help with logging and planning. For health questions, please talk to a doctor.";
 
+export const SEVERE_SYMPTOM_ESCALATION_MESSAGE =
+  "Important safety notice: Symptoms like fainting, chest pain, soaking through pads hourly, severe pain, high fever, or thoughts of self-harm need prompt medical care — if this is happening right now, please seek urgent or emergency medical help.";
+
 // Regular expressions and keywords that trigger the medical guardrail refusal.
 // Specifically targets advice queries, diagnostic probes, and medication questions
 // across English, Spanish, Malayalam, and Hindi while allowing neutral cycle logging.
@@ -61,7 +64,54 @@ const MEDICAL_ADVICE_PATTERNS = [
 
   // Code-Mixed: Advice, medication, pregnancy risk, diagnostic queries
   /(?:which\s+medicine\s+should\s+i\s+take|tablet\s+ethu\s+kazhikkanam|doctor\s+ko\s+dikhana\s+chahiye|risk\s+of\s+pregnancy\s+undo|normal\s+hai\s+ya\s+doctor)/i,
+
+  // Disguised medical advice: third-party attribution ("my friend said..."), declarative "I should take...", or "log that..." around medication / cycle manipulation
+  /\b(?:i|you|we|she)\s+should\s+(?:take|use|try|start|stop)\s+(?:[\w\s]{0,25}?\s+)?(?:pill|pills|tablet|tablets|medicine|medication|drug|hormone|norethisterone|primolut|ibuprofen|paracetamol|meftal|advil|tylenol|aspirin|naproxen|antibiotic|contraceptive|supplement)\b/i,
+  /\b(?:take|taking|use|using|try|trying|eat|drink)\s+(?:this|that|a|an|some|the|any|my)?\s*(?:[\w\s]{0,15}?\s+)?(?:pill|pills|tablet|tablets|medicine|medication|drug|remedy|herb)s?\s+to\s+(?:delay|postpone|stop|skip|induce|start|bring\s+on|regulate|end)\s+(?:my|the|a|her)?\s*(?:period|cycle|bleeding|menses|flow)\b/i,
+  /\b(?:how\s+to|can\s+i|ways\s+to|pill\s+to|medicine\s+to|tablet\s+to)\s+(?:delay|postpone|stop|skip|induce)\s+(?:my|a|the)?\s*period\b/i,
+  /\b(?:friend|mom|mother|sister|aunt|partner|coworker|someone|people|internet|tiktok|google|reddit)\s+(?:said|told\s+me|suggested|recommended|says|thinks)\s+(?:that\s+)?(?:i\s+should|to\s+take|to\s+use|taking|it'?s\s+(?:normal|safe|okay|bad|dangerous))\b/i,
+  /\b(?:log|note|record|save|remember)\s+that\s+i\s+(?:should|need\s+to|ought\s+to|can)\s+(?:take|use|try|stop|start)\s+(?:this|that|a|an|the|my|some)?\s*(?:pill|pills|tablet|tablets|medicine|medication|drug|painkiller|antibiotic|dose|dosage)\b/i,
 ];
+
+const SEVERE_SYMPTOM_PATTERNS = [
+  // Fainting / passed out / syncope
+  /\b(?:faint(?:ed|ing|s)?|passed\s+out|passing\s+out|blacked\s+out|blacking\s+out|lost\s+consciousness|unconscious|syncope)\b/i,
+  // Chest pain / breathing difficulty
+  /\b(?:chest\s+(?:pain|tightness|pressure|hurts)|short(?:ness)?\s+of\s+breath|trouble\s+breathing|difficulty\s+breathing|can'?t\s+breathe)\b/i,
+  // Severe / heavy bleeding soaking through pads or tampons
+  /\b(?:soak(?:ed|ing|s)?\s+through\s+(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)|bleed(?:ing)?\s+through\s+(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)|hemorrhag(?:e|ing)|flooding\s+(?:through\s+)?(?:pad|pads|tampon|tampons))\b/i,
+  // Severe / unbearable / excruciating pain
+  /\b(?:severe\s+(?:pain|abdominal\s+pain|pelvic\s+pain|stomach\s+pain|cramp|cramps)|unbearable\s+(?:pain|cramp|cramps)|excruciating\s+(?:pain|cramp|cramps)|worst\s+pain\s+of\s+my\s+life)\b/i,
+  // High fever with pain, chills, or discharge
+  /\b(?:high\s+fever|fever\s+(?:with|and)\s+(?:[\w\s]{0,20}?\s+)?(?:pain|cramps|chills|discharge|bleeding|vomiting|dizziness)|(?:pain|cramps|chills|discharge|bleeding)\s+(?:with|and)\s+(?:a\s+)?(?:high\s+)?fever)\b/i,
+  // Suicidal thoughts / self-harm
+  /\b(?:suicid(?:al|e)|thoughts?\s+of\s+(?:self[-\s]?harm|hurting\s+myself|ending\s+my\s+life|dying)|want(?:ing)?\s+to\s+(?:die|hurt\s+myself|end\s+it\s+all)|self[-\s]?harm)\b/i,
+];
+
+/**
+ * Deterministic check for clinical red-flag severe symptoms (fainting/passed out,
+ * chest pain, soaking through pads, severe pain, fever with symptoms, suicidal thoughts).
+ * Checked before logging in both Live and Offline paths so the response leads with
+ * a clear care-seeking signpost without diagnosing.
+ */
+export function checkSevereSymptomEscalation(input: string): {
+  isSevere: boolean;
+  escalationMessage: string | null;
+} {
+  const normalized = input.trim();
+  if (!normalized) {
+    return { isSevere: false, escalationMessage: null };
+  }
+  for (const pattern of SEVERE_SYMPTOM_PATTERNS) {
+    if (pattern.test(normalized)) {
+      return {
+        isSevere: true,
+        escalationMessage: SEVERE_SYMPTOM_ESCALATION_MESSAGE,
+      };
+    }
+  }
+  return { isSevere: false, escalationMessage: null };
+}
 
 /**
  * Checks whether user input or transcript contains a request for medical advice,
