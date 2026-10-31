@@ -10,6 +10,7 @@ import { PlanAroundIt } from "../components/PlanAroundIt";
 import { todayLocal } from "../lib/localDate";
 import { addDays } from "../lib/periodEngine";
 import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
+import { useDiscreetMode } from "../lib/discreetMode";
 
 export function buildWeekdayHeader(weekStart: 0 | 1, locale = "en-US"): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -86,6 +87,7 @@ export function CalendarPage(){
   </div>;
 }
 export function NextThirtyDaysStrip(){
+  const { isDiscreet } = useDiscreetMode();
   const { data, isDemoActive } = useCycle();
   const today = todayLocal();
   const [events, setEvents] = useState(() => loadEvents());
@@ -106,9 +108,11 @@ export function NextThirtyDaysStrip(){
         {days.map((d) => (
           <span
             key={d.date}
-            title={d.label}
+            title={isDiscreet ? d.date : d.label}
             className={`size-8 rounded-xl text-[10px] flex items-center justify-center font-medium transition-all ${
-              d.bleeding
+              isDiscreet
+                ? "liquid-glass-day text-stone-700"
+                : d.bleeding
                 ? "liquid-glass-day-bleeding"
                 : d.predicted
                 ? "liquid-glass-day-predicted"

@@ -18,7 +18,7 @@ const LABELS: Record<string, string> = {
   unknown: "Unknown — log more cycles",
 };
 
-export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] } = {}) {
+export function PlanAroundIt({ events: eventsProp, maskWhenDiscreet = false }: { events?: CalendarEvent[]; maskWhenDiscreet?: boolean } = {}) {
   const { data, stats, isDemoActive } = useCycle();
   const [internalEvents, setInternalEvents] = useState(() => loadEvents());
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
@@ -42,6 +42,8 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
   const pastPattern = useMemo(() => flowPattern(data.periods, data.logs), [data.periods, data.logs]);
   const pastEcho = useMemo(() => symptomEcho(data.periods, data.logs), [data.periods, data.logs]);
   const { isDiscreet } = useDiscreetMode();
+  const [planRevealed, setPlanRevealed] = useState(false);
+  const planMasked = maskWhenDiscreet && isDiscreet && !planRevealed;
   const rows = useMemo(
     () =>
       upcomingEvents(events, today, 120).map((e) => {
@@ -78,8 +80,8 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
     );
 
   return (
-    <div className="liquid-glass-card rounded-[24px] p-5 space-y-3">
-      <h3 className="font-serif text-lg font-semibold">Plan Around It</h3>
+    <div className="liquid-glass-card rounded-[24px] p-5 space-y-3" onClick={planMasked ? () => setPlanRevealed(true) : undefined}>
+      <h3 className="font-serif text-lg font-semibold">Plan Around It</h3>{planMasked && <p className="text-[11px] text-violet-700 font-medium">Tap to reveal</p>}
       <p data-testid="window-trust" className="text-[11px] text-stone-500">{trustLine}</p>
       {savedNotice && (
         <div
@@ -109,13 +111,13 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
             <div>
               <span className="font-semibold">{e.title}</span>{" "}
               <span className="text-stone-500">{e.date}</span>
-              <span className="block text-stone-600">
+              {planMasked ? <span className="block text-violet-700 font-medium">Details hidden in Discreet Mode</span> : <><span className="block text-stone-600">
                 {LABELS[r.status] || r.status}
                 {cleanNote ? ` · ${cleanNote}` : ""}{r.window ? ` · wider estimate window ${r.window.start} to ${r.window.end}` : ""}
               </span>
               {clearLine && <span className="block text-stone-600">{clearLine}</span>}
               {positionLine && <span className="block text-stone-600">{positionLine}</span>}
-              {echoLine && <span className="block text-stone-600">{echoLine}</span>}
+              {echoLine && <span className="block text-stone-600">{echoLine}</span>}</>}
             </div>
             {isConfirmed ? (
               <span className="text-emerald-800 font-semibold px-3 py-1.5">Saved to calendar ✓</span>

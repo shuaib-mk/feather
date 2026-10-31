@@ -372,7 +372,7 @@ export function DashboardPage() {
         </>
       )}
       <NextThirtyDaysStrip />
-      <PlanAroundIt />
+      <PlanAroundIt maskWhenDiscreet />
     </div>
   );
 }
