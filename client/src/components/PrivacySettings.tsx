@@ -29,7 +29,7 @@ export function PrivacySettings(){
     </div>
     <label className="block text-xs font-sans text-stone-700">Auto-lock after minutes of inactivity <input value={autoLock} onChange={e=>{setAutoLock(e.target.value); try{localStorage.setItem("feather_autolock_minutes",e.target.value);}catch{}}} className="liquid-glass-input rounded-xl px-2 py-1 ml-2 w-20 text-center" inputMode="numeric" /></label>
     <label className="flex justify-between text-xs gap-3"><span>Lock when tab is hidden</span><input type="checkbox" className="size-5" checked={lockOnHide} onChange={e=>{setLockOnHide(e.target.checked); try{localStorage.setItem("feather_autolock_hidden", e.target.checked?"true":"false");}catch{}}} /></label>
-    <label className="flex justify-between text-xs gap-3"><span>Discreet mode (neutral “Notes” title, quick-hide)</span><input type="checkbox" className="size-5" checked={discreet} onChange={e=>{setDiscreet(e.target.checked); try{localStorage.setItem("feather_discreet", e.target.checked?"true":"false");}catch{} document.title = e.target.checked ? "Notes" : "Feather"; }} /></label>
+    <label className="flex justify-between text-xs gap-3"><span>Discreet mode (neutral “Notes” title, quick-hide)</span><input type="checkbox" className="size-5" checked={discreet} onChange={e=>{setDiscreet(e.target.checked); try{localStorage.setItem("feather_discreet", e.target.checked?"true":"false");}catch{} document.title = e.target.checked ? "Notes" : "Feather — Voice-First Menstrual Cycle Companion"; }} /></label>
     {msg && <p role="status" className="text-xs text-stone-700">{msg}</p>}
   </div>;
 }

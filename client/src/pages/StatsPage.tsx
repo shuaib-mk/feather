@@ -25,6 +25,7 @@ export function StatsPage() {
             <div className="liquid-glass-card rounded-[20px] p-4"><span className="font-sans text-xs text-stone-500 block">Shortest – longest</span><span className="font-serif text-2xl font-semibold text-stone-900">{view.min !== null && view.max !== null ? `${view.min}–${view.max} days` : "—"}</span></div>
             <div className="liquid-glass-card rounded-[20px] p-4"><span className="font-sans text-xs text-stone-500 block">Average bleeding days</span><span className="font-serif text-2xl font-semibold text-stone-900">{view.averageBleedingDays !== null ? `${view.averageBleedingDays} days` : "Not enough data yet"}</span></div>
           </div>
+          {view.shortCycleDays !== null && (<p role="note" className="font-sans text-xs text-amber-900 liquid-glass-card border border-amber-200/80 bg-amber-50/40 rounded-[18px] p-4">One cycle looks unusually short ({view.shortCycleDays} days) — this can happen if two period starts were logged close together. Check Chronicle if that's not right.</p>)}
           <div className="liquid-glass-card rounded-[24px] p-6 space-y-3">
             <h2 className="font-serif text-lg font-semibold text-stone-900">Last {view.last12Lengths.length} cycle lengths</h2>
             <svg viewBox="0 0 360 120" className="w-full" role="img" aria-label="Bar chart of recent cycle lengths in days">

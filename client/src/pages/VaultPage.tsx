@@ -199,7 +199,7 @@ export function VaultPage() {
           <div className="p-4 rounded-[18px] liquid-glass-tile space-y-2">
             <span className="font-bold text-stone-900 block">Demo Mode (fictional data, separate namespace)</span>
             <p className="text-stone-600 leading-relaxed text-[11px]">
-              Load 4 historical cycles and 5 symptom logs to test landmark recalls, overlap forecasts, and foresight matrices immediately.
+              Load 7 fictional periods and 7 daily notes (14 entries) to try landmark recall and overlap estimates immediately.
             </p>
             {isDemoActive ? (
               <button

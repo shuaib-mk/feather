@@ -144,11 +144,11 @@ export function DashboardPage() {
                 )}
               </div>
               <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
-                {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate).split(",")[0] : "Estimating"}
+                {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate) : "Estimating"}
               </div>
-              <span className="font-sans text-[11px] text-violet-700 font-medium block truncate" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate).split(",")[0]} – ${prettyDate(stats.latestNextDate).split(",")[0]}` : undefined}>
+              <span className="font-sans text-[11px] text-violet-700 font-medium block truncate" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}` : undefined}>
                 {stats.earliestNextDate && stats.latestNextDate
-                  ? `Window: ${prettyDate(stats.earliestNextDate).split(",")[0]} – ${prettyDate(stats.latestNextDate).split(",")[0]}`
+                  ? `Window: ${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}`
                   : daysUntilNext != null
                   ? daysUntilNext > 0
                     ? `In ~${daysUntilNext} days`

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { LiquidGlassFilter } from "./LiquidGlassFilter";
 import { useCycle } from "../context/CycleContext";
+import { isDemoActive as isDemoModeActive } from "../lib/demoMode";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -66,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         className="min-h-[85vh] w-full max-w-5xl mx-auto px-3.5 sm:px-6 py-1 sm:py-4 md:pl-24 lg:pl-28 md:pr-8 space-y-5 overflow-x-hidden pb-24 md:pb-8"
       >
         {/* Persistent Demo Mode Banner */}
-        {isDemoActive && (
+        {(isDemoActive || isDemoModeActive()) && (
           <div role="status" className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">
             <div className="flex items-center gap-2.5">
               <div className="size-6 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center shrink-0 font-bold text-xs">

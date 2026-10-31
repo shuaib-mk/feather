@@ -9,6 +9,7 @@ export interface CycleStatsView {
   averageBleedingDays: number | null;
   last12Lengths: number[];
   hasEnoughData: boolean;
+  shortCycleDays: number | null;
 }
 
 export function toStatsView(stats: CycleStatistics | undefined | null): CycleStatsView {
@@ -25,6 +26,7 @@ export function toStatsView(stats: CycleStatistics | undefined | null): CycleSta
     variabilityDays: min !== null && max !== null ? max - min : null,
     averageBleedingDays: stats?.averageBleedingDuration ?? null,
     last12Lengths: lengths.slice(-12),
+    shortCycleDays: sorted.length && sorted[0] < 10 ? sorted[0] : null,
     hasEnoughData: completed >= 1 && lengths.length > 0,
   };
 }

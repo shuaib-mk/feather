@@ -2,6 +2,10 @@
 import { saveCycleData, loadCycleData, saveLogEntry, deletePeriodEntry, deleteDayLog, countDailyNotes, countEntryDates, effectivePeriodDurationDays } from "../../client/src/cycleStorage";
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
+import { computeCycleStats } from "../../client/src/cycleStorage";
+import { toStatsView } from "../../client/src/lib/statsView";
+import { getPrediction } from "../../client/src/lib/periodEngine";
+import { toEngineRecords } from "../../client/src/lib/calendarView";
 import { parseLocally } from "../backend/agent";
 import { sendAgentMessage, MAX_PROMPT_CHARS } from "../frontend/aiClient";
 
@@ -111,6 +115,26 @@ try {
   const r = await sendAgentMessage("x".repeat(MAX_PROMPT_CHARS + 1), { currentDate: "2026-10-31" });
   check("C3 over-limit flagged, API not called", fetchCalls === 0 && /1,000 characters/i.test(r.message), `fetchCalls=${fetchCalls} msg=${r.message}`);
 } catch (e: any) { check("C3", false, e.message); }
+
+
+// D3: calendar predicted days are exactly the engine earliest..latest window.
+try {
+  const periods: any[] = ["2026-01-01", "2026-01-29", "2026-02-26", "2026-03-26"].map((s, i) => ({ id: i + 1, startDate: s, endDate: null }));
+  const pred = getPrediction(toEngineRecords(periods) as any, "2026-03-30");
+  const m = buildMonthDayStates(2026, 4, periods, [], [], "2026-03-30");
+  const predicted = m.days.filter((d) => d.predicted).map((d) => d.date);
+  check("D3 calendar window = engine earliest..latest", !!pred.earliestStart && predicted.length > 0 && predicted[0] === pred.earliestStart && predicted[predicted.length - 1] === pred.latestStart, JSON.stringify({ pred, predicted }));
+} catch (e: any) { check("D3", false, e.message); }
+
+// D5: implausibly short cycle is flagged; golden demo stats unchanged and unflagged.
+try {
+  const v = toStatsView({ allCycleLengths: [4, 30, 32], completedCycleCount: 3, medianCycleLength: 30, averageBleedingDuration: 5 } as any);
+  check("D5 short cycle flagged at 4 days", v.shortCycleDays === 4, JSON.stringify(v));
+  const demo = buildDemoData("2026-10-30");
+  const stats = computeCycleStats(demo.periods as any, demo.logs);
+  const dv = toStatsView(stats.statistics);
+  check("D5 demo: range 26-38, avg bleeding 5, no short-cycle flag (stat formulas unchanged)", dv.min === 26 && dv.max === 38 && dv.averageBleedingDays === 5 && dv.shortCycleDays === null, JSON.stringify(dv));
+} catch (e: any) { check("D5", false, e.message); }
 
 console.log(`\nQABatch2 Results: ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);

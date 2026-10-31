@@ -49,7 +49,7 @@ export function VoiceFlowPage() {
     cancelRecording,
   } = useAudioRecorder();
 
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("auto");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => { try { return sessionStorage.getItem("feather_voice_lang") || "auto"; } catch { return "auto"; } });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingSource, setProcessingSource] = useState<"voice" | "text">("voice");
   const [transcript, setTranscript] = useState<string>("");
@@ -65,6 +65,7 @@ export function VoiceFlowPage() {
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
+  const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
 
   const textInputRef = useRef<HTMLInputElement | null>(null);
@@ -249,7 +250,7 @@ export function VoiceFlowPage() {
     }
 
     const confirmedDate = confirmEntry.date;
-    setSavedSuccessMessage(`Entry for ${prettyDate(confirmedDate)} saved to your device vault.`);
+    setSavedSuccessMessage(`Entry for ${prettyDate(confirmedDate)} saved to your device vault.`); setSavedLink({ to: "/chronicle", label: "View in Chronicle" });
     setConfirmEntry(null);
     setSlipCorrectionText("");
     setLongPeriodWarning(null);
@@ -315,8 +316,8 @@ export function VoiceFlowPage() {
             <span className="size-2 rounded-full bg-emerald-500" />
             <span className="font-semibold">{savedSuccessMessage}</span>
           </div>
-          <Link to="/chronicle" className="liquid-glass-pill rounded-full px-3 py-1 font-mono text-[10px] uppercase font-bold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
-            View in Chronicle →
+          <Link to={savedLink.to} className="liquid-glass-pill rounded-full px-3 py-1 font-mono text-[10px] uppercase font-bold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
+            {savedLink.label} →
           </Link>
         </div>
       )}
@@ -341,7 +342,7 @@ export function VoiceFlowPage() {
                 <button
                   key={lang.id}
                   type="button"
-                  onClick={() => setSelectedLanguage(lang.id)}
+                  onClick={() => { setSelectedLanguage(lang.id); try { sessionStorage.setItem("feather_voice_lang", lang.id); } catch {} }}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
                     selectedLanguage === lang.id
                       ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
@@ -526,7 +527,7 @@ export function VoiceFlowPage() {
                   onClick={() => {
                     upsertEvent({ title: e.title, date: e.date, source: "voice" });
                     setPlannedEventsState(plannedEventsState.filter((_: any, j: number) => j !== i));
-                    setSavedSuccessMessage(`Event "${e.title}" on ${prettyDate(e.date)} saved to calendar.`);
+                    setSavedSuccessMessage(`Event "${e.title}" on ${prettyDate(e.date)} saved to calendar.`); setSavedLink({ to: "/calendar", label: "View in Calendar" });
                   }}
                 >
                   Save Event to Calendar

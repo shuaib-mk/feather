@@ -19,7 +19,7 @@ export function buildMonthDayStates(year:number, month:number, periods:Period[],
     const log = logs.find((l)=>l.logDate===d.date) || null;
     const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started") : false; // A3: only a real log may claim "period day logged"
     const spotting = log?.flow==="spotting";
-    const predicted = !!(prediction.earliestStart && prediction.latestStart && d.date >= prediction.earliestStart && d.date <= addDays(prediction.latestStart, 4) && d.date >= today);
+    const predicted = !!(prediction.earliestStart && prediction.latestStart && d.date >= prediction.earliestStart && d.date <= prediction.latestStart && d.date >= today); // D3: one window definition (engine earliest..latest) on every surface
     const evs = eventsOnDate(events, d.date);
     const nice = new Date(Date.UTC(year, month-1, Number(d.date.slice(8,10)))).toLocaleDateString(locale,{weekday:"long", day:"numeric", month:"long", timeZone:"UTC"});
     const label = `${nice}${bleeding?", period day logged":spotting?", spotting logged":predicted?", predicted period window (estimate)":""}${log?.symptoms?.length?", symptom log":""}${evs.length?`, ${evs.length} event${evs.length>1?"s":""}`:""}`;

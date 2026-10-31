@@ -134,7 +134,7 @@ export function Sidebar() {
       >
         <div
           data-slot="sidebar-card"
-          className={`liquid-glass-lens flex flex-col p-1.5 transition-all duration-200 ease-out shadow-lg ${
+          className={`liquid-glass-lens flex flex-col p-1.5 transition-all duration-200 ease-out shadow-lg max-h-[calc(100vh-2.5rem)] overflow-y-auto ${
             isHovered ? "w-[216px] rounded-[24px]" : "w-[58px] rounded-[24px]"
           }`}
         >
