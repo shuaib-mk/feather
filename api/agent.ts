@@ -1531,6 +1531,15 @@ function clauseAround(text, index, length) {
   const stops = [text.indexOf(".", index + length), text.indexOf("!", index + length), text.indexOf("?", index + length), text.indexOf(";", index + length), text.indexOf("\n", index + length)].filter((i) => i !== -1);
   return text.slice(start, stops.length ? Math.min(...stops) : text.length);
 }
+function subClauseAround(text, index, length) {
+  const before = text.slice(0, index);
+  const after = text.slice(index + length);
+  const startCut = Math.max(before.lastIndexOf(","), before.lastIndexOf(";"), before.lastIndexOf("."), before.lastIndexOf("\n"), Math.max(before.toLowerCase().lastIndexOf(" and "), before.toLowerCase().lastIndexOf(" but ")));
+  const afterLow = after.toLowerCase();
+  const stops = [afterLow.indexOf(","), afterLow.indexOf(";"), afterLow.indexOf("."), afterLow.indexOf("\n"), afterLow.indexOf(" and "), afterLow.indexOf(" but ")].filter((i) => i !== -1);
+  const endCut = stops.length ? index + length + Math.min(...stops) : text.length;
+  return text.slice(startCut + 1, endCut);
+}
 function findStatedDatedFacts(userPrompt, today) {
   const text = userPrompt || "";
   const lower = text.toLowerCase();
@@ -1590,7 +1599,7 @@ function findStatedDatedFacts(userPrompt, today) {
   const agoRe = /\b(\d+|one|two|three|four|five|six|seven)\s+days?\s+ago\b/gi;
   let a;
   while ((a = agoRe.exec(text)) !== null) {
-    const clause = clauseAround(text, a.index, a[0].length);
+    const clause = subClauseAround(text, a.index, a[0].length);
     const flowMatch = clause.match(COVERAGE_FLOW_RE);
     if (!flowMatch) continue;
     const n = /^\d+$/.test(a[1]) ? Number(a[1]) : DAY_WORD_NUMBERS[a[1].toLowerCase()] || 0;
@@ -1601,13 +1610,7 @@ function findStatedDatedFacts(userPrompt, today) {
   return facts;
 }
 function structuredEntriesOf(result) {
-  const entries = [];
-  if (result.entry) entries.push(result.entry);
-  for (const call of result.toolCalls || []) {
-    const entry = call?.result?.entry;
-    if (entry && typeof entry.date === "string" && !entries.some((e) => e.date === entry.date && e.flow === entry.flow)) entries.push(entry);
-  }
-  return entries;
+  return result.entry ? [result.entry] : [];
 }
 function factIsPlaced(fact, entries, events) {
   if (fact.eventNoun) {

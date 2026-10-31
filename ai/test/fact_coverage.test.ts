@@ -48,8 +48,21 @@ async function main() {
       textMsg("Logged your period start for October 28th with medium flow, and your heavy flow yesterday too."),
     ]);
     const b: any = await runLavenderAgent(SENTENCE, { currentDate: TODAY });
-    check("B: structured output contains Oct 30 heavy entry", (b.toolCalls || []).some((c: any) => c.toolName === "log_entry" && c.result?.entry?.date === "2026-10-30" && c.result?.entry?.flow === "heavy"), b.toolCalls);
+    check("B: rendered slip is the Oct 30 heavy entry", !!b.entry && b.entry.date === "2026-10-30" && b.entry.flow === "heavy", b.entry);
     check("B: no disclosure appended (no false alarm)", typeof b.message === "string" && !b.message.includes("couldn't place"), b.message);
+
+    // Fixture B2: Oct 30 heavy exists only in tool-call history (model logged it first,
+    // then overwrote the rendered slip with Oct 28) -> NOT placed, disclosure appended.
+    mockModel([
+      toolMsg([
+        logCall("d1", { date: "2026-10-30", flow: "heavy", symptoms: ["cramps", "headache"], kind: "daily_log" }),
+        logCall("d2", { date: "2026-10-28", flow: "medium", symptoms: ["cramps", "headache"], kind: "period_started" }),
+      ]),
+      textMsg("Logged both days for you."),
+    ]);
+    const d: any = await runLavenderAgent(SENTENCE, { currentDate: TODAY });
+    check("B2: tool history contains Oct 30 heavy but rendered slip is Oct 28", (d.toolCalls || []).some((c: any) => c.result?.entry?.date === "2026-10-30") && !!d.entry && d.entry.date === "2026-10-28", d.entry);
+    check("B2: disclosure appended (tool-history-only entry is not placed)", typeof d.message === "string" && d.message.includes(DISCLOSURE), d.message);
 
     // Fixture C: prose says nothing about the fact; structured output lacks it -> disclosure appended.
     mockModel([

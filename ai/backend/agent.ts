@@ -405,7 +405,8 @@ export function hasAnyLoggingOrPlanningCue(text: string): boolean {
 // offline disclosure logic inside parseLocally never runs on that result, so
 // a fact the model mentioned only in prose was silently dropped. Coverage
 // below is computed ONLY from the structured payload actually returned
-// (result.entry, log_entry/update_entry tool results, plannedEvents). The
+// (result.entry and plannedEvents). Entries that exist only in tool-call
+// history do not count: the UI renders and saves result.entry only. The
 // message text is read solely to avoid duplicating a disclosure already
 // appended; placement is never inferred from prose. Undated events are not
 // dated facts and are never flagged here.
@@ -432,6 +433,17 @@ function clauseAround(text: string, index: number, length: number): string {
   const start = Math.max(0, text.lastIndexOf(".", index - 1) + 1, text.lastIndexOf("!", index - 1) + 1, text.lastIndexOf("?", index - 1) + 1, text.lastIndexOf(";", index - 1) + 1, text.lastIndexOf("\n", index - 1) + 1);
   const stops = [text.indexOf(".", index + length), text.indexOf("!", index + length), text.indexOf("?", index + length), text.indexOf(";", index + length), text.indexOf("\n", index + length)].filter((i) => i !== -1);
   return text.slice(start, stops.length ? Math.min(...stops) : text.length);
+}
+
+/** Clause segment around a match, split on sentence ends, commas, "and"/"but" - keeps nearby facts separate. */
+function subClauseAround(text: string, index: number, length: number): string {
+  const before = text.slice(0, index);
+  const after = text.slice(index + length);
+  const startCut = Math.max(before.lastIndexOf(","), before.lastIndexOf(";"), before.lastIndexOf("."), before.lastIndexOf("\n"), Math.max(before.toLowerCase().lastIndexOf(" and "), before.toLowerCase().lastIndexOf(" but ")));
+  const afterLow = after.toLowerCase();
+  const stops = [afterLow.indexOf(","), afterLow.indexOf(";"), afterLow.indexOf("."), afterLow.indexOf("\n"), afterLow.indexOf(" and "), afterLow.indexOf(" but ")].filter((i) => i !== -1);
+  const endCut = stops.length ? index + length + Math.min(...stops) : text.length;
+  return text.slice(startCut + 1, endCut);
 }
 
 /** Dated facts stated in the prompt, resolved deterministically. Undated mentions are excluded. */
@@ -503,7 +515,7 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
   const agoRe = /\b(\d+|one|two|three|four|five|six|seven)\s+days?\s+ago\b/gi;
   let a: RegExpExecArray | null;
   while ((a = agoRe.exec(text)) !== null) {
-    const clause = clauseAround(text, a.index, a[0].length);
+    const clause = subClauseAround(text, a.index, a[0].length);
     const flowMatch = clause.match(COVERAGE_FLOW_RE);
     if (!flowMatch) continue;
     const n = /^\d+$/.test(a[1]) ? Number(a[1]) : DAY_WORD_NUMBERS[a[1].toLowerCase()] || 0;
@@ -515,13 +527,11 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
 }
 
 function structuredEntriesOf(result: AgentResult): StructuredEntry[] {
-  const entries: StructuredEntry[] = [];
-  if (result.entry) entries.push(result.entry);
-  for (const call of result.toolCalls || []) {
-    const entry = (call as any)?.result?.entry;
-    if (entry && typeof entry.date === "string" && !entries.some((e) => e.date === entry.date && e.flow === entry.flow)) entries.push(entry);
-  }
-  return entries;
+  // Only the slip actually returned for rendering/saving counts as placed.
+  // Entries that appear solely in tool-call history (the model called
+  // log_entry more than once; the renderer keeps result.entry) are NOT
+  // placed - live runs showed exactly that gap.
+  return result.entry ? [result.entry] : [];
 }
 
 function factIsPlaced(fact: StatedDatedFact, entries: StructuredEntry[], events: Array<{ title: string; date: string }>): boolean {
