@@ -6,7 +6,7 @@ import { toEngineRecords } from "../lib/calendarView";
 import { evaluateEventOverlap } from "../lib/periodEngine";
 import { todayLocal } from "../lib/localDate";
 import { OVERLAP_DISCLAIMER, prettyDate } from "../cycleStorage";
-import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine, symptomEcho, formatSymptomEchoLine } from "../lib/planInsights";
+import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine, symptomEcho, formatSymptomEchoLine, shouldShowClearDates } from "../lib/planInsights";
 import { useDiscreetMode } from "../lib/discreetMode";
 
 const LABELS: Record<string, string> = {
@@ -93,7 +93,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
         </div>
       )}
       {rows.map(({ e, r }) => {
-        const clearLine = formatClearDatesLine(suggestClearDates(e.date, toEngineRecords(data.periods), today, stats?.statistics?.allCycleLengths ?? []));
+        const clearLine = shouldShowClearDates(r.status) ? formatClearDatesLine(suggestClearDates(e.date, toEngineRecords(data.periods), today, stats?.statistics?.allCycleLengths ?? [])) : "";
         const positionLine = formatEventPositionLine(e.date, r.window, pastPattern);
         const echoLine = isDiscreet ? "" : formatSymptomEchoLine(e.date, r.window, pastEcho);
         const cleanNote = (r.note || "").replace(

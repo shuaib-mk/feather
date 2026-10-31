@@ -133,6 +133,11 @@ export function suggestClearDates(
     .sort();
 }
 
+/** Clearer-date suggestions only make sense when the event itself may overlap. */
+export function shouldShowClearDates(status: string): boolean {
+  return status === "likely" || status === "possible";
+}
+
 /** "Nearby dates that look clearer (estimate): Sat Nov 14, Sun Nov 15." or "" when none. */
 export function formatClearDatesLine(dates: string[]): string {
   if (!dates.length) return "";
@@ -417,8 +422,9 @@ export function symptomEcho(
 }
 
 /**
- * The echo sentence for one event, or "" when there is no echo or the
- * event is not inside the estimated window (dayPosition is null outside).
+ * The echo sentence for one event, or "" when there is no echo, the event
+ * is outside the estimated window, or it is not near the start of the
+ * window (the echo describes the opening days of past periods).
  */
 export function formatSymptomEchoLine(
   eventDate: string,
@@ -426,6 +432,6 @@ export function formatSymptomEchoLine(
   echo: SymptomEcho | null,
 ): string {
   if (!echo) return "";
-  if (!dayPosition(eventDate, window)) return "";
+  if (dayPosition(eventDate, window)?.position !== "near_start") return "";
   return echo.sentence;
 }

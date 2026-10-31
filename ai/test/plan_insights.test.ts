@@ -172,10 +172,12 @@ const multiEcho = symptomEcho(sePeriods, [
   { logDate: "2026-03-30", symptoms: ["cramps"] },
 ]);
 check("echo: several qualify -> most periods wins", multiEcho?.symptom === "cramps" && multiEcho?.hitPeriods === 4, JSON.stringify(multiEcho));
-check("echo line: inside window shows the sentence", formatSymptomEchoLine("2026-11-26", win, echo) === echo?.sentence);
+check("echo line: near start of window shows the sentence", formatSymptomEchoLine("2026-11-22", win, echo) === echo?.sentence);
 check("echo line: outside window shows nothing", formatSymptomEchoLine("2026-11-14", win, echo) === "");
 check("echo line: no echo -> nothing", formatSymptomEchoLine("2026-11-26", win, null) === "");
 check("echo line: no window -> nothing", formatSymptomEchoLine("2026-11-26", null, echo) === "");
+check("echo line: middle of window -> nothing", formatSymptomEchoLine("2026-11-26", win, echo) === "");
+check("echo line: near end of window -> nothing", formatSymptomEchoLine("2026-12-01", win, echo) === "");
 // Guardrail bait: the template instantiated with common logged symptoms must never trip either guardrail.
 const baitSentences = ["cramps", "headache", "backache", "fatigue", "bloating"].map((sym) => {
   const e = symptomEcho(sePeriods, [
@@ -190,6 +192,12 @@ check("echo bait: no sentence triggers medical guardrail", baitSentences.every((
 check("echo bait: no sentence triggers severe-symptom escalation", baitSentences.every((x) => !checkSevereSymptomEscalation(x).isSevere), baitSentences.join(" | "));
 check("echo text: no banned or advice words", baitSentences.every((x) => !/\b(should|expect|normal|irregular|abnormal|healthy|guaranteed|take|try|remedy|treatment)\b/i.test(x)), baitSentences.join(" | "));
 check("echo text: past/log wording only, no future claim", baitSentences.every((x) => x.startsWith("You've logged")), baitSentences.join(" | "));
+
+
+// ---- UI gating fixes: clearer dates by verdict, echo by position ----
+import { shouldShowClearDates } from "../../client/src/lib/planInsights";
+check("clear dates gate: likely and possible show suggestions", shouldShowClearDates("likely") && shouldShowClearDates("possible"));
+check("clear dates gate: unlikely, logged, past and unknown hide suggestions", !shouldShowClearDates("unlikely") && !shouldShowClearDates("logged") && !shouldShowClearDates("past") && !shouldShowClearDates("unknown"));
 
 console.log("\nPlanInsights Results: " + passed + " passed, " + failed + " failed.");
 if (failed) process.exit(1);
