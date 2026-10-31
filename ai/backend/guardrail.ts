@@ -97,7 +97,7 @@ const VERDICT_PATTERNS = [
   /\bis\s+(?:my\s+)?(?:cycle\s+length|period\s+length|flow|cycle|period)\s+(?:healthy|normal|regular|okay|ok|fine)\b/i,
   /\bhow\s+many\s+days\s+is\s+a\s+normal\s+period\b/i,
   /\bwhat(?:'s|\s+is)\s+a?\s*normal\s+cycle\s+length\b/i,
-  /\bdoes\s+this\s+mean\s+something\s+is\s+wrong\b/i,
+  /\bdoes\s+this\s+mean\s+something\s+is\s+wrong\b/i, /\bmean\s+something\s+is\s+wrong\b/i,
   /\bshould\s+i\s+be\s+worried\b/i, /\bmy\s+period\s+is\s+[\w\s]{0,12}?late,\s*should\s+i\s+worry\b/i,
   /\bis\s+this\s+(?:cramp|cramps|pain)\s+normal\b/i,
   /\u0938\u093e\u092e\u093e\u0928\u094d\u092f\s+\u091a\u0915\u094d\u0930/,
