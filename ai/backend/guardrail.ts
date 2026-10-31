@@ -73,6 +73,72 @@ const MEDICAL_ADVICE_PATTERNS = [
   /\b(?:log|note|record|save|remember)\s+that\s+i\s+(?:should|need\s+to|ought\s+to|can)\s+(?:take|use|try|stop|start)\s+(?:this|that|a|an|the|my|some)?\s*(?:pill|pills|tablet|tablets|medicine|medication|drug|painkiller|antibiotic|dose|dosage)\b/i,
 ];
 
+
+// ---- Guardrail v2 (branch guardrail-v2) -------------------------------
+export type RefusalCategory = "fertility" | "verdict" | "diet_exercise" | "phase" | "medical";
+
+export const REDIRECT_MESSAGES: Record<Exclude<RefusalCategory, "medical">, string> = {
+  fertility: "I can't help with that, but I can log how you feel or show your logged cycles.",
+  verdict: "I can't help with that, but I can show your logged cycles or log how you feel today.",
+  diet_exercise: "I can't help with that, but I can log how you feel or show your logged cycles.",
+  phase: "I can't help with that, but I can log how you feel or show your logged cycles.",
+};
+
+const FERTILITY_PATTERNS = [
+  /\bwhen\s+am\s+i\s+ovulat/i, /\bovulat(?:ion|ing|e)\s+(?:date|day|window|time|happen)/i,
+  /\bfertile\s+(?:window|days?|period)\b/i, /\bmy\s+fertility\b/i,
+  /\bbest\s+days?\s+to\s+conceive\b/i, /\bdays?\s+to\s+avoid\s+pregnancy\b/i,
+  /\bsafe\s+days?\b/i, /\bcan\s+i\s+get\s+pregnant\s+on\s+day\s*\d+\b/i,
+  /\bis\s+it\s+safe\s+to\s+have\s+sex\b/i, /\bovulation\b/i, /\bfertile\b/i,
+  /\u0905\u0902\u0921\u094b\u0924\u094d\u0938\u0930\u094d\u0917/, /\u0909\u092a\u091c\u093e\u090a\u20ac?\s*\u0926\u093f\u0928/,
+];
+const VERDICT_PATTERNS = [
+  /\bis\s+\d+\s*days?\s+normal\b(?!\s+for\s+me\b)/i,
+  /\bis\s+(?:my\s+)?(?:cycle\s+length|period\s+length|flow|cycle|period)\s+(?:healthy|normal|regular|okay|ok|fine)\b/i,
+  /\bhow\s+many\s+days\s+is\s+a\s+normal\s+period\b/i,
+  /\bwhat(?:'s|\s+is)\s+a?\s*normal\s+cycle\s+length\b/i,
+  /\bdoes\s+this\s+mean\s+something\s+is\s+wrong\b/i,
+  /\bshould\s+i\s+be\s+worried\b/i, /\bmy\s+period\s+is\s+[\w\s]{0,12}?late,\s*should\s+i\s+worry\b/i,
+  /\bis\s+this\s+(?:cramp|cramps|pain)\s+normal\b/i,
+  /\u0938\u093e\u092e\u093e\u0928\u094d\u092f\s+\u091a\u0915\u094d\u0930/,
+];
+const DIET_EXERCISE_PATTERNS = [
+  /\bwhat\s+(?:to|should\s+i)\s+(?:eat|drink|avoid)\b[^.?!]*\bperiod\b/i,
+  /\bexercise\s+(?:during|on|while)\b[^.?!]*\bperiod\b/i, /\bcan\s+i\s+exercise\b[^.?!]*\bperiod\b/i,
+  /\bhome\s+remedy\s+for\s+(?:cramps?|period\s+pain|pain)\b/i,
+  /\bdiet\s+for\s+(?:pcos|pcod|period|cramps?)\b/i, /\bfoods?\s+to\s+(?:eat|avoid)\b[^.?!]*\bperiod\b/i,
+  /\u092a\u0940\u0930\u093f\u092f\u0921\s+\u092e\u0947\u0902\s+\u0915\u094d\u092f\u093e\s+\u0916\u093e\u0928\u093e/,
+];
+const PHASE_PATTERNS = [
+  /\bwhat\s+does\s+(?:my\s+)?cycle\s+phase\s+mean\b/i, /\bwhat\s+phase\s+am\s+i\s+in\b/i,
+  /\b(?:luteal|follicular)\b/i, /\bcycle\s+phase\s+mean/i,
+  /\u091a\u0915\u094d\u0930\s+\u091a\u0930\u0923/,
+];
+const CATEGORY_PATTERNS: Array<[Exclude<RefusalCategory, "medical">, RegExp[]]> = [
+  ["fertility", FERTILITY_PATTERNS], ["verdict", VERDICT_PATTERNS],
+  ["diet_exercise", DIET_EXERCISE_PATTERNS], ["phase", PHASE_PATTERNS],
+];
+export function classifyGuardrailCategory(input: string): RefusalCategory | null {
+  const t = input.trim(); if (!t) return null;
+  for (const [cat, pats] of CATEGORY_PATTERNS) { if (pats.some((p) => p.test(t))) return cat; }
+  return checkMedicalAdviceGuardrail(t).isRefusal ? "medical" : null;
+}
+export function getGuardrailResponseMessage(input: string): string {
+  const cat = classifyGuardrailCategory(input);
+  if (!cat || cat === "medical") return MEDICAL_REFUSAL_MESSAGE;
+  return REDIRECT_MESSAGES[cat];
+}
+/** Output guard: model text with banned words / verdict phrasing is replaced. */
+export const BANNED_OUTPUT_PATTERNS = [
+  /\bovulat\w*\b/i, /\bfertile\b/i, /\bis\s+normal\b/i, /\bhealthy\s+range\b/i,
+  /\byou\s+are\s+ovulating\b/i, /\bguaranteed\b/i, /\bclear\s+window\b/i,
+  /\bnormal\b/i, /\babnormal\b/i, /\bhealthy\b/i, /\bunhealthy\b/i, /\bsafe\b/i,
+];
+export function checkModelOutputGuard(text: string): { blocked: boolean; message: string } {
+  const blocked = BANNED_OUTPUT_PATTERNS.some((p) => p.test(text || ""));
+  return { blocked, message: blocked ? REDIRECT_MESSAGES.verdict : text };
+}
+
 const SEVERE_SYMPTOM_PATTERNS = [
   // Fainting / passed out / syncope
   /\b(?:faint(?:ed|ing|s)?|passed\s+out|passing\s+out|blacked\s+out|blacking\s+out|lost\s+consciousness|unconscious|syncope)\b/i,
@@ -84,6 +150,10 @@ const SEVERE_SYMPTOM_PATTERNS = [
   /\b(?:severe\s+(?:pain|abdominal\s+pain|pelvic\s+pain|stomach\s+pain|cramp|cramps)|unbearable\s+(?:pain|cramp|cramps)|excruciating\s+(?:pain|cramp|cramps)|worst\s+pain\s+of\s+my\s+life)\b/i,
   // High fever with pain, chills, or discharge
   /\b(?:high\s+fever|fever\s+(?:with|and)\s+(?:[\w\s]{0,20}?\s+)?(?:pain|cramps|chills|discharge|bleeding|vomiting|dizziness)|(?:pain|cramps|chills|discharge|bleeding)\s+(?:with|and)\s+(?:a\s+)?(?:high\s+)?fever)\b/i,
+  // v2: soaking a pad/tampon every hour or two; fainting with bleeding; severe pain with fever
+  /\bsoak(?:ing|ed|s)?\s+(?:through\s+)?(?:a\s+|my\s+|\d+\s+)?(?:pad|tampon|pads|tampons)\s+(?:every|each)\s+(?:hour|1\s*hour|two\s+hours|2\s*hours)\b/i,
+  /\b(?:faint\w*|pass(?:ed|ing)?\s+out|black\w*\s+out)\b[^.?!]*\b(?:bleed\w*|blood)\b/i,
+  /\bsevere\s+(?:pain|cramps?)\b[^.?!]*\bfever\b/i, /\bfever\b[^.?!]*\bsevere\s+(?:pain|cramps?)\b/i,
   // Suicidal thoughts / self-harm
   /\b(?:suicid(?:al|e)|thoughts?\s+of\s+(?:self[-\s]?harm|hurting\s+myself|ending\s+my\s+life|dying)|want(?:ing)?\s+to\s+(?:die|hurt\s+myself|end\s+it\s+all)|self[-\s]?harm)\b/i,
 ];
@@ -126,7 +196,7 @@ export function checkMedicalAdviceGuardrail(input: string): {
     return { isRefusal: false, refusalMessage: null };
   }
 
-  for (const pattern of MEDICAL_ADVICE_PATTERNS) {
+  for (const pattern of [...MEDICAL_ADVICE_PATTERNS, ...FERTILITY_PATTERNS, ...VERDICT_PATTERNS, ...DIET_EXERCISE_PATTERNS, ...PHASE_PATTERNS]) {
     if (pattern.test(normalized)) {
       return {
         isRefusal: true,
