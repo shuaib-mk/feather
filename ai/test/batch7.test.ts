@@ -18,7 +18,7 @@ const h:any=healthPayload(); check("health shape", typeof h.metaKeyConfigured===
 check("no fabricated transcript", !readSrc("ai/backend/transcribe.ts").includes("heavy flow with cramps and fatigue."));
 check("no fabricated vision", !readSrc("ai/backend/vision.ts").includes("Circled in red ink"));
 check("real SW", readSrc("client/public/sw.js").includes("stale")===false || true);
-const sw=readSrc("client/public/sw.js"); check("SW network-only api + versioned cache", sw.includes("/api/") && sw.includes("feather-shell-v1") && !sw.includes("unregister"));
+const sw=readSrc("client/public/sw.js"); check("SW network-only api + versioned cache", sw.includes("/api/") && sw.includes("feather-shell-v2") && !sw.includes("unregister"));
 check("index has no unregister script", !readSrc("client/index.html").includes("getRegistrations"));
 check("main registers SW", readSrc("client/src/main.tsx").includes("serviceWorker.register"));
 check("netlify removed", (()=>{try{readSrc("netlify.toml"); return false;}catch{return true;}})());
