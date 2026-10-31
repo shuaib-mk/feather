@@ -94,13 +94,17 @@ const FERTILITY_PATTERNS = [
 ];
 const VERDICT_PATTERNS = [
   /\bis\s+\d+\s*days?\s+normal\b(?!\s+for\s+me\b)/i,
-  /\bis\s+(?:my\s+)?(?:cycle\s+length|period\s+length|flow|cycle|period)\s+(?:healthy|normal|regular|okay|ok|fine)\b/i,
+  /\bis\s+(?:my\s+)?(?:cycle\s+length|period\s+length)\s+(?:healthy|normal|regular|okay|ok|fine)\b/i,
   /\bhow\s+many\s+days\s+is\s+a\s+normal\s+period\b/i,
   /\bwhat(?:'s|\s+is)\s+a?\s*normal\s+cycle\s+length\b/i,
-  /\bdoes\s+this\s+mean\s+something\s+is\s+wrong\b/i, /\bmean\s+something\s+is\s+wrong\b/i,
-  /\bshould\s+i\s+be\s+worried\b/i, /\bmy\s+period\s+is\s+[\w\s]{0,12}?late,\s*should\s+i\s+worry\b/i,
-  /\bis\s+this\s+(?:cramp|cramps|pain)\s+normal\b/i,
   /\u0938\u093e\u092e\u093e\u0928\u094d\u092f\s+\u091a\u0915\u094d\u0930/,
+];
+// Symptom/body verdicts keep the frozen MEDICAL_REFUSAL_MESSAGE (refinement of Item 4).
+const SYMPTOM_VERDICT_PATTERNS = [
+  /\bis\s+(?:this|my|the)?\s*(?:cramp|cramps|pain|bleeding|flow|discharge|symptom|blood)\b[^.?!]*\b(?:normal|abnormal|healthy|regular|okay|ok|fine|bad|dangerous|concerning)\b/i,
+  /\bis\s+this\s+(?:cramp|cramps|pain)\s+normal\b/i,
+  /\bshould\s+i\s+(?:be\s+)?(?:worried|worry)\b/i,
+  /\bmean\s+something\s+is\s+wrong\b/i,
 ];
 const DIET_EXERCISE_PATTERNS = [
   /\bwhat\s+(?:to|should\s+i)\s+(?:eat|drink|avoid)\b[^.?!]*\bperiod\b/i,
@@ -120,6 +124,7 @@ const CATEGORY_PATTERNS: Array<[Exclude<RefusalCategory, "medical">, RegExp[]]> 
 ];
 export function classifyGuardrailCategory(input: string): RefusalCategory | null {
   const t = input.trim(); if (!t) return null;
+  if (SYMPTOM_VERDICT_PATTERNS.some((p) => p.test(t))) return "medical";
   for (const [cat, pats] of CATEGORY_PATTERNS) { if (pats.some((p) => p.test(t))) return cat; }
   return checkMedicalAdviceGuardrail(t).isRefusal ? "medical" : null;
 }
@@ -196,7 +201,7 @@ export function checkMedicalAdviceGuardrail(input: string): {
     return { isRefusal: false, refusalMessage: null };
   }
 
-  for (const pattern of [...MEDICAL_ADVICE_PATTERNS, ...FERTILITY_PATTERNS, ...VERDICT_PATTERNS, ...DIET_EXERCISE_PATTERNS, ...PHASE_PATTERNS]) {
+  for (const pattern of [...MEDICAL_ADVICE_PATTERNS, ...FERTILITY_PATTERNS, ...VERDICT_PATTERNS, ...SYMPTOM_VERDICT_PATTERNS, ...DIET_EXERCISE_PATTERNS, ...PHASE_PATTERNS]) {
     if (pattern.test(normalized)) {
       return {
         isRefusal: true,

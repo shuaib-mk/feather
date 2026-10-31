@@ -31,6 +31,14 @@ check("severe pain with fever", checkSevereSymptomEscalation("severe pain with a
 check("fertility category", classifyGuardrailCategory("when am I ovulating?") === "fertility");
 check("medical category keeps frozen message", getGuardrailResponseMessage("can you diagnose PCOS?") === MEDICAL_REFUSAL_MESSAGE);
 check("fertility redirect text", getGuardrailResponseMessage("when am I ovulating?") === REDIRECT_MESSAGES.fertility);
+check("symptom verdict keeps frozen message", getGuardrailResponseMessage("is this cramp normal?") === MEDICAL_REFUSAL_MESSAGE);
+check("symptom verdict category is medical", classifyGuardrailCategory("is this cramp normal?") === "medical");
+check("symptom verdict agent message frozen", parseLocally("is this cramp normal?", TODAY, {}).message === MEDICAL_REFUSAL_MESSAGE);
+check("worry-about-symptom keeps frozen message", getGuardrailResponseMessage("should I worry about this symptom") === MEDICAL_REFUSAL_MESSAGE);
+check("cycle-number verdict uses redirect", getGuardrailResponseMessage("Is 35 days normal?") === REDIRECT_MESSAGES.verdict);
+check("cycle-length verdict uses redirect", getGuardrailResponseMessage("is my cycle length healthy?") === REDIRECT_MESSAGES.verdict);
+check("normal-period-length question uses redirect", getGuardrailResponseMessage("how many days is a normal period") === REDIRECT_MESSAGES.verdict);
+check("cycle-number verdict category", classifyGuardrailCategory("Is 35 days normal?") === "verdict");
 // Own data: 6 starts -> 5 completed lengths [28,30,38,32,35]
 const starts = ["2026-01-01", "2026-01-29", "2026-02-28", "2026-04-07", "2026-05-09", "2026-06-13"];
 const periods = starts.map((s) => ({ startDate: s, endDate: null as string | null }));
