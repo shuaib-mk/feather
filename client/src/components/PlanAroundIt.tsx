@@ -6,7 +6,8 @@ import { toEngineRecords } from "../lib/calendarView";
 import { evaluateEventOverlap } from "../lib/periodEngine";
 import { todayLocal } from "../lib/localDate";
 import { OVERLAP_DISCLAIMER, prettyDate } from "../cycleStorage";
-import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine } from "../lib/planInsights";
+import { gradeWindowTrust, formatWindowTrustLine, suggestClearDates, formatClearDatesLine, flowPattern, formatEventPositionLine, symptomEcho, formatSymptomEchoLine } from "../lib/planInsights";
+import { useDiscreetMode } from "../lib/discreetMode";
 
 const LABELS: Record<string, string> = {
   logged: "Logged period",
@@ -39,6 +40,8 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
   const events = eventsProp !== undefined ? eventsProp : internalEvents;
   const trustLine = formatWindowTrustLine(gradeWindowTrust(stats?.statistics?.allCycleLengths ?? []));
   const pastPattern = useMemo(() => flowPattern(data.periods, data.logs), [data.periods, data.logs]);
+  const pastEcho = useMemo(() => symptomEcho(data.periods, data.logs), [data.periods, data.logs]);
+  const { isDiscreet } = useDiscreetMode();
   const rows = useMemo(
     () =>
       upcomingEvents(events, today, 120).map((e) => {
@@ -92,6 +95,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
       {rows.map(({ e, r }) => {
         const clearLine = formatClearDatesLine(suggestClearDates(e.date, toEngineRecords(data.periods), today, stats?.statistics?.allCycleLengths ?? []));
         const positionLine = formatEventPositionLine(e.date, r.window, pastPattern);
+        const echoLine = isDiscreet ? "" : formatSymptomEchoLine(e.date, r.window, pastEcho);
         const cleanNote = (r.note || "").replace(
           /^(Likely overlap|Possible overlap|Unlikely to overlap \(estimate\)):\s*/i,
           "",
@@ -111,6 +115,7 @@ export function PlanAroundIt({ events: eventsProp }: { events?: CalendarEvent[] 
               </span>
               {clearLine && <span className="block text-stone-600">{clearLine}</span>}
               {positionLine && <span className="block text-stone-600">{positionLine}</span>}
+              {echoLine && <span className="block text-stone-600">{echoLine}</span>}
             </div>
             <button
               type="button"

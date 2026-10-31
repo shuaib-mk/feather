@@ -9,6 +9,7 @@
  * period-days that most often carried the heaviest logged flow in past
  * completed periods. Both are read-only descriptions of existing data.
  * Phase 4: prediction back-test against the user's own earlier cycles.
+ * Phase 5: symptom echo from the opening days of past completed periods.
  */
 
 import { evaluateEventOverlap, getPrediction, addDays, dayDifference, type PeriodRecord } from "./periodEngine";
@@ -336,4 +337,95 @@ export function backTest(periods: ReadonlyArray<PeriodStartLike>): BackTestResul
     averageDaysOff,
     sentence: `Back-tested on your own history: off by ${comparisons.map((c) => c.daysOff).join(", ")} days (average ${averageDaysOff.toFixed(1)}).`,
   };
+}
+
+// ---- Phase 5: symptom echo (past logs only, hidden in Discreet Mode) ----
+
+/** Minimum completed periods a symptom must appear in on day 1 or 2. */
+export const SYMPTOM_ECHO_MIN_PERIODS = 3;
+/** Minimum share of completed periods (0.6 = 60%) a symptom must appear in. */
+export const SYMPTOM_ECHO_MIN_RATIO = 0.6;
+/** Period-days counted as the opening of a period. */
+export const SYMPTOM_ECHO_DAYS = [1, 2] as const;
+
+export interface SymptomEcho {
+  symptom: string;
+  /** Completed periods with the symptom logged on day 1 or 2. */
+  hitPeriods: number;
+  /** Completed periods considered. */
+  totalPeriods: number;
+  /** Opening days the symptom was logged on across the hitting periods. */
+  days: number[];
+  sentence: string;
+}
+
+type SymptomLogLike = { logDate?: string | null; symptoms?: ReadonlyArray<string> | null } | null | undefined;
+
+/**
+ * Find one symptom logged on day 1 or 2 of at least
+ * SYMPTOM_ECHO_MIN_PERIODS completed periods and in at least
+ * SYMPTOM_ECHO_MIN_RATIO of all completed periods. A period counts as
+ * completed once a later period start exists; the latest period is never
+ * used. When several symptoms qualify, the one in the most periods wins
+ * (ties break alphabetically, for a stable result). The sentence restates
+ * logged history only; it carries no advice or remedy. Returns null when
+ * nothing qualifies. Callers must not render this in Discreet Mode, where
+ * symptom words are hidden.
+ */
+export function symptomEcho(
+  periods: ReadonlyArray<PeriodStartLike>,
+  logs: ReadonlyArray<SymptomLogLike>,
+): SymptomEcho | null {
+  const starts = [...new Set(periods.map((p) => p?.startDate).filter((d): d is string => typeof d === "string" && !!d))].sort();
+  const totalPeriods = starts.length - 1;
+  if (totalPeriods < SYMPTOM_ECHO_MIN_PERIODS) return null;
+  const bySymptom = new Map<string, { periods: Set<number>; days: Set<number> }>();
+  for (let i = 0; i < totalPeriods; i++) {
+    const start = starts[i];
+    for (const log of logs) {
+      const date = log?.logDate;
+      if (!date || !log?.symptoms) continue;
+      const day = dayDifference(start, date) + 1;
+      if (!(SYMPTOM_ECHO_DAYS as ReadonlyArray<number>).includes(day)) continue;
+      for (const raw of log.symptoms) {
+        const symptom = typeof raw === "string" ? raw.trim() : "";
+        if (!symptom) continue;
+        let entry = bySymptom.get(symptom);
+        if (!entry) {
+          entry = { periods: new Set<number>(), days: new Set<number>() };
+          bySymptom.set(symptom, entry);
+        }
+        entry.periods.add(i);
+        entry.days.add(day);
+      }
+    }
+  }
+  const qualifying = [...bySymptom.entries()]
+    .map(([symptom, entry]) => ({ symptom, hitPeriods: entry.periods.size, days: [...entry.days].sort((a, b) => a - b) }))
+    .filter((q) => q.hitPeriods >= SYMPTOM_ECHO_MIN_PERIODS && q.hitPeriods / totalPeriods >= SYMPTOM_ECHO_MIN_RATIO)
+    .sort((a, b) => b.hitPeriods - a.hitPeriods || a.symptom.localeCompare(b.symptom));
+  const best = qualifying[0];
+  if (!best) return null;
+  const dayPhrase = best.days.length === 1 ? `day ${best.days[0]}` : `days ${best.days[0]}-${best.days[best.days.length - 1]}`;
+  return {
+    symptom: best.symptom,
+    hitPeriods: best.hitPeriods,
+    totalPeriods,
+    days: best.days,
+    sentence: `You've logged ${best.symptom} near ${dayPhrase} in ${best.hitPeriods} of your last ${totalPeriods} periods.`,
+  };
+}
+
+/**
+ * The echo sentence for one event, or "" when there is no echo or the
+ * event is not inside the estimated window (dayPosition is null outside).
+ */
+export function formatSymptomEchoLine(
+  eventDate: string,
+  window: EstimatedWindow | null | undefined,
+  echo: SymptomEcho | null,
+): string {
+  if (!echo) return "";
+  if (!dayPosition(eventDate, window)) return "";
+  return echo.sentence;
 }
