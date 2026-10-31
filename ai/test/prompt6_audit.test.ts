@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { enterDemoMode, exitDemoMode, isDemoActive, DEMO_EVENTS_KEY } from "../../client/src/lib/demoMode";
 import { loadEvents, upsertEvent, deleteEvent, REAL_EVENTS_KEY, getEventsKey } from "../../client/src/lib/events";
 import { buildCycleCalendarICS } from "../../client/src/lib/ics";
-import { loadCycleData, computeCycleStats, exportCycleDataJSON, importCycleDataJSON } from "../../client/src/cycleStorage";
+import { loadCycleData, computeCycleStats, exportCycleDataJSON, importCycleDataJSON, effectivePeriodEndDate, deleteDayLog, countDailyNotes } from "../../client/src/cycleStorage";
 import { parseLocally } from "../backend/agent";
 import { checkMedicalAdviceGuardrail, checkSevereSymptomEscalation, MEDICAL_REFUSAL_MESSAGE, SEVERE_SYMPTOM_ESCALATION_MESSAGE } from "../backend/guardrail";
 import { agentMessageKind } from "../../client/src/lib/voiceMessage";
@@ -10,7 +10,6 @@ import { buildAndFilterChronicleItems } from "../../client/src/pages/ChroniclePa
 import { buildWeekdayHeader } from "../../client/src/pages/CalendarPage";
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
-import { countDailyNotes } from "../../client/src/cycleStorage";
 
 console.log("=== Prompt 6 Audit Regression Suite ===");
 
@@ -161,4 +160,52 @@ const mem: Record<string, string> = {};
   assert.strictEqual(sunHeader[nov2026.leadingBlanks], "Sun", "Nov 1, 2026 renders under Sun");
 
   console.log("[PASS] Group C: Chronicle Daily Notes filter (7/14) & Calendar weekday header (Sun..Sat)");
+}
+
+// Group D: Offline long-input multi-fact disclosure, clean event titles, period duration & daily note delete
+{
+  // D1: ~600-char multi-sentence paragraph with 5 dated facts + 2 dated events + 1 undated event in Offline mode
+  const longPara =
+    "My period started 5 days ago with light flow. On October 27 I had heavy flow and cramps. On October 28 I had headache and nausea. Yesterday I had fatigue and bloating, and today I have tender breasts. I am worried about my exam on November 15, my cousin's birthday party on November 22, and a wedding to attend.";
+  const d1 = parseLocally(longPara, "2026-10-31", {});
+  assert(d1.entry !== null, "D1 must produce a primary confirmation slip");
+  assert.strictEqual(d1.entry?.date, "2026-10-26", "D1 primary slip date must be period start (5 days ago = 2026-10-26)");
+  assert.strictEqual(d1.entry?.flow, "light", "D1 primary slip flow must be light (start day), not overwritten by later days");
+  assert.deepStrictEqual(d1.entry?.symptoms, [], "D1 primary slip must not merge symptoms from Oct 27/28/30/31 onto Oct 26");
+  assert(d1.message.includes("I couldn't place:"), `D1 must disclose unplaced dated facts, got: ${d1.message}`);
+  assert(d1.message.includes("2026-10-27") && d1.message.includes("2026-10-28") && d1.message.includes("2026-10-30") && d1.message.includes("2026-10-31"), `D1 must disclose all 4 unplaced dates, got: ${d1.message}`);
+  assert(d1.message.includes("I couldn't place a date for: wedding"), `D1 must disclose unplaced wedding event, got: ${d1.message}`);
+  assert.deepStrictEqual(
+    d1.plannedEvents,
+    [
+      { title: "exam", date: "2026-11-15" },
+      { title: "cousin's birthday party", date: "2026-11-22" },
+    ],
+    "D1 planned event titles must be clean ('exam' and \"cousin's birthday party\")",
+  );
+
+  // D2 & D3: Period duration derives from period record (startDate..endDate = 5d), and deleting a daily note never shrinks period duration
+  (globalThis as any).localStorage.clear();
+  enterDemoMode();
+  const beforeDelete = loadCycleData();
+  const sep30Before = beforeDelete.periods.find((p) => p.startDate === "2026-09-30")!;
+  assert(sep30Before, "Demo mode has Sep 30 period");
+  const endBefore = effectivePeriodEndDate(sep30Before, beforeDelete.periods, beforeDelete.logs);
+  assert.strictEqual(endBefore, "2026-10-04", "Sep 30 period span must be 2026-09-30..2026-10-04 (5d)");
+  const statsBefore = computeCycleStats(beforeDelete.periods, beforeDelete.logs);
+  assert.strictEqual(statsBefore.avgPeriodLength, 5, "Average bleeding days must be 5");
+  assert.strictEqual(statsBefore.medianCycleLength, 31, "Median cycle length must be 31");
+
+  // Delete Oct 1 daily note in Demo Mode
+  deleteDayLog("2026-10-01");
+  const afterDelete = loadCycleData();
+  const sep30After = afterDelete.periods.find((p) => p.startDate === "2026-09-30")!;
+  const endAfter = effectivePeriodEndDate(sep30After, afterDelete.periods, afterDelete.logs);
+  assert.strictEqual(endAfter, "2026-10-04", "Deleting Oct 1 daily note must NOT change Sep 30 period end date or duration (still 5d)");
+  const chronicleAfter = buildAndFilterChronicleItems(afterDelete.periods, afterDelete.logs, "periods");
+  const sep30Item = chronicleAfter.filteredItems.find((i) => i.date === "2026-09-30")!;
+  assert.strictEqual(sep30Item.periodItem?.endDate, "2026-10-04", "Chronicle Sep 30 period item still ends 2026-10-04 (5d)");
+  exitDemoMode();
+
+  console.log("[PASS] Group D: Offline multi-fact disclosure, clean event titles, & period duration invariance on note delete");
 }

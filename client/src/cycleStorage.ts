@@ -444,7 +444,7 @@ export function effectivePeriodEndDate(period: Period, periods: Period[], logs: 
     .filter((l) => l.logDate >= period.startDate && (!nextStart || l.logDate < nextStart) && (isBleedingFlow(l.flow) || l.kind === "period_started"))
     .map((l) => l.logDate)
     .sort();
-  if (bleedingDays.length) return bleedingDays[bleedingDays.length - 1];
+  // Period duration derives from period record days (startDate..endDate), never daily-note presence.
   const stored = period.endDate || period.startDate;
   return stored >= period.startDate ? stored : period.startDate;
 }
@@ -455,12 +455,14 @@ export function effectivePeriodDurationDays(period: Period, periods: Period[], l
 
 export function deleteDayLog(logDate: string): void {
   const data = loadCycleData();
+  const deleted = data.logs.find((l) => l.logDate === logDate);
   data.logs = data.logs.filter((l) => l.logDate !== logDate);
   // A2: shrink any period whose stored end was this (now deleted) bleeding day.
   for (const per of data.periods) {
     const storedEnd = per.endDate || per.startDate;
-    if (per.startDate <= logDate && logDate <= storedEnd) {
-      per.endDate = effectivePeriodEndDate(per, data.periods, data.logs);
+    if (deleted && isBleedingFlow(deleted.flow) && per.endDate === logDate && per.startDate < logDate) {
+      const rem = data.logs.filter((l) => l.logDate >= per.startDate && l.logDate < logDate && (isBleedingFlow(l.flow) || l.kind === "period_started")).map((l) => l.logDate).sort();
+      per.endDate = rem.length ? rem[rem.length - 1] : per.startDate;
     }
   }
   saveCycleData(data);

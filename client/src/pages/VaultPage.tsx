@@ -96,11 +96,11 @@ export function VaultPage() {
 
         <div className="liquid-glass-card rounded-[20px] p-4 space-y-1">
           <span className="font-sans text-xs font-medium text-stone-500 block">
-            Average Cycle
+            Median Cycle Length
           </span>
-          <div className="font-serif text-2xl font-semibold text-stone-900">{stats.isDefaultCycle ? "Not enough data yet" : `${stats.avgCycleLength} days`}</div>
+          <div className="font-serif text-2xl font-semibold text-stone-900">{stats.isDefaultCycle ? "Not enough data yet" : `${stats.medianCycleLength ?? stats.avgCycleLength} days`}</div>
           <span className="text-[11px] text-stone-500 font-sans">
-            {stats.isDefaultCycle ? "Log a completed cycle to learn this" : "From history"}
+            {stats.isDefaultCycle ? "Log a completed cycle to learn this" : "Observed median"}
           </span>
         </div>
 

@@ -837,16 +837,28 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   {
     let m: RegExpExecArray | null; let prevEnd = 0;
     const cleanTitle = (seg: string): string => {
-      let t = seg.replace(/[,";]+\s*$/g, "").trim();
-      t = t.replace(/^\s*(?:and|&)\s+/i, "");
-      t = t.replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+/i, "");
+      let t = seg.split(/[.!?\n;]+/).pop() || seg;
+      t = t.split(/,|\band\b/i).pop() || t;
+      t = t.replace(/[,";]+\s*$/g, "").trim();
+      t = t.replace(/^[\s,.;:!?\-&]+/, "").trim();
+      t = t.replace(/^\s*(?:and|&|also|plus|then)\s+/i, "");
+      let prevLead = "";
+      while (prevLead !== t) {
+        prevLead = t;
+        t = t
+          .replace(
+            /^\s*(?:i\s+also\s+have|i\s+have|i've\s+got|ive\s+got|i\s+got|there\s+is|there's|we\s+have|we've\s+got|i\s+am\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|i'm\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|im\s+(?:worried|nervous|anxious|excited|stressed|thinking|planning|going|preparing)\s+(?:about|for|to)|worried\s+about|nervous\s+about|excited\s+for|preparing\s+for|planning\s+for|going\s+to)\s+/i,
+            "",
+          )
+          .trim();
+      }
       let prev = "";
       while (prev !== t) {
         prev = t;
         t = t.replace(/\s*(?:\b(?:is|was|scheduled|planned|happening|coming up|on|at|for|to attend)\b)\s*$/i, "").trim();
       }
       t = t.replace(/\bcoming up\b/gi, "").replace(/\s+/g, " ").trim();
-      t = t.replace(/^\s*(?:an?|the)\s+/i, "").trim();
+      t = t.replace(/^\s*(?:an?|the|my|our|his|her|their)\s+/i, "").trim();
       return t;
     };
     while ((m = planDateRe.exec(text)) !== null) {
@@ -859,9 +871,31 @@ export function parseLocally(text: string, today: string, context: AgentContext)
         resolvedDate = parseMonthDay(dateNoYear, explicitYear ?? currentYear);
       }
       const seg = text.slice(prevEnd, m.index);
+      const sentenceStart = Math.max(
+        0,
+        text.lastIndexOf(".", m.index - 1) + 1,
+        text.lastIndexOf("!", m.index - 1) + 1,
+        text.lastIndexOf("?", m.index - 1) + 1,
+        text.lastIndexOf("\n", m.index - 1) + 1,
+        text.lastIndexOf(";", m.index - 1) + 1,
+      );
+      const nextStops = [
+        text.indexOf(".", m.index + rawDate.length),
+        text.indexOf("!", m.index + rawDate.length),
+        text.indexOf("?", m.index + rawDate.length),
+        text.indexOf("\n", m.index + rawDate.length),
+        text.indexOf(";", m.index + rawDate.length),
+      ].filter((idx) => idx !== -1);
+      const sentenceEnd = nextStops.length > 0 ? Math.min(...nextStops) : text.length;
+      const localSentence = text.slice(sentenceStart, sentenceEnd);
+      const clauseBeforeDate = text.slice(Math.max(prevEnd, sentenceStart), m.index);
       prevEnd = m.index + rawDate.length;
-      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(seg) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(seg)) continue;
-      const title = cleanTitle(seg.split(/\band\b/i).pop() || seg) || "Event";
+      const hasEventNounInClauseOrSentence = /\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|plan|planning)\b/i.test(localSentence);
+      const hasCycleOrSymptomInSentence = /\b(period|flow|spotting|bleeding|menstruat|cramps|headache|nausea|fatigue|bloating|back pain|tender breasts|mood|acne|insomnia|cravings|diarrhea|constipation|dizziness|hot flashes)\b/i.test(localSentence);
+      const cleanedCandidate = cleanTitle(clauseBeforeDate);
+      if (!hasEventNounInClauseOrSentence && (cleanedCandidate === "" || hasCycleOrSymptomInSentence)) continue;
+      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(clauseBeforeDate) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(clauseBeforeDate)) continue;
+      const title = cleanedCandidate || "Event";
       if (!resolvedDate || !isValidDateKey(resolvedDate)) { planDateInvalid = true; continue; }
       if (explicitYear === null && resolvedDate < today) {
         const nextYear = parseMonthDay(dateNoYear, currentYear + 1);
@@ -1028,7 +1062,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   // different flow or symptoms "yesterday" are named as unplaced instead of dropped/merged.
   let unplacedNote: string | null = null;
   if (extraction.periodStart) {
-    const frag = text.match(/period\s+started\s+([^,.]+?)(?=\s+and\s|\s+but\s|,|$)/i)?.[1];
+    const frag = text.match(/(?:period\s+(?:started|began|came)|started\s+my\s+period|got\s+my\s+period)\s+([^,.;!?\n]+?)(?=\s+and\s|\s+but\s|\s+with\s|[,.;!?\n]|$)/i)?.[1];
     if (frag) {
       const r = resolveDateExpression(`period started ${frag}`, today);
       if (r.date) { entryDate = r.date; dateExplanation = r.explanation || dateExplanation; }
@@ -1056,6 +1090,84 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       }
     } else if (yesterdayFlow && yesterdayFlow[1] !== extraction.flow) {
       unplacedNote = `${yesterdayFlow[1]} flow yesterday (${yesterdayKey}) as a separate day`;
+    }
+  }
+
+  // Multi-sentence / multi-clause dated facts disclosure (Prompt 6 Group D1):
+  // When a paragraph contains multiple dated log clauses (e.g., period start + heavy day + symptom days),
+  // keep only the primary date's facts on the confirmation slip and disclose all other dated facts in unplacedNote.
+  {
+    const clauseParts = logDateText
+      .split(
+        /(?:[.!?\n;]+|,\s*(?=(?:and\s+|but\s+)?(?:on\s+|yesterday\b|today\b|last\s+night\b|day\s+before\s+yesterday\b|the\s+next\s+day\b|day\s*[2-7]\b|\d+\s+days?\s+ago\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\b|\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b))|\b(?:and|but)\s+(?=(?:on\s+|yesterday\b|today\b|last\s+night\b|the\s+next\s+day\b|day\s*[2-7]\b|\d+\s+days?\s+ago\b)))/i,
+      )
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (clauseParts.length >= 2) {
+      const parsedClauses = clauseParts.map((cl) => {
+        const clRes = resolveDateExpression(cl, today);
+        let clDate = clRes.date;
+        const clExplanation = clRes.explanation;
+        if (!clDate && entryDate) {
+          if (/\b(?:the\s+next\s+day|on\s+day\s*2|on\s+the\s+(?:2nd|second)\s+day|day\s*2)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 1);
+          else if (/\b(?:on\s+day\s*3|on\s+the\s+(?:3rd|third)\s+day|day\s*3)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 2);
+          else if (/\b(?:on\s+day\s*4|on\s+the\s+(?:4th|fourth)\s+day|day\s*4)\b/i.test(cl)) clDate = addDaysToKey(entryDate, 3);
+        }
+        const clExt = extractWithLexicon(cl);
+        const hasClLog = clExt.periodStart || clExt.periodEnd || clExt.flow !== null || clExt.symptoms.length > 0 || clExt.mood !== null;
+        return { text: cl, date: clDate, explanation: clExplanation, ext: clExt, hasClLog };
+      });
+
+      const datedLogClauses = parsedClauses.filter((c) => c.hasClLog && c.date !== null && c.date! <= today);
+      if (datedLogClauses.length >= 2) {
+        const primaryClause = datedLogClauses.find((c) => c.ext.periodStart) || datedLogClauses[0];
+        if (!extraction.periodStart && primaryClause.date) {
+          entryDate = primaryClause.date;
+          dateExplanation = primaryClause.explanation || dateExplanation;
+        }
+        const otherDated = datedLogClauses.filter((c) => c.date !== entryDate);
+        const yesterdayKey = addDaysToKey(today, -1);
+        const isMultiOrNonYesterday =
+          otherDated.length > 1 ||
+          (otherDated.length === 1 && (otherDated[0].date !== yesterdayKey || !unplacedNote));
+
+        if (otherDated.length > 0 && isMultiOrNonYesterday) {
+          const sameDateClauses = parsedClauses.filter((c) => c.date === entryDate || (c.date === null && c.hasClLog));
+          const sameDateFlows = sameDateClauses.map((c) => c.ext.flow).filter(Boolean);
+          const firstDayFlowMatch = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
+          (extraction as any).flow = firstDayFlowMatch ? firstDayFlowMatch[1] : (sameDateFlows[0] ?? null);
+
+          const sameDateSymptoms: ValidSymptom[] = [];
+          for (const c of sameDateClauses) {
+            for (const s of c.ext.symptoms) {
+              if (!sameDateSymptoms.includes(s)) sameDateSymptoms.push(s);
+            }
+          }
+          (extraction as any).symptoms = sameDateSymptoms;
+
+          const sameDateMoods = sameDateClauses.map((c) => c.ext.mood).filter(Boolean);
+          (extraction as any).mood = sameDateMoods[0] ?? null;
+
+          const unplacedDescriptions: string[] = [];
+          for (const c of otherDated) {
+            const parts: string[] = [];
+            if (c.ext.flow) parts.push(`${c.ext.flow} flow`);
+            if (c.ext.symptoms.length > 0) {
+              parts.push(c.ext.flow ? `with ${c.ext.symptoms.join(" and ")}` : c.ext.symptoms.join(" and "));
+            }
+            if (c.ext.mood) parts.push(`mood ${c.ext.mood.toLowerCase()}`);
+            if (parts.length === 0 && c.ext.periodEnd) parts.push("period ended");
+            if (parts.length > 0) {
+              const dayWord = /\byesterday\b/i.test(c.text) ? `yesterday (${c.date})` : /\btoday\b/i.test(c.text) ? `today (${c.date})` : `(${c.date})`;
+              unplacedDescriptions.push(`${parts.join(" ")} ${dayWord}`);
+            }
+          }
+          if (unplacedDescriptions.length > 0) {
+            unplacedNote = `${unplacedDescriptions.join("; ")} as ${unplacedDescriptions.length === 1 ? "a separate day" : "separate days"}`;
+          }
+        }
+      }
     }
   }
 
