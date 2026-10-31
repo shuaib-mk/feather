@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { loadEvents, fuzzyMatchEvents, upsertEvent } from "../lib/events";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
+import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
@@ -183,6 +184,13 @@ export function VoiceFlowPage() {
 
       if (res.rateLimited) {
         setRateLimitNotice(res.message);
+      }
+
+      const isMessageOnly = !res.entry && extractedEvents.length === 0 && !(res.planOverlaps && res.planOverlaps.length > 0);
+      if (isMessageOnly) {
+        setConfirmEntry(null);
+        setPlannedEventsState([]);
+        setPlanOverlaps(null);
       }
 
       if (res.entry) {
@@ -462,6 +470,9 @@ export function VoiceFlowPage() {
           </span>
         </div>
       )}
+
+      {/* Agent message outcome (clarifying questions, "didn't understand", unplaced-fact disclosures) */}
+      <AgentMessageCard message={agentMessage} />
 
       {/* Plan Overlap Alerts */}
       {planOverlaps && planOverlaps.length > 0 && (
