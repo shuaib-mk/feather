@@ -3,18 +3,19 @@
 **Project:** Feather — Voice-First Menstrual Cycle Companion  
 **Hackathon Window:** October 27 – November 4, 2026  
 **Primary Models:** Meta Muse Voice Transcribe (`muse-voice-transcribe-1.0`) & Meta Muse Spark (`muse-spark-1.3`)  
-**Open-Weight Swappable:** Meta Muse Spark Open 1026 (`meta-models/muse-spark-open-1026` via Baseten)
+**Open-Weight Swappable:** Meta Muse Spark Open 1026 (`meta-models/muse-spark-open-1026` via Baseten)  
+**Live demo:** https://feather-w.vercel.app
 
 ---
 
 ## 1. Demo Video Opening Statement
-> *"Feather is a private, voice-first menstrual cycle companion that turns fuzzy recollections like 'two days before New Year's' into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — stored 100% on-device with zero cloud database."*
+> *"Feather is a private, voice-first menstrual cycle companion that turns fuzzy recollections like 'two days before New Year's' into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — cycle data is stored only on your device."*
 
 ---
 
 ## 2. Personal Firsthand Motivation
 <!-- FIRSTHAND_MOTIVATION_START -->
-[Firsthand Motivation: Enter your personal story/motivation here — e.g., how recalling cycles relative to life events solves real friction compared to rigid calendar datepickers, and why privacy and non-medical clarity are critical for women's cycle planning.]
+I built Feather to address a gap in how people track cycles: people remember life events, not always exact dates. Coming from Kerala, I wanted to make tracking more natural by understanding references like "two days before Onam." During this hackathon, I built a working voice-first companion using Meta Muse Voice and Muse Spark, with cultural date recognition, cycle logging, and event-overlap estimates. I also prioritised on-device privacy and clear non-medical boundaries. Built solo, Feather is my attempt to turn a real everyday friction into a practical, privacy-conscious solution.
 <!-- FIRSTHAND_MOTIVATION_END -->
 
 ---
@@ -40,7 +41,7 @@ Most menstrual trackers assume women remember calendar dates (*"my cycle started
 
 ## 4. What Was Built During the Hackathon (Oct 27 – Nov 4, 2026)
 
-All code in this repository was engineered specifically for the hackathon event:
+Per git history, all commits fall inside the hackathon building period; see PROVENANCE.md for provenance and assets whose source needs confirmation.
 
 ### A. Speech-to-Text Pipeline (`ai/backend/transcribe.ts`, `ai/frontend/useAudioRecorder.ts`)
 - Implemented real-time audio resampling to 24 kHz mono 16-bit PCM WAV (rejects audio over 60 seconds; Vercel's ~4.5 MB request-body limit is why the cap is 60s, not longer).
@@ -76,7 +77,7 @@ All code in this repository was engineered specifically for the hackathon event:
 | Model Name | Endpoint Model ID | Exact Files | Usage in Feather |
 | :--- | :--- | :--- | :--- |
 | **Meta Muse Voice Transcribe** | `muse-voice-transcribe-1.0` | `api/transcribe.ts`<br>`ai/backend/transcribe.ts` | Real-time speech-to-text audio transcription |
-| **Meta Muse Spark (Open-Weight)** | `meta-models/muse-spark-open-1026` | `ai/backend/config.ts`<br>`client/src/CreditsModal.tsx` | Swappable open-weight model on Baseten bridge |
+| **Meta Muse Spark (Open-Weight)** | `meta-models/muse-spark-open-1026` | `ai/backend/config.ts` | Swappable open-weight model on Baseten bridge |
 
 ---
 
