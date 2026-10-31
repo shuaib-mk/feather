@@ -14,6 +14,35 @@ export function buildICS(events: CalendarEvent[], options: ICSBuildOptions={}): 
   return lines.map(foldICSLine).join("\r\n")+"\r\n";
 }
 export function buildSingleEventICS(title:string, date:string): string { return buildICS([{id:stableUID(title+date), title, date, source:"manual"}]); }
+export function buildCycleCalendarICS(
+  periods: Array<{ id: number; startDate: string; endDate?: string | null }>,
+  stats: { earliestNextDate?: string | null; latestNextDate?: string | null },
+  events: CalendarEvent[],
+  cycleTitle = "Private",
+): string {
+  const periodEvents: CalendarEvent[] = periods.map((p) => ({
+    id: `p-${p.id}`,
+    title: cycleTitle,
+    date: p.startDate,
+    endDate: p.endDate || p.startDate,
+    source: "manual" as const,
+    private: cycleTitle === "Private",
+  }));
+  const predicted: CalendarEvent[] =
+    stats.earliestNextDate && stats.latestNextDate
+      ? [
+          {
+            id: "pred-1",
+            title: cycleTitle,
+            date: stats.earliestNextDate,
+            endDate: stats.latestNextDate,
+            source: "manual" as const,
+            private: cycleTitle === "Private",
+          },
+        ]
+      : [];
+  return buildICS([...periodEvents, ...predicted, ...events]);
+}
 function unfold(text:string): string[] { return text.replace(/\r\n[ \t]/g,"").replace(/\n[ \t]/g,"").split(/\r?\n/); }
 function unescapeText(s:string): string { return s.replace(/\\n/gi,"\n").replace(/\\,/g,",").replace(/\\;/g,";").replace(/\\\\/g,"\\"); }
 function parseICSDate(v:string, params:string): string|null {

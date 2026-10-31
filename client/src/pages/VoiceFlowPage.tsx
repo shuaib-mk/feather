@@ -30,7 +30,7 @@ const COMMON_SYMPTOMS: Array<{ key: ValidSymptom; label: string }> = [
 ];
 
 export function VoiceFlowPage() {
-  const { data, stats, savePeriod, saveLog } = useCycle();
+  const { data, stats, savePeriod, saveLog, isDemoActive } = useCycle();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const presetDate = searchParams.get("date");
@@ -70,6 +70,16 @@ export function VoiceFlowPage() {
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
 
   const textInputRef = useRef<HTMLInputElement | null>(null);
+  const prevDemoRef = useRef<boolean>(isDemoActive);
+  useEffect(() => {
+    if (prevDemoRef.current !== isDemoActive) {
+      prevDemoRef.current = isDemoActive;
+      setConfirmEntry(null);
+      setPlannedEventsState([]);
+      setPlanOverlaps(null);
+      setAgentMessage("");
+    }
+  }, [isDemoActive]);
 
   // Auto-process captured audio blob
   useEffect(() => {

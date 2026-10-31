@@ -20,6 +20,7 @@ import {
 } from "../cycleStorage";
 import { todayLocal } from "../lib/localDate";
 import { enterDemoMode, exitDemoMode, isDemoActive as isDemoModeActive } from "../lib/demoMode";
+import { saveEvents } from "../lib/events";
 
 interface CycleContextValue {
   data: { periods: Period[]; logs: DayLog[] };
@@ -117,6 +118,7 @@ export function CycleProvider({ children }: { children: ReactNode }) {
 
   const clearAllVaultData = useCallback(() => {
     saveCycleData({ periods: [], logs: [] });
+    saveEvents([]);
     refreshData();
   }, [refreshData]);
 

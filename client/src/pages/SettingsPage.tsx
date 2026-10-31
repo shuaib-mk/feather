@@ -4,6 +4,7 @@ import { PageHeader } from "../components/PageHeader";
 import { PrivacySettings } from "../components/PrivacySettings";
 
 export function SettingsPage() {
+  const { data, stats } = useCycle();
 
   const [useBaseten, setUseBaseten] = useState<boolean>(() => {
     try {
@@ -81,7 +82,7 @@ export function SettingsPage() {
       <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm">
         <h3 className="font-serif text-lg font-semibold text-stone-900">Calendar assistant consent</h3>
         <label className="flex items-center justify-between gap-3 text-xs"><span>Let the assistant see matching calendar events (off by default; only matching events are sent, never your full calendar)</span><input type="checkbox" className="size-5" defaultChecked={typeof localStorage!=="undefined" && localStorage.getItem("feather_allow_matched_events")==="true"} onChange={(e)=>{ try{ localStorage.setItem("feather_allow_matched_events", e.target.checked?"true":"false"); }catch{} e.target.checked=e.target.checked; }} /></label>
-        <button type="button" className="liquid-glass-button rounded-full px-4 py-2 min-h-[44px] text-xs" onClick={async ()=>{ const { loadEvents } = await import("../lib/events"); const { buildICS } = await import("../lib/ics"); const blob=new Blob([buildICS(loadEvents(),{title:"Private"})],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); }}>Download my cycle calendar (.ics)</button>
+        <button type="button" className="liquid-glass-button rounded-full px-4 py-2 min-h-[44px] text-xs" onClick={async ()=>{ const { loadEvents } = await import("../lib/events"); const { buildCycleCalendarICS } = await import("../lib/ics"); const blob=new Blob([buildCycleCalendarICS(data.periods, stats, loadEvents(), "Private")],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); }}>Download my cycle calendar (.ics)</button>
         <p className="text-[11px] text-stone-500">Warning: calendar apps may sync these titles to other people or devices. Default title is “Private”.</p>
       </div>
       {/* AI Model Provider Configuration */}

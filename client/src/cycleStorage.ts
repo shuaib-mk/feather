@@ -18,6 +18,7 @@ import {
   type CycleStatistics,
 } from "./lib/periodEngine";
 import { todayLocal, toLocalKey } from "./lib/localDate";
+import { loadEvents, saveEvents } from "./lib/events";
 
 export interface Period {
   id: number;
@@ -617,7 +618,7 @@ export function exportCycleDataJSON(): string {
       exportedAt: new Date().toISOString(),
       periods: data.periods,
       logs: data.logs,
-      events: (() => { try { return JSON.parse(localStorage.getItem("feather_events_v1") || "[]"); } catch { return []; } })(),
+      events: loadEvents(),
     },
     null,
     2,
@@ -678,7 +679,7 @@ export function importCycleDataJSON(jsonStr: string): { success: boolean; count:
       }
     }
 
-    try { if (Array.isArray((parsed as any).events)) localStorage.setItem("feather_events_v1", JSON.stringify((parsed as any).events)); } catch {}
+    try { if (Array.isArray((parsed as any).events)) saveEvents((parsed as any).events); } catch {}
     saveCycleData({ periods: validPeriods, logs: validLogs });
     recordExportTimestamp();
     return { success: true, count: validPeriods.length + validLogs.length };

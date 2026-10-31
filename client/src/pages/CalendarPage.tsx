@@ -5,17 +5,18 @@ import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { buildMonthDayStates, nextThirtyDays } from "../lib/calendarView";
 import { loadEvents, saveEvents, upsertEvent, deleteEvent, type CalendarEvent } from "../lib/events";
-import { buildICS, parseICS } from "../lib/ics";
+import { buildICS, buildCycleCalendarICS, parseICS } from "../lib/ics";
 import { PlanAroundIt } from "../components/PlanAroundIt";
 import { todayLocal } from "../lib/localDate";
 import { addDays } from "../lib/periodEngine";
 
 export function CalendarPage(){
-  const { data, stats, saveLog, removeLog } = useCycle();
+  const { data, stats, saveLog, removeLog, isDemoActive } = useCycle();
   const today = todayLocal();
   const [cursor, setCursor] = useState(()=>{ const [y,m]=today.split("-").map(Number); return {y,m}; });
   const [selected, setSelected] = useState<string>(today);
   const [events, setEvents] = useState<CalendarEvent[]>(()=>loadEvents());
+  useEffect(() => { setEvents(loadEvents()); }, [isDemoActive]);
   useEffect(() => { const handler = () => setEvents(loadEvents()); window.addEventListener("feather_events_changed", handler); return () => window.removeEventListener("feather_events_changed", handler); }, []);
   const [newTitle, setNewTitle] = useState("");
   const [icsTitle, setIcsTitle] = useState("Private");
@@ -29,7 +30,7 @@ export function CalendarPage(){
   const monthName = new Date(Date.UTC(cursor.y,cursor.m-1,1)).toLocaleDateString(locale,{month:"long",year:"numeric",timeZone:"UTC"});
   const move=(n:number)=>{ const d=new Date(Date.UTC(cursor.y,cursor.m-1+n,1)); const y=d.getUTCFullYear(), m=d.getUTCMonth()+1; setCursor({y,m}); setSelected(`${y}-${String(m).padStart(2,"0")}-01`); };
   const onKey=(e:React.KeyboardEvent, date:string)=>{ let next:string|null=null; if(e.key==="ArrowRight") next=addDays(date,1); if(e.key==="ArrowLeft") next=addDays(date,-1); if(e.key==="ArrowDown") next=addDays(date,7); if(e.key==="ArrowUp") next=addDays(date,-7); if(next){ e.preventDefault(); setSelected(next); const [y,m]=next.split("-").map(Number); setCursor({y,m}); setTimeout(()=>document.querySelector<HTMLElement>(`[data-date="${next}"]`)?.focus(),0); } };
-  const downloadICS=()=>{ const predicted:any[]=[]; if(stats.earliestNextDate && stats.latestNextDate) predicted.push({id:"pred-1",title:icsTitle,date:stats.earliestNextDate,endDate:stats.latestNextDate,source:"manual",private:icsTitle==="Private"}); const periodEvents=data.periods.map(p=>({id:`p-${p.id}`,title:icsTitle,date:p.startDate,endDate:p.endDate||p.startDate,source:"manual" as const,private:icsTitle==="Private"})); const blob=new Blob([buildICS([...periodEvents,...predicted],{title:icsTitle})],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); };
+  const downloadICS=()=>{ const blob=new Blob([buildCycleCalendarICS(data.periods, stats, events, icsTitle)],{type:"text/calendar"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="feather-calendar.ics"; a.click(); URL.revokeObjectURL(url); };
   const onImportFile=async (f:File)=>{ const text=await f.text(); const res=parseICS(text, addDays(today,-540), addDays(today,365)); setImportPreview(res.events); setImportWarnings(res.warnings); setChecked(new Set(res.events.map(e=>e.id))); };
   const saveImport=()=>{ if(!importPreview) return; const chosen=importPreview.filter(e=>checked.has(e.id)); const merged=[...events]; for(const e of chosen){ if(!merged.some(x=>(x.uid&&x.uid===e.uid&&x.date===e.date))) merged.push(e); } saveEvents(merged); setEvents(merged); setImportPreview(null); };
   const weekdayNames = Array.from({length:7},(_,i)=>{ const base = month.weekStart===1 ? 1:0; const d=new Date(Date.UTC(2026,0,base+i+ (month.weekStart===1?0:0))); return d.toLocaleDateString(locale,{weekday:"short",timeZone:"UTC"}); });
@@ -74,7 +75,7 @@ export function CalendarPage(){
   </div>;
 }
 export function NextThirtyDaysStrip(){
-  const { data } = useCycle();
+  const { data, isDemoActive } = useCycle();
   const today = todayLocal();
   const [events, setEvents] = useState(() => loadEvents());
 
@@ -84,6 +85,7 @@ export function NextThirtyDaysStrip(){
     return () => window.removeEventListener("feather_events_changed", handler);
   }, []);
 
+  useEffect(() => { setEvents(loadEvents()); }, [isDemoActive]);
   const days = useMemo(() => nextThirtyDays(data.periods, data.logs, events, today), [data, events, today]);
 
   return (

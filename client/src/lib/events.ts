@@ -1,5 +1,4 @@
-
-import { isDemoActive, DEMO_EVENTS_KEY } from "./demoMode";
+import { isDemoActive, DEMO_EVENTS_KEY, buildDemoData } from "./demoMode";
 
 export interface CalendarEvent {
   id: string;
@@ -9,6 +8,7 @@ export interface CalendarEvent {
   source: "manual" | "ics" | "voice";
   uid?: string;
   private?: boolean;
+  demo?: boolean;
 }
 
 export const REAL_EVENTS_KEY = "feather_events_v1";
@@ -19,19 +19,46 @@ export function getEventsKey(): string {
 
 function store(): Storage | null {
   try {
-    return typeof localStorage !== "undefined" ? localStorage : null;
-  } catch {
-    return null;
-  }
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
+    if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) return (globalThis as any).localStorage;
+  } catch {}
+  return null;
+}
+
+function isLeakedDemoEventInRealMode(e: any): boolean {
+  if (!e) return false;
+  if (e.demo === true) return true;
+  if (typeof e.id === "string" && e.id.startsWith("demo-event-")) return true;
+  if (typeof e.title === "string" && /\(fictional\)/i.test(e.title)) return true;
+  // Clean legacy un-flagged "exam 2026-11-20" voice event created before namespace tagging
+  if (e.demo === undefined && e.title === "exam" && e.date === "2026-11-20" && e.source === "voice") return true;
+  return false;
 }
 
 export function loadEvents(): CalendarEvent[] {
   try {
-    const raw = store()?.getItem(getEventsKey());
+    const demoMode = isDemoActive();
+    const key = demoMode ? DEMO_EVENTS_KEY : REAL_EVENTS_KEY;
+    const ls = store();
+    let raw = ls?.getItem(key) ?? null;
+    if (demoMode && raw === null) {
+      const seeded = buildDemoData().events;
+      try { ls?.setItem(DEMO_EVENTS_KEY, JSON.stringify(seeded)); } catch {}
+      raw = JSON.stringify(seeded);
+    }
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed)
-      ? parsed.filter((e: any) => e && typeof e.title === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
-      : [];
+    if (!Array.isArray(parsed)) return [];
+    const valid = parsed.filter(
+      (e: any) => e && typeof e.title === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date),
+    );
+    if (demoMode) {
+      return valid.filter((e: any) => e.demo !== false);
+    }
+    const cleaned = valid.filter((e: any) => !isLeakedDemoEventInRealMode(e));
+    if (cleaned.length !== valid.length) {
+      try { ls?.setItem(REAL_EVENTS_KEY, JSON.stringify(cleaned)); } catch {}
+    }
+    return cleaned;
   } catch {
     return [];
   }
@@ -39,7 +66,9 @@ export function loadEvents(): CalendarEvent[] {
 
 export function saveEvents(events: CalendarEvent[]): void {
   try {
-    store()?.setItem(getEventsKey(), JSON.stringify(events));
+    const demoMode = isDemoActive();
+    const tagged = events.map((e) => ({ ...e, demo: demoMode }));
+    store()?.setItem(getEventsKey(), JSON.stringify(tagged));
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("feather_events_changed"));
     }
@@ -47,10 +76,12 @@ export function saveEvents(events: CalendarEvent[]): void {
 }
 
 export function upsertEvent(event: Omit<CalendarEvent, "id"> & { id?: string }): CalendarEvent {
+  const demoMode = isDemoActive();
   const events = loadEvents();
   const saved: CalendarEvent = {
     ...event,
     id: event.id || `evt-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+    demo: demoMode,
   };
   const i = events.findIndex((e) => e.id === saved.id);
   if (i >= 0) events[i] = saved;
