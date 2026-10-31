@@ -1413,6 +1413,9 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     status: "pending"
   });
   const fallbackResult = parseLocally(userPrompt, today, context);
+  if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (late-period question answered directly; no entry created)" };
+  }
   const config = getConfig();
   const isBaseten = context.provider === "baseten" || config.useBaseten;
   const apiKey = isBaseten ? config.basetenApiKey : config.metaApiKey || config.basetenApiKey;
@@ -1422,9 +1425,9 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     activityTrail.forEach((a) => a.status = "done");
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (Meta API key not configured)" };
   }
-  const targetEntry = context.pendingEntry || context.recentEntry;
-  let livePlannedEvents = [];
   const isCorrectionPhrase = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(userPrompt);
+  const targetEntry = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
+  let livePlannedEvents = [];
   if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
     return {
       message: "I couldn't find a recent entry to correct.",
@@ -1582,7 +1585,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
-          const entryToPatch = context.pendingEntry || context.recentEntry;
+          const entryToPatch = context.pendingEntry || (isCorrectionPhrase ? context.recentEntry : null);
           if (!entryToPatch) {
             toolResultObj = { success: false, error: "No pending slip to update" };
           } else {
@@ -1786,8 +1789,9 @@ function parseLocally(text, today, context) {
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
     return { message: MEDICAL_REFUSAL_MESSAGE, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
   }
-  const targetSlip = context.pendingEntry || context.recentEntry;
-  if (targetSlip) {
+  const isExplicitCorrection = /^\s*no[,.!?\s]/i.test(text) || /\bactually\b/i.test(text) || /\bmake it\b/i.test(text) || /\bchange\s+(?:the\s+)?(?:date|flow|mood|energy|it|to)\b/i.test(text) || /\b(?:add|remove|delete)\b/i.test(text) || /\balso had\b/i.test(text) || /\bset\s+(?:the\s+)?date\b/i.test(text) || /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) || /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
+  const targetSlip = context.pendingEntry || (isExplicitCorrection ? context.recentEntry : null);
+  if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
     const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
@@ -1806,7 +1810,7 @@ function parseLocally(text, today, context) {
       ...offline
     };
   }
-  const intent = classifyIntent(text, !!targetSlip);
+  const intent = classifyIntent(text, !!targetSlip && (Boolean(context.pendingEntry) || isExplicitCorrection));
   const extraction = extractWithLexicon(text);
   const energyMatch = lower.match(/\benergy\s*(?:is|level|:)?\s*([1-5])\b/);
   const energy = energyMatch ? parseInt(energyMatch[1], 10) : null;
@@ -1821,7 +1825,7 @@ function parseLocally(text, today, context) {
   {
     let m;
     let prevEnd = 0;
-    const cleanTitle = (seg) => seg.replace(/[,";]+\s*$/g, "").replace(/^\s*(?:and|&)\s+/i, "").replace(/^\s*(?:i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s).trim();
+    const cleanTitle = (seg) => seg.replace(/[,";]+\s*$/g, "").replace(/^\s*(?:and|&)\s+/i, "").replace(/^\s*(?:i also have|i have|i've got|ive got|there is|there's)\s+(?:an?\s+|the\s+)?/i, "").replace(/\bcoming up\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/\b(?:is|was|scheduled|planned|happening|on|at|for)\s*$/i, "").replace(/^\s*(?:my|the|a|an)\s+/i, (s) => s).trim();
     while ((m = planDateRe.exec(text)) !== null) {
       const rawDate = m[0];
       const explicitYear = /\b\d{4}\b/.test(rawDate) && !/^\d{4}-/.test(rawDate) ? parseInt(rawDate.match(/\b\d{4}\b/)[0], 10) : /^\d{4}-/.test(rawDate) ? parseInt(rawDate.slice(0, 4), 10) : null;
@@ -1849,6 +1853,12 @@ function parseLocally(text, today, context) {
       eventMatches.push({ name: title, date: resolvedDate });
     }
   }
+  if (eventMatches.length > 0) {
+    const trailing = text.match(/\b(?:and|also)\s+(?:a\s+|an\s+)?(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary)\b[^.]*$/i);
+    if (trailing && !eventMatches.some((e) => e.name.toLowerCase().includes(trailing[1].toLowerCase()))) {
+      eventMatches.push({ name: trailing[1].toLowerCase(), date: eventMatches[eventMatches.length - 1].date });
+    }
+  }
   if (planDateInvalid && eventMatches.length === 0 && extractWithLexicon(text).symptoms.length === 0) {
     const q = "Which date did you mean for that event? Please give the day and month.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
@@ -1873,7 +1883,7 @@ function parseLocally(text, today, context) {
   if (intent === "other" || !hasLogContent && intent !== "plan_event") {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
       const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
-      const q = late ? "What would you like to log \u2014 for example, that your period started, ended, or a symptom for a date?" : "What would you like to log?";
+      const q = late ? "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
@@ -1932,6 +1942,23 @@ function parseLocally(text, today, context) {
     const q = `Did you mean last year's date? That date is in the future.`;
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }
+  let unplacedNote = null;
+  if (extraction.periodStart) {
+    const frag = text.match(/period\s+started\s+([^,.]+?)(?=\s+and\s|\s+but\s|,|$)/i)?.[1];
+    if (frag) {
+      const r = resolveDateExpression(`period started ${frag}`, today);
+      if (r.date) {
+        entryDate = r.date;
+        dateExplanation = r.explanation || dateExplanation;
+      }
+    }
+    const firstDayFlow = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
+    if (firstDayFlow) extraction.flow = firstDayFlow[1];
+    const yesterdayFlow = lower.match(/\b(light|medium|heavy)\s+yesterday\b/);
+    if (yesterdayFlow && yesterdayFlow[1] !== extraction.flow) {
+      unplacedNote = `${yesterdayFlow[1]} flow yesterday (${addDaysToKey(today, -1)}) as a separate day`;
+    }
+  }
   const kind = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
   const entry = {
     date: entryDate,
@@ -1948,7 +1975,8 @@ function parseLocally(text, today, context) {
     dateWindow
   };
   toolCalls.push({ id: "call_log_" + Date.now(), toolName: "log_entry", args: { date: entryDate, flow: extraction.flow, symptoms: extraction.symptoms, mood: extraction.mood, energy, kind }, result: { entry }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-  const message = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  const baseMessage = isApproximate && landmarkName ? `I found ${landmarkName} on ${entryDate}. Would you like to confirm this period entry?` : `I've prepared your log for ${entryDate}. Please review and confirm below.`;
+  const message = unplacedNote ? `${baseMessage} I couldn't place: ${unplacedNote} \u2014 log that day separately if you want it saved.` : baseMessage;
   return { message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }
 
