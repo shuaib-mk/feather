@@ -71,14 +71,18 @@ async function runEvaluations(): Promise<EvalReport> {
   console.log("--> [1/2] Running Landmark Recall Benchmark (65 samples across EN, ML, HI, Code-Mixed)...");
   const landmarkLatencies: number[] = [];
   const landmarkMisses: Array<{ id: string; phrase: string; expected: string; got: string | undefined }> = [];
-  const byLanguage: Record<string, { total: number; passed: number; accuracyPct: number }> = {
-    en: { total: 0, passed: 0, accuracyPct: 0 },
-    ml: { total: 0, passed: 0, accuracyPct: 0 },
-    hi: { total: 0, passed: 0, accuracyPct: 0 },
-    "code-mixed": { total: 0, passed: 0, accuracyPct: 0 },
+  const byLanguage: Record<string, { total: number; passed: number; accuracyPct: number; datePassed: number; dateTotal: number; clarifyPassed: number; clarifyTotal: number }> = {
+    en: { total: 0, passed: 0, accuracyPct: 0, datePassed: 0, dateTotal: 0, clarifyPassed: 0, clarifyTotal: 0 },
+    ml: { total: 0, passed: 0, accuracyPct: 0, datePassed: 0, dateTotal: 0, clarifyPassed: 0, clarifyTotal: 0 },
+    hi: { total: 0, passed: 0, accuracyPct: 0, datePassed: 0, dateTotal: 0, clarifyPassed: 0, clarifyTotal: 0 },
+    "code-mixed": { total: 0, passed: 0, accuracyPct: 0, datePassed: 0, dateTotal: 0, clarifyPassed: 0, clarifyTotal: 0 },
   };
 
   let landmarksPassed = 0;
+  let dateExpectedCount = 0;
+  let dateResolvedRightCount = 0;
+  let clarificationExpectedCount = 0;
+  let clarificationCorrectCount = 0;
 
   for (const sample of LANDMARK_DATASET) {
     byLanguage[sample.language].total += 1;
@@ -87,17 +91,43 @@ async function runEvaluations(): Promise<EvalReport> {
     const latency = Date.now() - start;
     landmarkLatencies.push(latency);
 
-    const resolvedDate = result.entry?.date;
-    if (resolvedDate === sample.expectedDate) {
-      landmarksPassed += 1;
-      byLanguage[sample.language].passed += 1;
+    const entryDate = result.entry?.date;
+    const plannedDate = result.plannedEvents?.[0]?.date;
+    const resolvedDate = entryDate || plannedDate;
+    if (sample.expectsClarification || sample.expectedDate === null) {
+      clarificationExpectedCount += 1;
+      byLanguage[sample.language].clarifyTotal += 1;
+      const isCorrectClarification = Boolean(result.needsClarification) && !entryDate && !plannedDate;
+      if (isCorrectClarification) {
+        landmarksPassed += 1;
+        clarificationCorrectCount += 1;
+        byLanguage[sample.language].passed += 1;
+        byLanguage[sample.language].clarifyPassed += 1;
+      } else {
+        landmarkMisses.push({
+          id: sample.id,
+          phrase: sample.phrase,
+          expected: "expects clarification, no date",
+          got: `date=${resolvedDate ?? "none"}, needsClarification=${Boolean(result.needsClarification)}`,
+        });
+      }
     } else {
-      landmarkMisses.push({
-        id: sample.id,
-        phrase: sample.phrase,
-        expected: sample.expectedDate,
-        got: resolvedDate,
-      });
+      dateExpectedCount += 1;
+      byLanguage[sample.language].dateTotal += 1;
+      const noFutureLog = !entryDate || entryDate <= anchorDate;
+      if (resolvedDate === sample.expectedDate && noFutureLog) {
+        landmarksPassed += 1;
+        dateResolvedRightCount += 1;
+        byLanguage[sample.language].passed += 1;
+        byLanguage[sample.language].datePassed += 1;
+      } else {
+        landmarkMisses.push({
+          id: sample.id,
+          phrase: sample.phrase,
+          expected: sample.expectedDate,
+          got: resolvedDate,
+        });
+      }
     }
   }
 
@@ -110,14 +140,15 @@ async function runEvaluations(): Promise<EvalReport> {
   const landmarkP50 = calculatePercentile(landmarkLatencies, 50);
   const landmarkP95 = calculatePercentile(landmarkLatencies, 95);
 
-  console.log(`    Landmark Accuracy: ${landmarkAccuracyPct}% (${landmarksPassed}/${LANDMARK_DATASET.length})`);
+  console.log(`    resolved to the right date: ${dateResolvedRightCount}/${dateExpectedCount}`);
+  console.log(`    correctly asked for clarification: ${clarificationCorrectCount}/${clarificationExpectedCount}`);
   console.log(`    Latency: Median(p50) = ${landmarkP50}ms | p95 = ${landmarkP95}ms`);
   for (const [lang, stat] of Object.entries(byLanguage)) {
-    console.log(`      • ${lang.padEnd(10)}: ${stat.accuracyPct}% (${stat.passed}/${stat.total})`);
+    console.log(`      • ${lang.padEnd(10)}: date ${stat.datePassed}/${stat.dateTotal}, clarification ${stat.clarifyPassed}/${stat.clarifyTotal}`);
   }
   if (landmarkMisses.length > 0) {
     console.log(`    Discrepancies (${landmarkMisses.length}):`);
-    for (const m of landmarkMisses.slice(0, 5)) {
+    for (const m of landmarkMisses) {
       console.log(`      [${m.id}] "${m.phrase}" -> Expected: ${m.expected}, Got: ${m.got}`);
     }
   }
@@ -198,7 +229,8 @@ async function runEvaluations(): Promise<EvalReport> {
   console.log("                    EVALUATION SUMMARY                         ");
   console.log("===============================================================");
   console.log(` Total Benchmark Samples: ${LANDMARK_DATASET.length + GUARDRAIL_DATASET.length}`);
-  console.log(` Landmark Recall Accuracy: ${landmarkAccuracyPct}%`);
+  console.log(` resolved to the right date: ${dateResolvedRightCount}/${dateExpectedCount}`);
+  console.log(` correctly asked for clarification: ${clarificationCorrectCount}/${clarificationExpectedCount}`);
   console.log(` Medical Guardrail F1:     ${f1Score}% (Precision: ${precision}%, Recall: ${recall}%)`);
   console.log("===============================================================\n");
 

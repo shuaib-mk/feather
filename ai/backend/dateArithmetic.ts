@@ -156,19 +156,17 @@ export function resolveLandmarkExpression(
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
 
-  // Sort landmarks by longest match first to prevent prefix collisions (e.g. "Midsummer break" vs "Midsummer")
-  const sortedMilestones = [...MILESTONES_DATA].sort((a, b) => {
-    const maxA = Math.max(a.name.length, ...a.aliases.map((al) => al.length));
-    const maxB = Math.max(b.name.length, ...b.aliases.map((al) => al.length));
-    return maxB - maxA;
-  });
+  // Sort landmarks by longest ACTUAL matched alias first to prevent prefix collisions (e.g. "New Year's Eve" vs "New Year's")
+  const matchedMilestones = MILESTONES_DATA.map((fest) => {
+    const candidates = [fest.name, ...fest.aliases].filter((a) => matchesAlias(lower, a));
+    const maxMatchedLen = candidates.length > 0 ? Math.max(...candidates.map((c) => c.trim().length)) : 0;
+    return { fest, maxMatchedLen };
+  })
+    .filter((m) => m.maxMatchedLen > 0)
+    .sort((a, b) => b.maxMatchedLen - a.maxMatchedLen);
 
-  for (const fest of sortedMilestones) {
-    const matchesLandmark =
-      matchesAlias(lower, fest.name) ||
-      fest.aliases.some((a) => matchesAlias(lower, a));
-
-    if (matchesLandmark) {
+  for (const { fest } of matchedMilestones) {
+    {
       let baseDate: string | null = null;
       const explicitYearMatch = lower.match(/\b(202[5-7])\b/);
 

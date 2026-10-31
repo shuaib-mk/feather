@@ -210,7 +210,7 @@ export function VoiceFlowPage() {
       }
 
       if (res.entry) {
-        setConfirmEntry(res.entry);
+        if (res.entry.date <= todayStr()) setConfirmEntry(res.entry); else setConfirmEntry(null);
       }
 
       if (res.planOverlaps && res.planOverlaps.length > 0) {
@@ -241,7 +241,7 @@ export function VoiceFlowPage() {
   };
 
   const handleSaveConfirmed = (confirmLongPeriod: boolean = false) => {
-    if (!confirmEntry) return;
+    if (!confirmEntry || confirmEntry.date > todayStr()) { if (confirmEntry && confirmEntry.date > todayStr()) setAgentMessage(`Cannot save a log entry for ${confirmEntry.date} because that date is in the future.`); return; }
 
     // One atomic save: the log and its period are written together or not at all.
     const isBleeding = confirmEntry.flow === "light" || confirmEntry.flow === "medium" || confirmEntry.flow === "heavy";
@@ -289,7 +289,7 @@ export function VoiceFlowPage() {
   };
 
   const toggleSymptom = (sym: ValidSymptom) => {
-    if (!confirmEntry) return;
+    if (!confirmEntry || confirmEntry.date > todayStr()) { if (confirmEntry && confirmEntry.date > todayStr()) setAgentMessage(`Cannot save a log entry for ${confirmEntry.date} because that date is in the future.`); return; }
     const current = confirmEntry.symptoms || [];
     const updated = current.includes(sym) ? current.filter((s) => s !== sym) : [...current, sym];
     setConfirmEntry({ ...confirmEntry, symptoms: updated });
@@ -598,7 +598,7 @@ export function VoiceFlowPage() {
               <input
                 type="date"
                 value={confirmEntry.date}
-                onChange={(e) => setConfirmEntry({ ...confirmEntry, date: e.target.value })}
+                max={todayStr()} onChange={(e) => { if (e.target.value && e.target.value > todayStr()) { setAgentMessage(`Cannot select ${e.target.value} because that date is in the future.`); return; } setConfirmEntry({ ...confirmEntry, date: e.target.value }); }}
                 className="w-full liquid-glass-input rounded-xl p-2.5 text-xs font-sans text-stone-900"
               />
               {confirmEntry.dateExplanation ? (

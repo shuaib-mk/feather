@@ -892,6 +892,22 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
 
   const earlyLandmark = resolveLandmarkExpression(text, today);
+  const isLandmarkPlan = /\b(plan|planning)\b/i.test(lower) && !hasLogContent && eventMatches.length === 0 && earlyLandmark.found && !!earlyLandmark.resolvedDate;
+  if (isLandmarkPlan && earlyLandmark.resolvedDate) {
+    if (earlyLandmark.resolvedDate >= today) {
+      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: earlyLandmark.resolvedDate });
+      unplacedEvents.length = 0;
+      activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
+      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+      toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    } else {
+      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today);
+      if (nextLm.found && nextLm.resolvedDate && nextLm.resolvedDate > today) {
+        passedPlanCandidates.push({ name: earlyLandmark.landmarkName || "Event", thisYear: earlyLandmark.resolvedDate, nextYear: nextLm.resolvedDate });
+        unplacedEvents.length = 0;
+      }
+    }
+  }
   // Intent first: no loggable content -> no log slip (bare landmark recall is exempt:
   // it is the app's landmark-recall shorthand for a period date).
   if (intent === "other" || (!hasLogContent && intent !== "plan_event")) {
@@ -932,6 +948,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
     }
   }
+  const logLandmark = resolveLandmarkExpression(logDateText, today);
+  if (logLandmark.found && ((logLandmark.baseDate && logLandmark.baseDate > today) || (logLandmark.resolvedDate && logLandmark.resolvedDate > today))) {
+    const lmName = logLandmark.landmarkName || "Landmark";
+    const futureBase = logLandmark.baseDate || logLandmark.resolvedDate!;
+    const futureYear = futureBase.slice(0, 4);
+    const pastLm = resolveLandmarkExpression(`last ${lmName}`, today);
+    const pastBase = pastLm.found ? (pastLm.baseDate || pastLm.resolvedDate) : null;
+    const pastYear = pastBase ? pastBase.slice(0, 4) : null;
+    const q = pastBase && pastYear && pastBase <= today
+      ? `${lmName} ${futureYear} is on ${futureBase}, which hasn't happened yet. Did you mean ${lmName} ${pastYear} (${pastBase})?`
+      : `${lmName} ${futureYear} is on ${futureBase}, which hasn't happened yet. Which past date did you mean?`;
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+  }
   const resolved = resolveDateExpression(logDateText, today);
   if (resolved.needsClarification) {
     return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
@@ -948,18 +977,18 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     dateExplanation = `${matchedEvent.title} = ${matchedEvent.date}`;
     isApproximate = true;
   }
-  if (!entryDate) {
-    const landmarkRes = resolveLandmarkExpression(text, today);
-    if (landmarkRes.found && landmarkRes.resolvedDate) {
-      entryDate = landmarkRes.resolvedDate;
-      landmarkName = landmarkRes.landmarkName || null;
-      isApproximate = true;
-      dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
-    }
+  if (!entryDate && earlyLandmark.found && earlyLandmark.resolvedDate && earlyLandmark.resolvedDate <= today) {
+    entryDate = earlyLandmark.resolvedDate;
+    landmarkName = earlyLandmark.landmarkName || null;
+    isApproximate = true;
+    dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
   }
   if (!entryDate) {
     const clearlyToday = /\b(today|now|this morning|tonight|right now)\b/.test(lower);
-    const pastMarkers = /\b(started|began|came|ended|stopped|was|had|yesterday|ago)\b/.test(lower);
+    const pastMarkers =
+      /\b(started|began|came|ended|stopped|was|had|yesterday|ago|tha|the|thi|hua|hui|undaayirunnu|kazhinju|kazhinjittu|munpe|pehle|during|around|before|after|holi|equinox|solstice|midsummer|getaway|marathon)\b/i.test(lower) ||
+      /\b(ke\s+(?:day|time|din|baad|pehle)|time\s+il|winter\s+(?:holiday\s+)?break)\b/i.test(lower) ||
+      /(थी|था|थे|हुआ|हुई|के दिन|के समय|से .* पहले|के बाद|होली|ആയിരുന്നു|തുടങ്ങി|സമയത്ത്|ദിവസം|മുൻപ്|ശേഷം|ഹോളി|വേനൽ\s+അവധി)/.test(text);
     if (clearlyToday) entryDate = today;
     else if (hasLogContent && !pastMarkers) entryDate = today; // present-tense symptom/flow log
     else {
@@ -967,7 +996,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
-  if (entryDate > today && !/next year|planning|upcoming/.test(lower)) {
+  if (entryDate > today) {
     const q = `Did you mean last year's date? That date is in the future.`;
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }

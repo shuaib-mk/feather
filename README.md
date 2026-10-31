@@ -83,11 +83,11 @@ flowchart TD
 
 ---
 
-## Evaluation Internal regression suite & Honesty Split
+## Evaluation Internal Regression Suite & Honesty Split
 
-Feather includes a comprehensive evaluation harness covering cultural landmarks, relative date arithmetic, edge cases, blind holdouts, and medical safety guardrails. In strict adherence to evaluation integrity, results are clearly split between what was empirically measured and what was not measured due to local credential availability:
+Feather includes a comprehensive evaluation harness (`author's own internal regression set, not an independent benchmark`) covering cultural landmarks, relative date arithmetic, edge cases, blind holdouts, and medical safety guardrails. Results below are from running `npm run eval` and `npx tsx ai/eval/run-holdout.ts` locally; live remote model evaluations are marked **Not measured** until run with live credentials:
 
-### Part A: Offline Deterministic Engine & Guardrail (Empirically Measured)
+### Part A: Offline Deterministic Engine & Guardrail (Author's Own Internal Regression Set, Not an Independent Benchmark)
 
 ```sh
 # Run offline internal regression suite (170 samples)
@@ -97,21 +97,27 @@ npm run eval
 npx tsx ai/eval/run-holdout.ts
 ```
 
-| Internal regression suite Suite | Total Samples | Accuracy / Recall | Precision / Specificity | False Positives | False Negatives | Latency (p50 / p95) | Status |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Landmark Recall (Multilingual)** | 65 | **100.0%** (65/65) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
-| • English (`en`) | 25 | **100.0%** (25/25) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
-| • Malayalam (`ml`) | 15 | **100.0%** (15/15) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
-| • Hindi (`hi`) | 13 | **100.0%** (13/13) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
-| • Code-Mixed | 12 | **100.0%** (12/12) | N/A | 0 | 0 | 0 ms / 1 ms | **MEASURED** |
-| **Medical Safety Guardrail** | 105 | **100.0%** Refusal (53/53) | **100.0%** Precision (53/53) | 0 | 0 | 0 ms / 0 ms | **MEASURED** |
-| • Medical Inquiries (Blocked) | 53 | **100.0%** Refusal | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
-| • Valid Cycle Logs (Allowed) | 52 | **100.0%** Specificity | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
-| **Blind Holdout (Post-Fix)** | 19 | **100.0%** (19/19) | **100.0%** | 0 FP | 0 FN | 0 ms / 0 ms | **MEASURED** |
+- **Landmark Recall Benchmark (65 samples across `en`, `ml`, `hi`, `code-mixed`; anchor date `2026-10-28`)**:
+  - **resolved to the right date: 32/32** (verified past/present landmarks and explicit plan phrases in `ai/backend/landmarks.json`)
+  - **correctly asked for clarification: 33/33** (14 unverified landmarks not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask whether the user meant the past year's occurrence instead of logging a future date)
+  - • English (`en`, 25 samples): date `12/12`, clarification `13/13`
+  - • Malayalam (`ml`, 15 samples): date `8/8`, clarification `7/7`
+  - • Hindi (`hi`, 13 samples): date `6/6`, clarification `7/7`
+  - • Code-Mixed (`code-mixed`, 12 samples): date `6/6`, clarification `6/6`
+  - Latency: Median (`p50`) = `1 ms` | `p95` = `2 ms`
+- **Medical Safety Guardrail Benchmark (105 samples, author's own internal regression set, not an independent benchmark)**:
+  - **Refusal Recall (Sensitivity)**: `100%` (`53/53` medical queries blocked)
+  - **Precision**: `100%` (`53/53`)
+  - **Specificity (Valid Logging)**: `100%` (`52/52` valid logs allowed)
+  - **False Positives / False Negatives**: `0 FP` / `0 FN`
+  - Latency: Median (`p50`) = `0 ms` | `p95` = `0 ms`
+- **Blind Holdout Evaluation (`npx tsx ai/eval/run-holdout.ts`, 19 samples, author's own internal regression set, not an independent benchmark)**:
+  - First-run (before general category rules): `11/19` (`57.9%`)
+  - Post-fix: `19/19` (`100.0%`, `0 FP`, `0 FN`)
 
 ### Part B: Live Remote Models (Credential-Dependent)
 
-| Provider / Model | Internal regression suite Scope | Status | Notes |
+| Provider / Model | Internal Regression Suite Scope | Status | Notes |
 | :--- | :--- | :---: | :--- |
 | **Meta Model API (`muse-spark-1.3`)** | 30 landmark phrases | **Not measured** | `META_API_KEY` not configured in local evaluation runner |
 | **Open-Weight Muse Spark (Baseten `meta-models/muse-spark-open-1026`)** | 30 landmark phrases | **Open-weight not measured** | `BASETEN_API_KEY` not configured in local evaluation runner |

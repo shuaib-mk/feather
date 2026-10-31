@@ -177,5 +177,45 @@ let passed = 0;
   passed++;
 }
 
+// 4. Future landmark logs must NOT create a log dated in the future; must return clarification.
+// Plan phrases like "plan around Diwali" must still resolve to 2026-11-08.
+{
+  const r1 = parseLocally("period started two days before Diwali", "2026-10-28", {});
+  assert.strictEqual(r1.entry, null, "Must not create a future log entry for 'period started two days before Diwali'");
+  assert.strictEqual(r1.needsClarification, true, "Must ask for clarification");
+  assert.strictEqual(
+    r1.message,
+    "Diwali 2026 is on 2026-11-08, which hasn't happened yet. Did you mean Diwali 2025 (2025-10-20)?",
+    "Must return exact Diwali 2026 vs 2025 clarification",
+  );
+
+  const r2 = parseLocally("Christmas Day flow", "2026-10-28", {});
+  assert.strictEqual(r2.entry, null, "Must not create a future log entry for 'Christmas Day flow'");
+  assert.strictEqual(r2.needsClarification, true, "Must ask for clarification");
+  assert.strictEqual(
+    r2.message,
+    "Christmas 2026 is on 2026-12-25, which hasn't happened yet. Did you mean Christmas 2025 (2025-12-25)?",
+    "Must return exact Christmas 2026 vs 2025 clarification",
+  );
+
+  const r3 = parseLocally("Diwali ke 2 days before flow start hua", "2026-10-28", {});
+  assert.strictEqual(r3.entry, null, "Must not create a future log entry for 'Diwali ke 2 days before flow start hua'");
+  assert.strictEqual(r3.needsClarification, true, "Must ask for clarification");
+  assert.strictEqual(
+    r3.message,
+    "Diwali 2026 is on 2026-11-08, which hasn't happened yet. Did you mean Diwali 2025 (2025-10-20)?",
+    "Must return exact Diwali 2026 vs 2025 clarification",
+  );
+
+  const planDiwali = parseLocally("plan around Diwali", "2026-10-28", {});
+  assert.strictEqual(planDiwali.entry, null, "Plan phrase must not create a log entry");
+  assert.strictEqual(planDiwali.needsClarification, false, "Plan phrase for upcoming Diwali must not need clarification");
+  assert.strictEqual(planDiwali.plannedEvents?.[0]?.title, "Diwali", "Planned event title must be Diwali");
+  assert.strictEqual(planDiwali.plannedEvents?.[0]?.date, "2026-11-08", "Planned event date must resolve to 2026-11-08");
+
+  console.log("[PASS] parseLocally: future landmark logs return clarification (never future log), 'plan around Diwali' resolves to 2026-11-08");
+  passed++;
+}
+
 console.log(`\nQA Regression Suite: All ${passed} test groups passed!`);
 

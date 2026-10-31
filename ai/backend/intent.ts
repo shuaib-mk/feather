@@ -1,4 +1,4 @@
-﻿import { checkMedicalAdviceGuardrail } from "./guardrail";
+import { checkMedicalAdviceGuardrail } from "./guardrail";
 
 export type Intent =
   | "period_start"
@@ -9,7 +9,7 @@ export type Intent =
   | "medical_question"
   | "other";
 
-const EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel"];
+const EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
 const LOG_WORDS = ["flow", "cramps", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "दर्द", "थकान", "सिरदर्द", "ತಲೆನೋವು", "தலைவலி", "തലവേദന"];
 
 /** Deterministic intent classifier. Intent first: no loggable content -> no log slip. */

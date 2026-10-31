@@ -575,7 +575,18 @@ var landmarks_default = [
 
 // ai/backend/landmarks.ts
 var LANDMARKS = landmarks_default;
-var MILESTONES_DATA = LANDMARKS.map((l) => ({ name: l.names.en, aliases: Array.from(/* @__PURE__ */ new Set([...Object.values(l.names), l.names.en.toLowerCase(), ...l.id === "international-womens-day" ? ["Women's Day", "womens day", "women day"] : [], ...l.id === "new-years-day" ? ["New Year's", "new year", "New Year"] : []])), kind: l.pack, dates: l.dates, pack: l.pack, source: l.source }));
+var EXTRA_ALIASES = {
+  "new-years-day": ["New Year's", "new year", "New Year", "new years", "\u0D28\u0D4D\u0D2F\u0D42 \u0D07\u0D2F\u0D7C", "\u0928\u092F\u093E \u0938\u093E\u0932", "\u0928\u094D\u092F\u0942 \u0908\u092F\u0930"],
+  "valentines-day": ["valentine", "valentines", "\u0D35\u0D3E\u0D32\u0D28\u0D4D\u0D31\u0D48\u0D7B\u0D38\u0D4D", "\u0935\u0948\u0932\u0947\u0902\u091F\u093E\u0907\u0928"],
+  "international-womens-day": ["Women's Day", "womens day", "women day", "\u0D35\u0D28\u0D3F\u0D24\u0D3E\u0D26\u0D3F\u0D28\u0D02"],
+  "earth-day": ["\u0905\u0930\u094D\u0925 \u0921\u0947"],
+  "christmas": ["xmas", "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D2E\u0D38\u0D3F\u0D28\u0D4D", "\u0D15\u0D4D\u0D30\u0D3F\u0D38\u0D4D\u0D24\u0D41\u0D2E\u0D38\u0D4D"],
+  "new-years-eve": ["new years eve", "nye", "\u0D2A\u0D41\u0D24\u0D41\u0D35\u0D24\u0D4D\u0D38\u0D30 \u0D30\u0D3E\u0D35\u0D4D"],
+  "diwali": ["deepavali", "\u0D26\u0D40\u0D2A\u0D3E\u0D35\u0D32\u0D3F\u0D15\u0D4D\u0D15\u0D4D", "\u0926\u093F\u0935\u093E\u0932\u0940"],
+  "onam": ["thiruvonam", "\u0D13\u0D23\u0D24\u0D4D\u0D24\u0D3F\u0D28\u0D4D", "\u0D24\u0D3F\u0D30\u0D41\u0D35\u0D4B\u0D23\u0D02"],
+  "vishu": ["\u0D35\u0D3F\u0D37\u0D41\u0D35\u0D3F\u0D28\u0D4D"]
+};
+var MILESTONES_DATA = LANDMARKS.map((l) => ({ name: l.names.en, aliases: Array.from(/* @__PURE__ */ new Set([...Object.values(l.names), l.names.en.toLowerCase(), ...EXTRA_ALIASES[l.id] || []])), kind: l.pack, dates: l.dates, pack: l.pack, source: l.source }));
 
 // ai/backend/dateArithmetic.ts
 var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -669,14 +680,13 @@ function parseRelativeExpression(text) {
 function resolveLandmarkExpression(text, today) {
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
-  const sortedMilestones = [...MILESTONES_DATA].sort((a, b) => {
-    const maxA = Math.max(a.name.length, ...a.aliases.map((al) => al.length));
-    const maxB = Math.max(b.name.length, ...b.aliases.map((al) => al.length));
-    return maxB - maxA;
-  });
-  for (const fest of sortedMilestones) {
-    const matchesLandmark = matchesAlias(lower, fest.name) || fest.aliases.some((a) => matchesAlias(lower, a));
-    if (matchesLandmark) {
+  const matchedMilestones = MILESTONES_DATA.map((fest) => {
+    const candidates = [fest.name, ...fest.aliases].filter((a) => matchesAlias(lower, a));
+    const maxMatchedLen = candidates.length > 0 ? Math.max(...candidates.map((c) => c.trim().length)) : 0;
+    return { fest, maxMatchedLen };
+  }).filter((m) => m.maxMatchedLen > 0).sort((a, b) => b.maxMatchedLen - a.maxMatchedLen);
+  for (const { fest } of matchedMilestones) {
+    {
       let baseDate = null;
       const explicitYearMatch = lower.match(/\b(202[5-7])\b/);
       if (explicitYearMatch && fest.dates[explicitYearMatch[1]]) {
@@ -1000,7 +1010,7 @@ function resolveDateExpression(text, today) {
 }
 
 // ai/backend/intent.ts
-var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel"];
+var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
 var LOG_WORDS = ["flow", "cramps", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
 function classifyIntent(text, hasPendingEntry = false) {
   const lower = ` ${text.toLowerCase().trim()} `;
@@ -1933,6 +1943,22 @@ function parseLocally(text, today, context) {
   const matchedEvent = findMatchedEvent(text, context.matchedEvents);
   const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
   const earlyLandmark = resolveLandmarkExpression(text, today);
+  const isLandmarkPlan = /\b(plan|planning)\b/i.test(lower) && !hasLogContent && eventMatches.length === 0 && earlyLandmark.found && !!earlyLandmark.resolvedDate;
+  if (isLandmarkPlan && earlyLandmark.resolvedDate) {
+    if (earlyLandmark.resolvedDate >= today) {
+      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: earlyLandmark.resolvedDate });
+      unplacedEvents.length = 0;
+      activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
+      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+      toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    } else {
+      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today);
+      if (nextLm.found && nextLm.resolvedDate && nextLm.resolvedDate > today) {
+        passedPlanCandidates.push({ name: earlyLandmark.landmarkName || "Event", thisYear: earlyLandmark.resolvedDate, nextYear: nextLm.resolvedDate });
+        unplacedEvents.length = 0;
+      }
+    }
+  }
   if (intent === "other" || !hasLogContent && intent !== "plan_event") {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
       if (unplacedEvents.length > 0) {
@@ -1961,6 +1987,17 @@ function parseLocally(text, today, context) {
       logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
     }
   }
+  const logLandmark = resolveLandmarkExpression(logDateText, today);
+  if (logLandmark.found && (logLandmark.baseDate && logLandmark.baseDate > today || logLandmark.resolvedDate && logLandmark.resolvedDate > today)) {
+    const lmName = logLandmark.landmarkName || "Landmark";
+    const futureBase = logLandmark.baseDate || logLandmark.resolvedDate;
+    const futureYear = futureBase.slice(0, 4);
+    const pastLm = resolveLandmarkExpression(`last ${lmName}`, today);
+    const pastBase = pastLm.found ? pastLm.baseDate || pastLm.resolvedDate : null;
+    const pastYear = pastBase ? pastBase.slice(0, 4) : null;
+    const q = pastBase && pastYear && pastBase <= today ? `${lmName} ${futureYear} is on ${futureBase}, which hasn't happened yet. Did you mean ${lmName} ${pastYear} (${pastBase})?` : `${lmName} ${futureYear} is on ${futureBase}, which hasn't happened yet. Which past date did you mean?`;
+    return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+  }
   const resolved = resolveDateExpression(logDateText, today);
   if (resolved.needsClarification) {
     return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
@@ -1977,18 +2014,15 @@ function parseLocally(text, today, context) {
     dateExplanation = `${matchedEvent.title} = ${matchedEvent.date}`;
     isApproximate = true;
   }
-  if (!entryDate) {
-    const landmarkRes = resolveLandmarkExpression(text, today);
-    if (landmarkRes.found && landmarkRes.resolvedDate) {
-      entryDate = landmarkRes.resolvedDate;
-      landmarkName = landmarkRes.landmarkName || null;
-      isApproximate = true;
-      dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
-    }
+  if (!entryDate && earlyLandmark.found && earlyLandmark.resolvedDate && earlyLandmark.resolvedDate <= today) {
+    entryDate = earlyLandmark.resolvedDate;
+    landmarkName = earlyLandmark.landmarkName || null;
+    isApproximate = true;
+    dateExplanation = landmarkName ? `${landmarkName} = ${entryDate}` : dateExplanation;
   }
   if (!entryDate) {
     const clearlyToday = /\b(today|now|this morning|tonight|right now)\b/.test(lower);
-    const pastMarkers = /\b(started|began|came|ended|stopped|was|had|yesterday|ago)\b/.test(lower);
+    const pastMarkers = /\b(started|began|came|ended|stopped|was|had|yesterday|ago|tha|the|thi|hua|hui|undaayirunnu|kazhinju|kazhinjittu|munpe|pehle|during|around|before|after|holi|equinox|solstice|midsummer|getaway|marathon)\b/i.test(lower) || /\b(ke\s+(?:day|time|din|baad|pehle)|time\s+il|winter\s+(?:holiday\s+)?break)\b/i.test(lower) || /(थी|था|थे|हुआ|हुई|के दिन|के समय|से .* पहले|के बाद|होली|ആയിരുന്നു|തുടങ്ങി|സമയത്ത്|ദിവസം|മുൻപ്|ശേഷം|ഹോളി|വേനൽ\s+അവധി)/.test(text);
     if (clearlyToday) entryDate = today;
     else if (hasLogContent && !pastMarkers) entryDate = today;
     else {
@@ -1996,7 +2030,7 @@ function parseLocally(text, today, context) {
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
-  if (entryDate > today && !/next year|planning|upcoming/.test(lower)) {
+  if (entryDate > today) {
     const q = `Did you mean last year's date? That date is in the future.`;
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }

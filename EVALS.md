@@ -1,41 +1,49 @@
-# Feather AI Evaluation Internal regression suite & Safety Audits
+# Feather AI Evaluation Internal Regression Suite & Safety Audits
 
-This document details the empirical evaluation of Feather's core AI systems for the Meta Global AI Developer Hackathon. In strict adherence to evaluation integrity, all metrics below are categorized by whether they were empirically measured or not measured due to credential availability.
+This document details the evaluation of Feather's core AI systems for the Meta Global AI Developer Hackathon (`author's own internal regression set, not an independent benchmark`). In strict adherence to evaluation integrity, all metrics below reflect real output from running `npm run eval` and `npx tsx ai/eval/run-holdout.ts`, or are explicitly marked **Not measured** where live API keys were not configured.
 
 ---
 
-## 1. Empirical Results Overview
+## 1. Evaluation Results Overview
 
-### Part A: Offline Deterministic Engine & Safety Guardrail (Empirically Measured)
+### Part A: Offline Deterministic Engine & Safety Guardrail (Author's Own Internal Regression Set, Not an Independent Benchmark)
 
-These tests evaluate the on-device deterministic calendar arithmetic engine (`ai/backend/dateArithmetic.ts`) and the two-layer medical safety guardrail (`ai/backend/guardrail.ts`) running locally with zero network dependencies.
+These tests evaluate the on-device deterministic calendar arithmetic engine (`ai/backend/dateArithmetic.ts`) and the two-layer medical safety guardrail (`ai/backend/guardrail.ts`) running locally with zero network dependencies (`npm run eval`).
 
-| Internal regression suite Suite | Total Samples | Precision | Recall (Sensitivity) | F1 Score | Accuracy | Median Latency (p50) | p95 Latency | Status |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Landmark Recall (Multilingual)** | 65 | — | — | — | **100.0%** (65/65) | **< 1 ms** | **1.0 ms** | **MEASURED** |
-| **Medical Safety Guardrail** | 105 | **100.0%** | **100.0%** | **100.0%** | **100.0%** (105/105) | **< 1 ms** | **0.8 ms** | **MEASURED** |
-| **Blind Holdout Evaluation (Post-Fix)** | 19 | **100.0%** | **100.0%** | **100.0%** | **100.0%** (19/19) | **< 1 ms** | **0.8 ms** | **MEASURED** |
+- **Landmark Recall Suite (65 samples across `en`, `ml`, `hi`, `code-mixed`)**:
+  - **resolved to the right date: 32/32** (31 past/present verified landmark logs + 1 explicit plan phrase referencing `ai/backend/landmarks.json`)
+  - **correctly asked for clarification: 33/33** (14 unverified landmarks/seasons not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask whether the user meant the previous year's occurrence rather than creating a future log)
+  - **Latency**: Median (`p50`) = `1 ms` | `p95` = `2 ms`
+- **Medical Safety Guardrail Suite (105 samples)**:
+  - **Refusal Recall (Sensitivity)**: `100%` (`53/53` medical queries blocked)
+  - **Precision**: `100%` (`53/53`)
+  - **Specificity (Valid Logging)**: `100%` (`52/52` valid logs allowed)
+  - **F1 Score**: `100%` (author's own internal regression set, not an independent benchmark)
+  - **Latency**: Median (`p50`) = `0 ms` | `p95` = `0 ms`
+- **Blind Holdout Evaluation (19 samples, `npx tsx ai/eval/run-holdout.ts`)**:
+  - **First-run (before general category rules)**: `11/19` (`57.9%` — `9/9` must-allow passed, `2/10` must-refuse passed)
+  - **Post-fix (after adding 4 general category rules)**: `19/19` (`100.0%` — `9/9` must-allow passed, `10/10` must-refuse passed; author's own internal regression set, not an independent benchmark)
 
 ### Part B: Live Remote Models (Credential-Dependent)
 
-| Provider / Model | Internal regression suite Scope | Status | Notes |
+| Provider / Model | Internal Regression Suite Scope | Status | Notes |
 | :--- | :--- | :---: | :--- |
 | **Meta Model API (`muse-spark-1.3`)** | 30 landmark phrases | **Not measured** | `META_API_KEY` not configured in local evaluation environment |
 | **Open-Weight Muse Spark (Baseten `meta-models/muse-spark-open-1026`)** | 30 landmark phrases | **Open-weight not measured** | `BASETEN_API_KEY` not configured in local evaluation environment |
 
 ---
 
-## 2. Landmark Recall Multilingual Accuracy (Offline Engine)
+## 2. Landmark Recall Multilingual Breakdown (Offline Engine)
 
-Evaluated against anchor date **`2026-10-28`** across four linguistic groups:
+Evaluated against anchor date **`2026-10-28`** across four linguistic groups (`author's own internal regression set, not an independent benchmark`). Phrases referencing verified past/present landmarks or explicit plan phrases in `ai/backend/landmarks.json` must resolve to the exact expected date (`32/32`). Phrases referencing unverified landmarks or log phrases whose active-year landmark is still in the future as of `2026-10-28` must return `needsClarification: true` with no log entry (`33/33`).
 
-| Linguistic Group | Samples | Correct | Accuracy | Primary Test Scenarios |
+| Linguistic Group | Total Samples | Resolved to the Right Date | Correctly Asked for Clarification | Primary Test Scenarios |
 | :--- | :---: | :---: | :---: | :--- |
-| **English (`en`)** | 25 | 25 | **100.0%** | Day offsets ("2 days before New Year's"), weekday offsets ("Monday before Women's Day"), "last Diwali", "next year" |
-| **Malayalam (`ml`)** | 15 | 15 | **100.0%** | Onam ("ഓണം സമയത്ത്"), Vishu ("വിഷുവിന് മുൻപ്"), Christmas, Diwali, relative days ("രണ്ട് ദിവസം മുൻപ്") |
-| **Hindi (`hi`)** | 13 | 13 | **100.0%** | Diwali ("दीवाली के दिन"), Holi ("होली के दो दिन पहले"), New Year, Women's Day ("महिला दिवस"), Earth Day |
-| **Code-Mixed (`code-mixed`)** | 12 | 12 | **100.0%** | Manglish ("Onam kazhinju 2 days after"), Hinglish ("Diwali ke 2 days before"), "nu munpe", "ke baad" |
-| **Total Measured** | **65** | **65** | **100.0%** | Zero date hallucination; 100% deterministic calendar arithmetic |
+| **English (`en`)** | 25 | **12 / 12** | **13 / 13** | Day offsets ("Two days before New Year's"), weekday offsets ("The Monday before Women's Day"), "last Diwali"; unverified or future-date logs ask for clarification |
+| **Malayalam (`ml`)** | 15 | **8 / 8** | **7 / 7** | Onam ("ഓണം സമയത്ത്", "തിരുവോണം ദിവസം"), Vishu ("വിഷുവിന് രണ്ട് ദിവസം മുൻപ്"), "കഴിഞ്ഞ ദീപാവലിക്ക്"; unverified or future-date logs ask for clarification |
+| **Hindi (`hi`)** | 13 | **6 / 6** | **7 / 7** | New Year ("नए साल के दिन", "न्यू ईयर से दो दिन पहले"), "पिछली दीवाली के समय", Women's Day ("महिला दिवस"), Earth Day ("अर्थ डे के दिन"); unverified or future-date logs ask for clarification |
+| **Code-Mixed (`code-mixed`)** | 12 | **6 / 6** | **6 / 6** | Manglish ("Onam kazhinju 2 days after"), "New Year nu 2 days before", plan phrase ("Christmas time trip plan und"); unverified or future-date logs ask for clarification |
+| **Total** | **65** | **32 / 32** | **33 / 33** | Verified past/plan dates resolved deterministically; unverified or future log dates never guessed |
 
 ---
 
@@ -46,7 +54,7 @@ The guardrail enforces a strict non-negotiable refusal message whenever a user s
 
 ### Confusion Matrix (105 Labelled Samples)
 
-| Actual \\ Predicted | Predicted Refusal (Medical Query) | Predicted Allowed (Logging / Planning) |
+| Actual \ Predicted | Predicted Refusal (Medical Query) | Predicted Allowed (Logging / Planning) |
 | :--- | :---: | :---: |
 | **Actual Medical Query** | **53 (True Positives)** | **0 (False Negatives)** |
 | **Actual Valid Log / Plan** | **0 (False Positives)** | **52 (True Negatives)** |
@@ -58,9 +66,9 @@ The guardrail enforces a strict non-negotiable refusal message whenever a user s
 
 ---
 
-## 4. Blind Holdout Internal regression suite & Iteration Log (`ai/eval/holdout.dataset.ts`)
+## 4. Blind Holdout Internal Regression Suite & Iteration Log (`ai/eval/holdout.dataset.ts`)
 
-A blind test suite of 19 adversarial prompts was executed to evaluate generalization:
+A blind test suite of 19 adversarial prompts was executed to evaluate generalization (`author's own internal regression set, not an independent benchmark`):
 
 ### First-Run Results (Before Any Guardrail Rule Adjustments)
 - **Total Samples:** 19
@@ -102,16 +110,16 @@ Feather supports three decoupled execution paths:
 | **Model ID** | `muse-spark-1.3` | `meta-models/muse-spark-open-1026` | `offline-rule-engine` |
 | **Hosting Mode** | Cloud API (`https://api.meta.ai/v1`) | Self-hosted Bridge / Dedicated GPU | 100% In-Browser / Serverless Memory |
 | **API Key Stored** | Server-side only (`META_API_KEY`) | Server-side only (`BASETEN_API_KEY`) | None required (Zero Config) |
-| **Measurement Status** | **Not measured** *(local key not set)* | **Open-weight not measured** *(key not set)* | **100% Empirically Measured** |
-| **Landmark Accuracy** | *Not measured* | *Not measured* | **100.0% (65/65)** |
+| **Evaluation Status** | **Not measured** *(local key not set)* | **Open-weight not measured** *(key not set)* | **Evaluated on internal regression set** |
+| **Landmark Recall (65 samples)** | *Not measured* | *Not measured* | **resolved to the right date: 32/32; correctly asked for clarification: 33/33** |
 | **Medical Refusal Recall** | *Not measured* | *Not measured* | **100.0% (53/53)** |
-| **Median Latency (p50)** | *Not measured* | *Not measured* | **< 1 ms** |
-| **P95 Latency** | *Not measured* | *Not measured* | **1.0 ms** |
+| **Median Latency (p50)** | *Not measured* | *Not measured* | **1 ms** |
+| **P95 Latency** | *Not measured* | *Not measured* | **2 ms** |
 | **Privacy Footprint** | Ephemeral in-memory | Self-hosted enclave | **Zero data leaves client** |
 
 ---
 
-## 6. How to Re-Run the Eval Internal regression suite
+## 6. How to Re-Run the Eval Internal Regression Suite
 
 ```bash
 # Run the 170-sample offline evaluation harness:

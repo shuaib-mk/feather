@@ -52,7 +52,7 @@ All code in this repository was engineered specifically for the hackathon event:
 - Powered by **Meta Muse Spark** (`muse-spark-1.3`) and swappable open-weight **Muse Spark Open 1026** on Baseten.
 - Structured tool calls:
   - `log_entry`: Extracts flow, 14 standard symptoms, mood, energy, and notes.
-  - `milestone_lookup`: Database of 2026–2027 universal milestones (New Year's Day, Valentine's Day, International Women's Day, Spring Equinox, Earth Day, Summer Solstice, Global Marathon Season, Autumn Equinox, Winter Holidays, New Year's Eve).
+  - `milestone_lookup`: Database of 9 verified 2025–2027 landmarks in `ai/backend/landmarks.json` (New Year's Day, Valentine's Day, International Women's Day, Earth Day, Christmas, New Year's Eve, Diwali, Onam, Vishu); unverified landmarks ask for clarification instead of guessing.
   - `update_entry`: Conversational multi-turn slip corrections (*"no, make it the 3rd"*, *"change flow to light"*).
   - `check_overlap`: Evaluates event dates against the user's cycle pattern.
 
@@ -95,19 +95,21 @@ All code in this repository was engineered specifically for the hackathon event:
 
 ---
 
-## 7. Verification & Internal regression suite Test Suite
+## 7. Verification & Internal Regression Suite Test Suite
 
 ### Unit Tests (`npm test`)
 - **Guardrail Unit Tests (`ai/test/guardrail.test.ts`)**: **57 / 57 passed**
 - **Date Resolution & Landmark Tests (`ai/test/date_resolution.test.ts`)**: **22 / 22 passed**
-- **Total Unit Tests**: **85 passed, 0 failed**
+- **Batches 1–9, Holdout, QA & Smoke Suites**: **All 18 test suites passed, 0 failed**
 
 ### Evaluation Harness (`npm run eval`)
-- **Total Labelled Samples**: **170 samples**
-- **Landmark Recall Accuracy**: **100% (65/65, author's own internal regression set, not an independent benchmark)** across English, Malayalam, Hindi, and Code-Mixed
+- **Total Labelled Samples**: **170 samples** (`author's own internal regression set, not an independent benchmark`)
+- **Landmark Recall Benchmark (65 samples across English, Malayalam, Hindi, and Code-Mixed)**:
+  - **resolved to the right date: 32/32** (verified past/present landmarks and explicit plan phrases in `ai/backend/landmarks.json`)
+  - **correctly asked for clarification: 33/33** (14 unverified landmarks not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask for clarification with no date)
 - **Medical Guardrail F1**: **100%** (53/53 medical queries blocked, 52/52 valid logs permitted; author's own internal regression set, not an independent benchmark)
 - **False Positives / False Negatives**: **0 FP / 0 FN**
-- **Profiling Latency**: Median (p50) < 1ms | p95 = 1ms
+- **Profiling Latency**: Median (p50) = 1ms | p95 = 2ms
 
 ### Production Build (`npm run build`)
 - Serverless functions bundled with esbuild into `/api/`.
