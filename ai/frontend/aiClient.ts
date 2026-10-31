@@ -141,11 +141,18 @@ export async function transcribeAudioBlob(
   return { text: "", error: "Couldn't hear that — try again or type it" };
 }
 
+export const MAX_PROMPT_CHARS = 1000;
+export const OVER_LIMIT_MESSAGE = "Please keep it under 1,000 characters — try splitting it into two entries";
+
 export async function sendAgentMessage(
   message: string,
   context: any = {},
   conversationHistory: any[] = [],
 ): Promise<ClientAgentResult> {
+  // C3: over-limit input is flagged visibly and never sent as-is.
+  if (message.length > MAX_PROMPT_CHARS) {
+    return { message: OVER_LIMIT_MESSAGE, needsClarification: true, clarificationQuestion: OVER_LIMIT_MESSAGE, activityTrail: [{ step: "Input limit", detail: OVER_LIMIT_MESSAGE, status: "clarify" }], toolCalls: [], mode: "offline", modeReason: "Offline parser — Meta model not used (input over 1,000 characters)", isOfflineFallback: true } as ClientAgentResult;
+  }
   const provider =
     context.provider ||
     (typeof window !== "undefined" && window.localStorage.getItem("feather_use_baseten") === "true"
@@ -162,7 +169,7 @@ export async function sendAgentMessage(
         conversationHistory,
         provider,
       }),
-    });
+    }, 10000, 0);
 
     if (res.ok) {
       const data: AgentResult = await res.json();

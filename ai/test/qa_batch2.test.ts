@@ -3,6 +3,7 @@ import { saveCycleData, loadCycleData, saveLogEntry, deletePeriodEntry, deleteDa
 import { buildMonthDayStates } from "../../client/src/lib/calendarView";
 import { buildDemoData } from "../../client/src/lib/demoMode";
 import { parseLocally } from "../backend/agent";
+import { sendAgentMessage, MAX_PROMPT_CHARS } from "../frontend/aiClient";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, detail = "") { if (cond) { console.log(`[PASS] ${name}`); passed++; } else { console.error(`[FAIL] ${name} ${detail}`); failed++; } }
@@ -89,6 +90,27 @@ try {
   check("B2 events dated 2026-11-20", evs.every((e: any) => e.date === "2026-11-20"), JSON.stringify(evs));
   check("B2 unplaced fact named, not dropped", /couldn't place/i.test(r.message) && r.message.includes("2026-10-30"), r.message);
 } catch (e: any) { check("B2", false, e.message); }
+
+
+// C1: "my period is late" -> clarifying question, no entry.
+try {
+  const r = parseLocally("my period is late", "2026-10-31", {});
+  check("C1 late period clarifies, no entry", !r.entry && r.needsClarification === true && /can't tell if your period is late/i.test(r.message) && /period started today/i.test(r.message), r.message);
+} catch (e: any) { check("C1", false, e.message); }
+
+// C2: gibberish -> visible message, nothing to save.
+try {
+  const r = parseLocally("asdfgh qwerty banana", "2026-10-31", {});
+  check("C2 gibberish gets a visible message, no entry", !r.entry && /didn't catch anything I can log/i.test(r.message), r.message);
+} catch (e: any) { check("C2", false, e.message); }
+
+// C3: over-1,000-char input is flagged and never sent to the API.
+try {
+  let fetchCalls = 0;
+  (globalThis as any).fetch = async () => { fetchCalls++; return { ok: true, json: async () => ({}) }; };
+  const r = await sendAgentMessage("x".repeat(MAX_PROMPT_CHARS + 1), { currentDate: "2026-10-31" });
+  check("C3 over-limit flagged, API not called", fetchCalls === 0 && /1,000 characters/i.test(r.message), `fetchCalls=${fetchCalls} msg=${r.message}`);
+} catch (e: any) { check("C3", false, e.message); }
 
 console.log(`\nQABatch2 Results: ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);

@@ -51,6 +51,7 @@ export function VoiceFlowPage() {
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>("auto");
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingSource, setProcessingSource] = useState<"voice" | "text">("voice");
   const [transcript, setTranscript] = useState<string>("");
   const [manualText, setManualText] = useState<string>("");
   const [agentMessage, setAgentMessage] = useState<string>("");
@@ -105,7 +106,9 @@ export function VoiceFlowPage() {
     }
   };
 
-  const runAgentPipeline = async (promptText: string, activePendingEntry?: StructuredEntry | null) => {
+  const runAgentPipeline = async (promptText: string, activePendingEntry?: StructuredEntry | null, source: "voice" | "text" = "voice") => {
+    if (promptText.length > 1000) { setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries"); return; }
+    setProcessingSource(source);
     setIsProcessing(true);
     setTranscript(promptText);
     setRateLimitNotice(null);
@@ -207,7 +210,8 @@ export function VoiceFlowPage() {
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualText.trim()) return;
-    runAgentPipeline(manualText.trim());
+    if (manualText.trim().length > 1000) { setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries"); return; }
+    runAgentPipeline(manualText.trim(), undefined, "text");
     setManualText("");
   };
 
@@ -269,7 +273,7 @@ export function VoiceFlowPage() {
   const handleApplyCorrection = (e: React.FormEvent) => {
     e.preventDefault();
     if (!slipCorrectionText.trim() || !confirmEntry) return;
-    runAgentPipeline(slipCorrectionText.trim(), confirmEntry);
+    runAgentPipeline(slipCorrectionText.trim(), confirmEntry, "text");
     setSlipCorrectionText("");
   };
 
@@ -383,7 +387,7 @@ export function VoiceFlowPage() {
               {isRecording
                 ? `Recording 0:${durationSeconds < 10 ? `0${durationSeconds}` : durationSeconds} / 0:30`
                 : isProcessing
-                ? "Processing voice audio..."
+                ? (processingSource === "text" ? "Reading your text…" : "Processing voice audio...")
                 : "Tap microphone to speak"}
             </span>
 
@@ -426,6 +430,7 @@ export function VoiceFlowPage() {
               Resolve →
             </button>
           </form>
+          {manualText.length >= 800 && (<p className={`text-[11px] mt-1.5 ${manualText.length > 1000 ? "text-rose-600 font-semibold" : "text-stone-500"}`}>{manualText.length.toLocaleString()}/1,000 characters{manualText.length > 1000 ? " — please shorten it before resolving" : ""}</p>)}
         </div>
       </div>
 

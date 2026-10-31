@@ -353,6 +353,11 @@ export async function runLavenderAgent(
   // Fallback pattern parser for offline / test environments
   const fallbackResult = parseLocally(userPrompt, today, context);
 
+  // C1: "my period is late" is a deterministic clarifying intent in BOTH paths.
+  if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
+    return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (late-period question answered directly; no entry created)" };
+  }
+
   const config = getConfig();
   const isBaseten = context.provider === "baseten" || config.useBaseten;
   const apiKey = isBaseten ? config.basetenApiKey : (config.metaApiKey || config.basetenApiKey);
@@ -859,7 +864,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (intent === "other" || (!hasLogContent && intent !== "plan_event")) {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
       const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
-      const q = late ? "What would you like to log — for example, that your period started, ended, or a symptom for a date?" : "What would you like to log?";
+      const q = late ? "I can't tell if your period is late without a logged start — did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
