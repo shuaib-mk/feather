@@ -455,6 +455,17 @@ export function effectivePeriodDurationDays(period: Period, periods: Period[], l
 
 export function deleteDayLog(logDate: string): void {
   const data = loadCycleData();
+  // Calendar parity: a period-start day deletes the WHOLE period record,
+  // exactly as Chronicle's period delete (deletePeriodEntry) does.
+  const periodStart = data.periods.find((per) => per.startDate === logDate);
+  if (periodStart) {
+    data.periods = data.periods.filter((per) => per.id !== periodStart.id);
+    // A1 parity: "Delete period" removes the record entirely, including the
+    // log saved on its start date (with any symptoms/note on that day).
+    data.logs = data.logs.filter((l) => l.logDate !== periodStart.startDate);
+    saveCycleData(data);
+    return;
+  }
   const deleted = data.logs.find((l) => l.logDate === logDate);
   data.logs = data.logs.filter((l) => l.logDate !== logDate);
   // A2: shrink any period whose stored end was this (now deleted) bleeding day.
