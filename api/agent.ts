@@ -2394,6 +2394,7 @@ function extractBackfillDates(text, today) {
     warnings.push(bareMonths[0] + " still needs a day: add it like " + bareMonths[0] + " 9.");
   }
   if (seeds.length >= 2) return { seeds, warnings, monthAsk: null };
+  if (seeds.length === 1 && warnings.length > 0) return { seeds, warnings, monthAsk: null };
   if (bareMonths.length > 0) return { seeds: [], warnings, monthAsk: bareMonths[0] };
   return null;
 }
