@@ -156,7 +156,6 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     }
     return { success: false, message: (result.error || "Failed to import JSON backup.") + skippedNote, count: 0 };
   }, [refreshData]);
-  }, [refreshData]);
 
   const showOverdueBanner = !overdueDismissed && isExportOverdue(14) && data.periods.length > 0;
 
