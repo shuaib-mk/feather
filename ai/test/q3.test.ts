@@ -136,5 +136,40 @@ const TODAY = "2026-11-01";
   check("Q3.4: orphan correction never stored as notes", rOrphan.entry === null && rOrphan.message.indexOf("couldn" + String.fromCharCode(39) + "t find") !== -1, rOrphan.message);
 }
 
+
+// --- Q3.6 events: overlap questions, ranges, Hinglish nouns, birthdays ---
+{
+  const rQ = parseLocally("will I get my period during my exam on Nov 20?", TODAY, {} as any);
+  check("Q3.6: overlap question creates exam event", (rQ as any).plannedEvents?.length === 1 && (rQ as any).plannedEvents[0].title === "exam" && (rQ as any).plannedEvents[0].date === "2026-11-20", JSON.stringify((rQ as any).plannedEvents));
+  check("Q3.6: overlap question answered", (rQ as any).planOverlaps?.length === 1 && typeof rQ.message === "string" && rQ.message.indexOf("exam on 2026-11-20:") !== -1, rQ.message);
+  const rClash = parseLocally("will my period clash with my wedding on Nov 20?", TODAY, {} as any);
+  check("Q3.6: clash question keeps wedding noun", (rClash as any).plannedEvents?.[0]?.title === "wedding", JSON.stringify((rClash as any).plannedEvents));
+  const rRange = parseLocally("my trip is from Nov 20 to Nov 22", TODAY, {} as any);
+  check("Q3.6: from-to is one event with end date", (rRange as any).plannedEvents?.length === 1 && (rRange as any).plannedEvents[0].title === "trip" && (rRange as any).plannedEvents[0].date === "2026-11-20" && (rRange as any).plannedEvents[0].endDate === "2026-11-22", JSON.stringify((rRange as any).plannedEvents));
+  const rDash = parseLocally("my trip is Nov 20 - Nov 22", TODAY, {} as any);
+  check("Q3.6: dash range is one event", (rDash as any).plannedEvents?.length === 1 && (rDash as any).plannedEvents[0].endDate === "2026-11-22" && (rDash as any).plannedEvents[0].title === "trip", JSON.stringify((rDash as any).plannedEvents));
+  const rTill = parseLocally("holiday from Dec 20 till Dec 27", TODAY, {} as any);
+  check("Q3.6: till range is one event", (rTill as any).plannedEvents?.length === 1 && (rTill as any).plannedEvents[0].date === "2026-12-20" && (rTill as any).plannedEvents[0].endDate === "2026-12-27", JSON.stringify((rTill as any).plannedEvents));
+  const rHi = parseLocally("meri shaadi November 20 ko hai", TODAY, {} as any);
+  check("Q3.6: Hinglish keeps noun, strips meri", (rHi as any).plannedEvents?.length === 1 && (rHi as any).plannedEvents[0].title === "shaadi", JSON.stringify((rHi as any).plannedEvents));
+  const rBday = parseLocally("my birthday is on March 15", TODAY, {} as any);
+  check("Q3.6: birthday proposes next occurrence", (rBday as any).plannedEvents?.length === 1 && (rBday as any).plannedEvents[0].date === "2027-03-15" && rBday.needsClarification === false, JSON.stringify((rBday as any).plannedEvents));
+}
+
+
+// --- Q3.7 late path: "am I late?" + no false no-logged-start ---
+{
+  const rNone = parseLocally("am I late?", TODAY, {} as any);
+  check("Q3.7: am-i-late with nothing logged says so", rNone.entry === null && typeof rNone.message === "string" && rNone.message.indexOf("without a logged start") !== -1, rNone.message);
+  const rPer = parseLocally("am I late?", TODAY, { periods: [{ startDate: "2026-10-02" }] } as any);
+  check("Q3.7: am-i-late with a period uses late path", rPer.entry === null && typeof rPer.message === "string" && rPer.message.indexOf("Oct 2") !== -1 && rPer.message.indexOf("without a logged start") === -1, rPer.message);
+  const rEnt = parseLocally("am I late?", TODAY, { recentEntries: [{ date: "2026-10-02", kind: "period_started", flow: null, symptoms: [] }] } as any);
+  check("Q3.7: am-i-late sees logged period_started entry", typeof rEnt.message === "string" && rEnt.message.indexOf("Oct 2") !== -1, rEnt.message);
+  const rLog = parseLocally("am I late?", TODAY, { logs: [{ logDate: "2026-10-02", kind: "period_started" }] } as any);
+  check("Q3.7: am-i-late sees period_started log", typeof rLog.message === "string" && rLog.message.indexOf("Oct 2") !== -1, rLog.message);
+  const rIs = parseLocally("is my period late?", TODAY, { recentEntries: [{ date: "2026-10-02", kind: "period_started", flow: null, symptoms: [] }] } as any);
+  check("Q3.7: is-my-period-late no false no-start message", typeof rIs.message === "string" && rIs.message.indexOf("Oct 2") !== -1 && rIs.message.indexOf("without a logged start") === -1, rIs.message);
+}
+
 console.log("Q3 part 1 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);

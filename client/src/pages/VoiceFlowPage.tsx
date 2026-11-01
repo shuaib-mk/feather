@@ -510,7 +510,7 @@ export function VoiceFlowPage() {
         <div className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-2.5 text-xs text-amber-950 font-sans flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="font-semibold">Offline mode — saved using on-device rules</span>
+            <span className="font-semibold">Offline mode understands English best; other languages need the Meta model.</span>
           </div>
           <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-amber-900 border border-amber-200/70">On-device</span>
         </div>

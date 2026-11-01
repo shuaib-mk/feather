@@ -133,7 +133,7 @@ export interface AgentResult {
   usedLiveModel?: boolean;
   mode?: "live" | "offline";
   modeReason?: string | null;
-  plannedEvents?: Array<{ title: string; date: string }>;
+  plannedEvents?: Array<{ title: string; date: string; endDate?: string }>;
   usedPersonalAnchor?: boolean;
   message: string;
   entry?: StructuredEntry | null;
@@ -349,10 +349,22 @@ function recordsFromContext(context: AgentContext): PeriodRecord[] {
   }));
 }
 
-function evaluateContextOverlaps(events: Array<{ name: string; date: string }>, context: AgentContext, today: string) {
+function evaluateContextOverlaps(events: Array<{ name: string; date: string; endDate?: string }>, context: AgentContext, today: string) {
   const records = recordsFromContext(context);
+  const rankOf = (s: string): number => OVERLAP_RANK[s] ?? (s === "logged" ? 5 : 0);
   return events.map((ev) => {
-    const result = evaluateEventOverlap(ev.date, records, today);
+    // Q3.6: ranged events evaluate every day in the span (capped); keep the strongest signal.
+    let result = evaluateEventOverlap(ev.date, records, today);
+    if (ev.endDate && ev.endDate > ev.date) {
+      let d = addDaysToKey(ev.date, 1);
+      let guard = 0;
+      while (d <= ev.endDate && guard < 366) {
+        const r = evaluateEventOverlap(d, records, today);
+        if (rankOf(r.status) > rankOf(result.status)) result = r;
+        d = addDaysToKey(d, 1);
+        guard++;
+      }
+    }
     return {
       name: ev.name,
       eventDate: ev.date,
@@ -448,7 +460,7 @@ export interface StatedDatedFact {
 const COVERAGE_EVENT_NOUNS = [
   "wedding", "exam", "trip", "interview", "party", "flight",
   "vacation", "conference", "presentation", "dinner", "meeting",
-  "birthday", "anniversary", "marathon", "race", "appointment",
+  "birthday", "anniversary", "marathon", "race", "appointment", "shaadi", "sangeet",
 ];
 const COVERAGE_MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
 const COVERAGE_DATE_RE = new RegExp(`(\\d{4}-\\d{2}-\\d{2}|\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${COVERAGE_MONTHS})[a-z]*\\b|\\b(?:${COVERAGE_MONTHS})[a-z]*\\s+\\d{1,2}(?:st|nd|rd|th)?\\b)`, "gi");
@@ -679,7 +691,7 @@ export async function runLavenderAgent(
   }
 
   // C1: "my period is late" is a deterministic clarifying intent in BOTH paths.
-  if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
+  if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b|\bam\s+i\s+late\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (late-period question answered directly; no entry created)" };
   }
 
@@ -1123,7 +1135,7 @@ export function findMatchedEvent(text: string, matched?: Array<{title:string;dat
 // to the single-entry flow unchanged.
 const BACKFILL_MAX_ENTRIES = 12;
 const BACKFILL_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
-const BACKFILL_EVENT_NOUNS = "exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday";
+const BACKFILL_EVENT_NOUNS = "exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|shaadi|sangeet";
 const BACKFILL_NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
   seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
@@ -1414,9 +1426,15 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   // Plan Around It events: any "<title> on <date>" phrase (exam, wedding, dinner, ...).
   // Dates may be "Nov 20", "20 November", "3rd November" or ISO. Plan dates resolve
   // to the NEXT occurrence (never the past) unless an explicit year was given.
+  const EVENT_NOUNS = [
+    "wedding", "exam", "trip", "interview", "party", "flight",
+    "vacation", "conference", "presentation", "dinner", "meeting",
+    "birthday", "anniversary", "marathon", "race", "appointment",
+    "shaadi", "sangeet"
+  ];
   const MONTH_RE = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
   const planDateRe = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`, "gi");
-  const eventMatches: Array<{ name: string; date: string }> = [];
+  const eventMatches: Array<{ name: string; date: string; endDate?: string }> = [];
   const planDateSpans: Array<{ index: number; length: number }> = [];
   let planDateInvalid = false;
   const passedPlanCandidates: Array<{ name: string; thisYear: string; nextYear: string }> = [];
@@ -1441,13 +1459,57 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       let prev = "";
       while (prev !== t) {
         prev = t;
-        t = t.replace(/\s*(?:\b(?:is|was|scheduled|planned|happening|coming up|on|at|for|to attend)\b)\s*$/i, "").trim();
+        t = t.replace(/\s*(?:\b(?:is|was|scheduled|planned|happening|coming up|on|at|for|from|to attend)\b)\s*$/i, "").trim();
       }
       t = t.replace(/\bcoming up\b/gi, "").replace(/\s+/g, " ").trim();
-      t = t.replace(/^\s*(?:an?|the|my|our|his|her|their)\s+/i, "").trim();
+      t = t.replace(/^\s*(?:an?|the|my|our|his|her|their|meri|mere|mera|hamari|apni|apne|yeh|ye|woh|wo|ek)\s+/i, "").trim();
       return t;
     };
+    // Q3.6: overlap questions name the event noun ("...during my exam" -> "exam").
+    const focusNounTitle = (candidate: string, sentence: string): string => {
+      if (!/\bperiod\b/i.test(sentence)) return candidate;
+      const focus = candidate.match(new RegExp(`\\b(?:my|the|a|an|during(?:\\s+my)?|for(?:\\s+my)?)\\s+(${EVENT_NOUNS.join("|")})\\b`, "i"));
+      return focus ? focus[1].toLowerCase() : candidate;
+    };
+    // Q3.6: "from X to Y" / "X-Y" / "X till Y" is ONE event with an end date.
+    const rangeSpans: Array<{ index: number; length: number }> = [];
+    {
+      const DATE_ALT = `(?:\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_RE})|(?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?)(?:,?\\s+\\d{4})?|\\d{4}-\\d{2}-\\d{2}`;
+      const rangeRe = new RegExp(`\\bfrom\\s+(${DATE_ALT})\\s+(?:to|till|through|-|\\u2013)\\s+(${DATE_ALT})|\\b(${DATE_ALT})\\s*(?:-|\\u2013|\\btill\\b)\\s+(${DATE_ALT})`, "gi");
+      const resolveRangeDate = (raw: string): { key: string | null; explicitYear: boolean } => {
+        const t = raw.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return { key: isValidDateKey(t) ? t : null, explicitYear: true };
+        const yMatch = t.match(/\b(\d{4})\b/);
+        const noYear = t.replace(/,?\s+\b\d{4}\b/, "");
+        return { key: parseMonthDay(noYear, yMatch ? parseInt(yMatch[1], 10) : currentYear), explicitYear: !!yMatch };
+      };
+      let rm: RegExpExecArray | null;
+      while ((rm = rangeRe.exec(text)) !== null) {
+        const startRaw = (rm[1] ?? rm[3] ?? "").trim();
+        const endRaw = (rm[2] ?? rm[4] ?? "").trim();
+        if (!startRaw || !endRaw) continue;
+        const s = resolveRangeDate(startRaw);
+        const e = resolveRangeDate(endRaw);
+        if (!s.key || !e.key) continue;
+        let start = s.key;
+        let end = e.key;
+        if (!s.explicitYear && !e.explicitYear && start < today) {
+          const ns = resolveRangeDate(startRaw + " " + (currentYear + 1));
+          const ne = resolveRangeDate(endRaw + " " + (currentYear + 1));
+          if (!ns.key || !ne.key) continue;
+          start = ns.key; end = ne.key;
+        }
+        if (end < start) continue;
+        const sStart = Math.max(text.lastIndexOf(".", rm.index - 1) + 1, text.lastIndexOf("!", rm.index - 1) + 1, text.lastIndexOf("?", rm.index - 1) + 1, text.lastIndexOf("\n", rm.index - 1) + 1, text.lastIndexOf(";", rm.index - 1) + 1, 0);
+        const rangeSentence = text.slice(sStart, rm.index + rm[0].length);
+        const rangeTitle = focusNounTitle(cleanTitle(text.slice(sStart, rm.index)) || "Event", rangeSentence);
+        eventMatches.push({ name: rangeTitle, date: start, endDate: end });
+        rangeSpans.push({ index: rm.index, length: rm[0].length });
+        planDateSpans.push({ index: rm.index, length: rm[0].length });
+      }
+    }
     while ((m = planDateRe.exec(text)) !== null) {
+      if (rangeSpans.some((s) => m.index >= s.index && m.index < s.index + s.length)) continue;
       const rawDate = m[0];
       const explicitYear = /\b\d{4}\b/.test(rawDate) && !/^\d{4}-/.test(rawDate) ? parseInt(rawDate.match(/\b\d{4}\b/)![0], 10) : (/^\d{4}-/.test(rawDate) ? parseInt(rawDate.slice(0, 4), 10) : null);
       let resolvedDate: string | null;
@@ -1476,12 +1538,12 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       const localSentence = text.slice(sentenceStart, sentenceEnd);
       const clauseBeforeDate = text.slice(Math.max(prevEnd, sentenceStart), m.index);
       prevEnd = m.index + rawDate.length;
-      const hasEventNounInClauseOrSentence = /\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|plan|planning)\b/i.test(localSentence);
+      const hasEventNounInClauseOrSentence = /\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|plan|planning|shaadi|sangeet)\b/i.test(localSentence);
       const hasCycleOrSymptomInSentence = /\b(period|flow|spotting|bleeding|menstruat|cramps|headache|nausea|fatigue|bloating|back pain|tender breasts|mood|acne|insomnia|cravings|diarrhea|constipation|dizziness|hot flashes)\b/i.test(localSentence);
       const cleanedCandidate = cleanTitle(clauseBeforeDate);
       if (!hasEventNounInClauseOrSentence && (cleanedCandidate === "" || hasCycleOrSymptomInSentence)) continue;
-      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(clauseBeforeDate) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday)\b/i.test(clauseBeforeDate)) continue;
-      const title = cleanedCandidate || "Event";
+      if (/\b(period|flow|spotting|bleeding|menstruat)/i.test(clauseBeforeDate) && !/\b(exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday|shaadi|sangeet)\b/i.test(clauseBeforeDate)) continue;
+      const title = focusNounTitle(cleanedCandidate || "Event", localSentence);
       if (!resolvedDate || !isValidDateKey(resolvedDate)) { planDateInvalid = true; continue; }
       if (explicitYear === null && resolvedDate < today) {
         const nextYear = parseMonthDay(dateNoYear, currentYear + 1);
@@ -1493,11 +1555,14 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       eventMatches.push({ name: title, date: resolvedDate });
     }
   }
-  const EVENT_NOUNS = [
-    "wedding", "exam", "trip", "interview", "party", "flight",
-    "vacation", "conference", "presentation", "dinner", "meeting",
-    "birthday", "anniversary", "marathon", "race", "appointment"
-  ];
+  // Q3.6: birthdays/anniversaries propose the next occurrence instead of asking.
+  for (let i = passedPlanCandidates.length - 1; i >= 0; i--) {
+    const c = passedPlanCandidates[i];
+    if (/\b(birthday|anniversary)\b/i.test(c.name)) {
+      eventMatches.push({ name: c.name, date: c.nextYear });
+      passedPlanCandidates.splice(i, 1);
+    }
+  }
   const unplacedEvents: string[] = [];
   const eventNounRe = new RegExp(`\\b(${EVENT_NOUNS.join("|")})\\b`, "gi");
   let em: RegExpExecArray | null;
@@ -1615,8 +1680,13 @@ export function parseLocally(text: string, today: string, context: AgentContext)
         const q = `I couldn't place a date for: ${unplacedEvents.join(", ")}`;
         return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
-      const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b/i.test(lower);
-      const lastStart = [...(context.periods || [])].map((x) => x.startDate).filter(Boolean).sort().pop() || context.cycleStats?.lastPeriodStart || null;
+      const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b|\bam\s+i\s+late\b/i.test(lower);
+      // Q3.7: period starts also count when they only exist as logged period_started entries.
+      const startedFromEntries = [...(context.recentEntries || []), ...(context.recentEntry ? [context.recentEntry] : []), ...(context.pendingEntry && (context.pendingEntry as any).kind === "period_started" ? [context.pendingEntry] : [])]
+        .filter((e) => e && (e as any).kind === "period_started" && (e as any).date)
+        .map((e) => (e as any).date as string);
+      const startedFromLogs = (context.logs || []).filter((g) => (g as any) && (g as any).kind === "period_started" && (g as any).logDate).map((g) => (g as any).logDate as string);
+      const lastStart = [...(context.periods || []).map((x) => x.startDate).filter(Boolean), ...(context.cycleStats?.lastPeriodStart ? [context.cycleStats.lastPeriodStart] : []), ...startedFromEntries, ...startedFromLogs].filter(Boolean).sort().pop() || null;
       const q = late ? (lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it.") : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
       return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
@@ -1632,10 +1702,18 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     // (legacy landmark-recall shorthand) still falls through to a log entry below.
     const isBareLandmark = eventMatches.length === 0;
     if (!isBareLandmark) {
+      // Q3.6: overlap questions get the overlap answer; ranges show start to end.
+      const isOverlapQuestion = /\bperiod\b/i.test(text) && /\b(during|clash(?:es|ed|ing)?|overlap(?:s|ped|ping)?|coincid(?:e|es|ing)|safe)\b/i.test(text);
+      const describeEvent = (e: { name: string; date: string; endDate?: string }): string => {
+        const base = e.endDate && e.endDate !== e.date ? `${e.name} on ${e.date} to ${e.endDate}` : `${e.name} on ${e.date}`;
+        if (!isOverlapQuestion) return base;
+        const hit = (planOverlaps || []).find((o) => o.eventDate === e.date && o.name === e.name);
+        return hit && hit.overlapNote ? `${base}: ${hit.overlapNote}` : base;
+      };
       const msg = unplacedEvents.length > 0
         ? `I couldn't place a date for: ${unplacedEvents.join(", ")}`
-        : eventMatches.map((e) => `${e.name} on ${e.date}`).join("; ");
-      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+        : eventMatches.map(describeEvent).join("; ");
+      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date, ...(e.endDate && e.endDate !== e.date ? { endDate: e.endDate } : {}) })), usedPersonalAnchor, ...offline };
     }
   }
 
