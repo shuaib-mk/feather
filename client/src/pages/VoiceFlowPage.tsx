@@ -7,7 +7,8 @@ import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
-import { prettyDate, todayStr, addDays } from "../cycleStorage";
+import { prettyDate, todayStr, addDays, saveLogEntry, loadCycleData, saveCycleData, addOrUpdatePeriod } from "../cycleStorage";
+import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, type BackfillRow } from "../lib/backfill";
 
 export const VOICE_PENDING_SESSION_KEY = "feather_voice_pending_v1";
 
@@ -15,6 +16,7 @@ export interface VoicePendingSession {
   transcript: string;
   agentMessage: string;
   confirmEntry: StructuredEntry | null;
+  backfillRows?: BackfillRow[] | null;
   plannedEventsState: Array<{ title: string; date: string }>;
   planOverlaps: any[] | null;
   agentMode: any;
@@ -39,6 +41,7 @@ export function saveVoicePendingSession(session: VoicePendingSession): void {
       Boolean(session.transcript) ||
       Boolean(session.agentMessage) ||
       Boolean(session.confirmEntry) ||
+      Boolean(session.backfillRows && session.backfillRows.length > 0) ||
       (session.plannedEventsState && session.plannedEventsState.length > 0) ||
       (session.planOverlaps && session.planOverlaps.length > 0);
     if (!hasAnyState) {
@@ -82,7 +85,7 @@ const COMMON_SYMPTOMS: Array<{ key: ValidSymptom; label: string }> = [
 ];
 
 export function VoiceFlowPage() {
-  const { data, stats, savePeriod, saveLog, isDemoActive } = useCycle();
+  const { data, stats, savePeriod, saveLog, refreshData, isDemoActive } = useCycle();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const presetDate = searchParams.get("date");
@@ -118,6 +121,8 @@ export function VoiceFlowPage() {
   const [agentMessage, setAgentMessage] = useState<string>(() => initialPending?.agentMessage || "");
   const [activityTrail, setActivityTrail] = useState<ActivityStep[]>([]);
   const [confirmEntry, setConfirmEntry] = useState<StructuredEntry | null>(() => initialPending?.confirmEntry || null);
+  const [backfillRows, setBackfillRows] = useState<BackfillRow[] | null>(() => initialPending?.backfillRows || null);
+  const [backfillLongWarn, setBackfillLongWarn] = useState<string | null>(null);
   const [planOverlaps, setPlanOverlaps] = useState<any[] | null>(() => initialPending?.planOverlaps || null);
   const [toolCalls, setToolCalls] = useState<ToolCallRecord[]>([]);
   const [isUnderHoodOpen, setIsUnderHoodOpen] = useState<boolean>(false);
@@ -137,17 +142,20 @@ export function VoiceFlowPage() {
       transcript,
       agentMessage,
       confirmEntry,
+      backfillRows,
       plannedEventsState,
       planOverlaps,
       agentMode,
       isOfflineFallback,
     });
-  }, [transcript, agentMessage, confirmEntry, plannedEventsState, planOverlaps, agentMode, isOfflineFallback]);
+  }, [transcript, agentMessage, confirmEntry, backfillRows, plannedEventsState, planOverlaps, agentMode, isOfflineFallback]);
 
   useEffect(() => {
     if (prevDemoRef.current !== isDemoActive) {
       prevDemoRef.current = isDemoActive;
       clearVoicePendingSession();
+      setBackfillRows(null);
+      setBackfillLongWarn(null);
       setConfirmEntry(null);
       setPlannedEventsState([]);
       setPlanOverlaps(null);
@@ -308,11 +316,17 @@ export function VoiceFlowPage() {
         setPlanOverlaps(null);
       }
 
+      if (res.entries && res.entries.length > 1) {
+        setBackfillRows(backfillRowsFromEntries(res.entries));
+        setConfirmEntry(null);
+      } else {
+        setBackfillRows(null);
       if (res.entry) {
         if (res.entry.date <= todayStr()) setConfirmEntry(res.entry);
         else setConfirmEntry(null);
       } else {
         setConfirmEntry(null);
+      }
       }
 
       if (res.planOverlaps && res.planOverlaps.length > 0) {
@@ -385,6 +399,13 @@ export function VoiceFlowPage() {
       return;
     }
 
+    if (confirmEntry.endDate) {
+      const endPer = loadCycleData().periods.find((p) => p.startDate === confirmEntry.date);
+      if (endPer && confirmEntry.endDate >= confirmEntry.date && confirmEntry.endDate <= todayStr()) {
+        addOrUpdatePeriod({ ...endPer, endDate: confirmEntry.endDate });
+        refreshData();
+      }
+    }
     const confirmedDate = confirmEntry.date;
     setSavedSuccessMessage(`Entry for ${prettyDate(confirmedDate)} saved to your device vault.`);
     setSavedLink({ to: "/chronicle", label: "View in Chronicle" });
@@ -393,10 +414,69 @@ export function VoiceFlowPage() {
     setLongPeriodWarning(null);
   };
 
+  const handleSaveBackfill = (confirmed: boolean = false) => {
+    if (!backfillRows) return;
+    const rows = backfillSelected(backfillRows);
+    const problem = validateBackfillRows(backfillRows, todayStr());
+    if (problem) {
+      setAgentMessage(problem);
+      return;
+    }
+    const hasLongRow = rows.some((r) => {
+      const d = backfillDurationDays(r);
+      return d !== null && d > 10;
+    });
+    if (hasLongRow && !confirmed) {
+      setBackfillLongWarn("One or more periods is longer than 10 days. Save them anyway?");
+      return;
+    }
+    // Atomic: snapshot first; any failure restores the vault untouched.
+    const snapshot = loadCycleData();
+    try {
+      const ordered = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+      for (const row of ordered) {
+        const saved = saveLogEntry(
+          {
+            logDate: row.date,
+            flow: null,
+            symptoms: [],
+            mood: null,
+            energy: null,
+            sleepHours: null,
+            notes: null,
+            kind: "period_started",
+          },
+          { kind: "period_started", confirmLongPeriod: confirmed },
+        );
+        if (!saved || saved.needsConfirmation) {
+          throw new Error(saved && saved.confirmationReason ? saved.confirmationReason : "A row needs confirmation.");
+        }
+        if (row.endDate) {
+          const per = loadCycleData().periods.find((p) => p.startDate === row.date);
+          if (per) addOrUpdatePeriod({ ...per, endDate: row.endDate });
+        }
+      }
+    } catch (err: any) {
+      saveCycleData(snapshot);
+      refreshData();
+      setBackfillLongWarn(null);
+      setAgentMessage("Could not save these periods (" + (err?.message || "validation failed") + "). Nothing was saved.");
+      return;
+    }
+    refreshData();
+    const savedCount = rows.length;
+    setSavedSuccessMessage(savedCount + (savedCount === 1 ? " period" : " periods") + " saved to your device vault.");
+    setSavedLink({ to: "/chronicle", label: "View in Chronicle" });
+    setBackfillRows(null);
+    setBackfillLongWarn(null);
+  };
+
   const handleDiscard = () => {
     clearVoicePendingSession();
     setLongPeriodWarning(null);
     setConfirmEntry(null);
+    setBackfillRows(null);
+    setBackfillLongWarn(null);
     setSlipCorrectionText("");
     setPlanOverlaps(null);
     setPlannedEventsState([]);
@@ -744,7 +824,126 @@ export function VoiceFlowPage() {
           ))}
         </div>
       )}
-      {confirmEntry && (
+      {backfillRows && (
+        <div className="liquid-glass-card rounded-[26px] p-6 space-y-5 border border-white/95 shadow-md animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
+            <div>
+              <span className="font-sans text-xs font-semibold text-emerald-700 block">Backfill review</span>
+              <h3 className="font-serif text-xl font-semibold text-stone-900">Confirm Past Periods</h3>
+            </div>
+            <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
+              Confirmation Required
+            </span>
+          </div>
+          <p className="font-sans text-xs text-stone-600">One row per period. Nothing is saved until you press Save. Uncheck a row to skip it.</p>
+          <div className="space-y-3">
+            {[...backfillRows]
+              .sort((a, b) => a.date.localeCompare(b.date))
+              .map((row, idx, sorted) => {
+                const gap = backfillGapDays(sorted, idx);
+                const warns = row.selected ? backfillRowWarnings(row, sorted, idx, data.periods) : [];
+                const dur = backfillDurationDays(row);
+                return (
+                  <div key={row.key} className="p-3 rounded-[16px] liquid-glass-tile text-xs space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="checkbox"
+                        checked={row.selected}
+                        onChange={(e) => setBackfillRows(backfillRows.map((r) => (r.key === row.key ? { ...r, selected: e.target.checked } : r)))}
+                        aria-label={"Include period starting " + row.date}
+                        className="size-4 cursor-pointer"
+                      />
+                      <span className="font-semibold text-stone-900 font-sans">Period {idx + 1}</span>
+                      {gap !== null && <span className="font-sans text-[11px] text-stone-500">{gap} days after previous start</span>}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = backfillRows.filter((r) => r.key !== row.key);
+                          setBackfillRows(next.length > 0 ? next : null);
+                        }}
+                        className="liquid-glass-pill rounded-full px-3 py-1 font-sans text-[11px] text-stone-500 hover:text-rose-700 cursor-pointer ml-auto"
+                        aria-label={"Delete row " + row.date}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="space-y-1 block">
+                        <span className="font-sans text-[11px] font-medium text-stone-600 block">Start</span>
+                        <input
+                          type="date"
+                          value={row.date}
+                          max={todayStr()}
+                          onChange={(e) => {
+                            if (e.target.value && e.target.value > todayStr()) {
+                              setAgentMessage("Cannot select " + e.target.value + " because that date is in the future.");
+                              return;
+                            }
+                            setBackfillRows(backfillRows.map((r) => (r.key === row.key ? { ...r, date: e.target.value } : r)));
+                          }}
+                          className="w-full liquid-glass-input rounded-xl p-2 text-xs font-sans text-stone-900"
+                        />
+                      </label>
+                      <label className="space-y-1 block">
+                        <span className="font-sans text-[11px] font-medium text-stone-600 block">End (optional)</span>
+                        <input
+                          type="date"
+                          value={row.endDate}
+                          min={row.date}
+                          max={todayStr()}
+                          onChange={(e) => {
+                            if (e.target.value && e.target.value > todayStr()) {
+                              setAgentMessage("Cannot select " + e.target.value + " because that date is in the future.");
+                              return;
+                            }
+                            setBackfillRows(backfillRows.map((r) => (r.key === row.key ? { ...r, endDate: e.target.value } : r)));
+                          }}
+                          className="w-full liquid-glass-input rounded-xl p-2 text-xs font-sans text-stone-900"
+                        />
+                      </label>
+                    </div>
+                    {dur !== null && row.endDate ? (
+                      <span className="font-sans text-[11px] text-stone-600 block">Duration: {dur} days</span>
+                    ) : null}
+                    {warns.map((w, i) => (
+                      <span key={i} className="font-sans text-[11px] text-amber-800 block">
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })}
+          </div>
+          {backfillLongWarn && (
+            <div role="alert" className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center gap-2 shadow-xs">
+              <span className="flex-1">{backfillLongWarn}</span>
+              <button type="button" onClick={() => handleSaveBackfill(true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
+                Save anyway
+              </button>
+            </div>
+          )}
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
+            <button
+              type="button"
+              onClick={() => {
+                setBackfillRows(null);
+                setBackfillLongWarn(null);
+              }}
+              className="liquid-glass-pill rounded-full px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveBackfill(false)}
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center"
+            >
+              Save {backfillSelected(backfillRows).length} periods
+            </button>
+          </div>
+        </div>
+      )}
+      {!backfillRows && confirmEntry && (
         <div className="liquid-glass-card rounded-[26px] p-6 space-y-5 border border-white/95 shadow-md animate-in fade-in">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
             <div>
@@ -787,6 +986,9 @@ export function VoiceFlowPage() {
               ) : null}
             </div>
 
+            {confirmEntry.endDate ? (
+              <p className="font-sans text-xs text-stone-600">Period end: {prettyDate(confirmEntry.endDate)} (from your date range).</p>
+            ) : null}
             {/* Flow Selector */}
             <div className="space-y-1">
               <label className="font-sans text-xs font-medium text-stone-600 block">Flow Intensity:</label>
