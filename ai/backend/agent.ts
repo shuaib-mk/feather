@@ -541,8 +541,8 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
 
 function structuredEntriesOf(result: AgentResult): StructuredEntry[] {
   // Only slips actually returned for rendering/saving count as placed.
-  // With backfill, every collected entry is returned in result.entries, so
-  // all of them count; single-entry results keep the old entry-only path.
+  // entries is populated only on multi-period (backfill) turns, where every
+  // collected call is rendered for saving; single turns keep entry-only.
   if (result.entries && result.entries.length > 0) return result.entries;
   return result.entry ? [result.entry] : [];
 }
@@ -693,6 +693,10 @@ export async function runLavenderAgent(
   let usedPersonalAnchorLive = false;
   let structuredEntry: StructuredEntry | null = null;
   const structuredEntries: StructuredEntry[] = [];
+  // Multi mode only for backfill-shaped prompts (several period dates, no
+  // detail): single-period turns keep the old overwrite behavior exactly.
+  const backfillShape = extractBackfillDates(userPrompt, today);
+  const collectBackfillEntries = backfillShape !== null && backfillShape.seeds.length > 0;
   let planOverlaps: any[] | undefined = undefined;
   let needsClarification = false;
   let clarificationQuestion: string | null = null;
@@ -830,7 +834,7 @@ export async function runLavenderAgent(
               isApproximate: fnArgs.isApproximate || false, landmarkName: fnArgs.landmarkName || null, kind: fnArgs.kind || "daily_log",
             };
             toolResultObj = { success: true, entry: structuredEntry };
-            structuredEntries.push(structuredEntry);
+            if (collectBackfillEntries) structuredEntries.push(structuredEntry);
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
@@ -906,7 +910,7 @@ export async function runLavenderAgent(
 
     return ensureFactCoverageDisclosure({
       message: finalMessage,
-      entry: structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
+      entry: collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
       entries: structuredEntries.length > 0 ? structuredEntries : undefined,
       needsClarification,
       clarificationQuestion,
