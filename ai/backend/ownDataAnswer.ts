@@ -17,7 +17,6 @@ export const VERDICT_TAIL =
 export interface OwnDataContext {
   periods?: Array<{ startDate: string; endDate?: string | null }>;
   logs?: Array<{ logDate: string }>;
-  periods?: Array<{ startDate: string; endDate?: string | null }>;
   cycleStats?: { avgPeriodLength?: number; nextPeriodEarliest?: string | null; nextPeriodLatest?: string | null };
 }
 export interface OwnDataResult { kind: "own_data_answer"; message: string; usedLiveModel: false }

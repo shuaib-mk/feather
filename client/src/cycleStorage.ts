@@ -18,7 +18,7 @@ import {
   type CycleStatistics,
 } from "./lib/periodEngine";
 import { todayLocal, toLocalKey } from "./lib/localDate";
-import { loadEvents, saveEvents } from "./lib/events";
+import { loadEvents, saveEvents, type CalendarEvent } from "./lib/events";
 
 export interface Period {
   id: number;

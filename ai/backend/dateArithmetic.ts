@@ -139,6 +139,13 @@ export function parseRelativeExpression(text: string): RelativeOffsetResult {
   return { days: 0 };
 }
 
+/** Landmark pack toggles (feather_landmark_packs). Absent pack keys default on;
+ * passing no packs at all keeps every landmark enabled (legacy behavior). */
+export interface LandmarkPacks {
+  global?: boolean;
+  india?: boolean;
+}
+
 /**
  * Resolves calendar landmark fuzzy recall deterministically across 2025-2027.
  * Handles "last Diwali", "Christmas next year", explicit years, and relative offsets.
@@ -146,6 +153,7 @@ export function parseRelativeExpression(text: string): RelativeOffsetResult {
 export function resolveLandmarkExpression(
   text: string,
   today: string,
+  packs?: LandmarkPacks | null,
 ): {
   found: boolean;
   landmarkName: string | null;
@@ -155,9 +163,12 @@ export function resolveLandmarkExpression(
 } {
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
+  // Q4.5: a landmark from a disabled pack is treated as unknown.
+  const enabledPacks = packs ? new Set(["global", "india"].filter((p) => (packs as any)[p] !== false)) : null;
+  const landmarkPool = enabledPacks ? MILESTONES_DATA.filter((m) => enabledPacks.has(m.pack || "global")) : MILESTONES_DATA;
 
   // Sort landmarks by longest ACTUAL matched alias first to prevent prefix collisions (e.g. "New Year's Eve" vs "New Year's")
-  const matchedMilestones = MILESTONES_DATA.map((fest) => {
+  const matchedMilestones = landmarkPool.map((fest) => {
     const candidates = [fest.name, ...fest.aliases].filter((a) => matchesAlias(lower, a));
     const maxMatchedLen = candidates.length > 0 ? Math.max(...candidates.map((c) => c.trim().length)) : 0;
     return { fest, maxMatchedLen };
@@ -442,12 +453,12 @@ const SPELLED_DAY_SRC = "(?:thirty[\\s-]+first|twenty[\\s-]+(?:first|second|thir
  * Log dates default to the PAST: most recent occurrence <= today.
  * Never resolves a future log date; asks instead.
  */
-export function resolveDateExpression(text: string, today: string): ResolvedDate {
+export function resolveDateExpression(text: string, today: string, packs?: LandmarkPacks | null): ResolvedDate {
   const lower = ` ${text.toLowerCase()} `;
   const none: ResolvedDate = { date: null, confidence: "none", explanation: "" };
 
   // Landmark offsets & ranges need the landmark; handle "after X" with no number first.
-  const landmarkRes = resolveLandmarkExpression(text, today);
+  const landmarkRes = resolveLandmarkExpression(text, today, packs);
   const hasAfterWithoutNumber = /\bafter\b/.test(lower) && !/\d|one|two|three|four|five|six|seven|day after|week after/.test(lower);
 
   // Explicit range: "from the 3rd to the 7th" (optionally with a month name)
@@ -667,7 +678,7 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
     // Recompute base as past occurrence when the chosen date is in the future and no explicit future intent
     if (resolved && resolved > today && !/next|upcoming|planning/.test(lower)) {
       // step back a year at a time using landmark dates table via resolve with "last"
-      const lastRes = resolveLandmarkExpression(`last ${landmarkRes.landmarkName}`, today);
+      const lastRes = resolveLandmarkExpression(`last ${landmarkRes.landmarkName}`, today, packs);
       if (lastRes.found && lastRes.resolvedDate) {
         // Preserve offsets relative to base: difference between resolved and its base
         const offset = base && resolved ? diffDateKeys(base, resolved) : 0;

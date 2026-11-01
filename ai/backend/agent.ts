@@ -8,6 +8,7 @@
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE, getGuardrailResponseMessage, checkModelOutputGuard, REDIRECT_MESSAGES } from "./guardrail";
 import { buildOwnDataAnswer } from "./ownDataAnswer";
+import { buildOwnEventsAnswer } from "./eventAnswers";
 
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
 import { evaluateEventOverlap, type PeriodRecord } from "../../client/src/lib/periodEngine";
@@ -17,6 +18,7 @@ import {
   applySlipCorrections,
   applyDayOffset,
   parseRelativeExpression,
+  type LandmarkPacks,
 } from "./dateArithmetic";
 import { classifyIntent } from "./intent";
 import { en } from "./lexicon/en";
@@ -97,6 +99,10 @@ export interface AgentContext {
   recentEntries?: StructuredEntry[];
   locale?: string;
   matchedEvents?: Array<{ title: string; date: string }>;
+  events?: Array<{ title: string; date: string; endDate?: string | null }>;
+  calendarVisible?: boolean;
+  defaultDate?: string;
+  landmarkPacks?: LandmarkPacks | null;
   cycleStatsIsDefault?: boolean;
 }
 
@@ -123,9 +129,9 @@ export function selectCorrectionTarget(text: string, pending: StructuredEntry | 
 // Q3.3: a date named by anything other than bare today-words (digits, month
 // names, weekdays, relative phrases, landmarks). Bare "today" never counts:
 // statements about today must never edit old entries.
-function namesNonTodayDate(text: string, today: string): string | null {
+function namesNonTodayDate(text: string, today: string, packs?: LandmarkPacks | null): string | null {
   const stripped = text.replace(/\b(today|tonight|this morning|right now)\b/gi, " ");
-  return resolveDateExpression(stripped, today).date;
+  return resolveDateExpression(stripped, today, packs).date;
 }
 
 export interface AgentResult {
@@ -672,6 +678,18 @@ export async function runLavenderAgent(
       activityTrail.forEach((a) => (a.status = "done"));
       return { message: ownLive.message, kind: ownLive.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Answered from your own logs, no model call" };
     }
+    // Q4.1: local calendar questions are answered on this device, before the model.
+    const ownEventsLive = buildOwnEventsAnswer(userPrompt, {
+      events: context.events,
+      periods: context.periods,
+      cycleStats: context.cycleStats ? { lastPeriodStart: context.cycleStats.lastPeriodStart ?? null } : undefined,
+      today,
+    });
+    if (ownEventsLive) {
+      activityTrail.push({ step: "Your Calendar", detail: "Answered from your own calendar, no model call", status: "done" });
+      activityTrail.forEach((a) => (a.status = "done"));
+      return { message: ownEventsLive.message, kind: ownEventsLive.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Answered from your own calendar, no model call" };
+    }
   }
 
   // Live path: no regex pre-intercept for corrections. The pending entry is passed
@@ -729,9 +747,13 @@ export async function runLavenderAgent(
     };
   }
 
+  // Q4.2: the model cannot see the calendar unless it is visible; never let it claim otherwise.
+  const calendarVisibilityNote = context.calendarVisible === false
+    ? "\nYou cannot see the user's calendar; never say they have no events. Say you can't see it here."
+    : "";
   // OpenAI-compatible Chat Completions API with Tool Calling
   const messages: any[] = [
-    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${targetEntry ? `\nPending or recent entry to correct if asked: ${JSON.stringify(targetEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `\nClient-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}` },
+    { role: "system", content: `${SYSTEM_PROMPT}\nToday's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${targetEntry ? `\nPending or recent entry to correct if asked: ${JSON.stringify(targetEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `\nClient-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}${calendarVisibilityNote}` },
     ...conversationHistory,
     { role: "user", content: userPrompt },
   ];
@@ -819,7 +841,7 @@ export async function runLavenderAgent(
             status: "done",
           });
 
-          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today);
+          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today, context.landmarkPacks);
           if (landmarkRes.found) {
             const baseDate = landmarkRes.resolvedDate;
             const offsetDate = baseDate && fnArgs.offsetDays ? applyDayOffset(baseDate, Number(fnArgs.offsetDays) || 0) : baseDate;
@@ -1347,6 +1369,18 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: "There's no pending slip to discard.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
 
+  // Q4.1: local calendar questions are answered on this device from stored events.
+  const ownEvents = buildOwnEventsAnswer(text, {
+    events: context.events,
+    periods: context.periods,
+    cycleStats: context.cycleStats ? { lastPeriodStart: context.cycleStats.lastPeriodStart ?? null } : undefined,
+    today,
+  });
+  if (ownEvents) {
+    activityTrail.push({ step: "Your Calendar", detail: "Answered from your own calendar, no model call", status: "done" });
+    return { message: ownEvents.message, kind: ownEvents.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+
   // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
   // B3: previous entries may ONLY be corrected on explicit correction language;
   // a new log sentence must never inherit their date/flow/symptoms.
@@ -1368,7 +1402,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   // "my last entry". Statements about today never edit old entries.
   const lastEntryMentioned = /\b(?:my\s+)?last\s+entry\b/i.test(text);
   const hasCorrectionVerb = /\b(change|changed|correct|correction|fix|fixed|update|updated|edit|edited)\b/i.test(text);
-  const namedDate = (isExplicitCorrection || lastEntryMentioned || hasCorrectionVerb) && !context.pendingEntry ? namesNonTodayDate(text, today) : null;
+  const namedDate = (isExplicitCorrection || lastEntryMentioned || hasCorrectionVerb) && !context.pendingEntry ? namesNonTodayDate(text, today, context.landmarkPacks) : null;
   const mentionsToday = /\b(today|tonight|this morning|right now)\b/i.test(text);
   const todayOnlyStatement = mentionsToday && !namedDate && !lastEntryMentioned;
   let targetSlip: StructuredEntry | null = context.pendingEntry ?? null;
@@ -1598,7 +1632,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const matchedEvent = findMatchedEvent(text, context.matchedEvents);
   const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
 
-  const earlyLandmark = resolveLandmarkExpression(text, today);
+  const earlyLandmark = resolveLandmarkExpression(text, today, context.landmarkPacks);
   const isLandmarkPlan = /\b(plan|planning)\b/i.test(lower) && !hasLogContent && eventMatches.length === 0 && earlyLandmark.found && !!earlyLandmark.resolvedDate;
   if (isLandmarkPlan && earlyLandmark.resolvedDate) {
     if (earlyLandmark.resolvedDate >= today) {
@@ -1608,7 +1642,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
     } else {
-      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today);
+      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today, context.landmarkPacks);
       if (nextLm.found && nextLm.resolvedDate && nextLm.resolvedDate > today) {
         passedPlanCandidates.push({ name: earlyLandmark.landmarkName || "Event", thisYear: earlyLandmark.resolvedDate, nextYear: nextLm.resolvedDate });
         unplacedEvents.length = 0;
@@ -1622,7 +1656,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     let evDate: string | null = earlyLandmark.resolvedDate;
     if (evDate && evDate < today) {
       const lmName = earlyLandmark.landmarkName || "Event";
-      const nextLm = resolveLandmarkExpression(`${lmName} next year`, today);
+      const nextLm = resolveLandmarkExpression(`${lmName} next year`, today, context.landmarkPacks);
       if (nextLm.found && nextLm.baseDate) {
         const off = earlyLandmark.baseDate ? Math.round((Date.parse(earlyLandmark.resolvedDate) - Date.parse(earlyLandmark.baseDate)) / 86400000) : 0;
         evDate = applyDayOffset(nextLm.baseDate, off);
@@ -1726,12 +1760,12 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
     }
   }
-  const logLandmark = resolveLandmarkExpression(logDateText, today);
+  const logLandmark = resolveLandmarkExpression(logDateText, today, context.landmarkPacks);
   if (logLandmark.found && ((logLandmark.baseDate && logLandmark.baseDate > today) || (logLandmark.resolvedDate && logLandmark.resolvedDate > today))) {
     const lmName = logLandmark.landmarkName || "Landmark";
     const futureBase = logLandmark.baseDate || logLandmark.resolvedDate!;
     const futureYear = futureBase.slice(0, 4);
-    const pastLm = resolveLandmarkExpression(`last ${lmName}`, today);
+    const pastLm = resolveLandmarkExpression(`last ${lmName}`, today, context.landmarkPacks);
     const pastBase = pastLm.found ? (pastLm.baseDate || pastLm.resolvedDate) : null;
     const pastYear = pastBase ? pastBase.slice(0, 4) : null;
     const q = pastBase && pastYear && pastBase <= today
@@ -1739,7 +1773,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       : `${lmName} ${futureYear} is on ${futureBase}, which hasn't happened yet. Which past date did you mean?`;
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
   }
-  const resolved = resolveDateExpression(logDateText, today);
+  const resolved = resolveDateExpression(logDateText, today, context.landmarkPacks);
   if (resolved.needsClarification) {
     const dateQ = resolved.clarificationQuestion || "Which date?";
     const dateQMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
@@ -1769,7 +1803,10 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       /\b(started|began|came|ended|stopped|was|had|yesterday|ago|tha|the|thi|hua|hui|undaayirunnu|kazhinju|kazhinjittu|munpe|pehle|during|around|before|after|holi|equinox|solstice|midsummer|getaway|marathon)\b/i.test(lower) ||
       /\b(ke\s+(?:day|time|din|baad|pehle)|time\s+il|winter\s+(?:holiday\s+)?break)\b/i.test(lower) ||
       /(थी|था|थे|हुआ|हुई|के दिन|के समय|से .* पहले|के बाद|होली|ആയിരുന്നു|തുടങ്ങി|സമയത്ത്|ദിവസം|മുൻപ്|ശേഷം|ഹോളി|വേനൽ\s+അവധി)/.test(text);
+    // Q4.4: the calendar ?date= preset wins over silent defaults, never over a stated date.
+    const presetDefault = context.defaultDate && /^\d{4}-\d{2}-\d{2}$/.test(context.defaultDate) && isValidDateKey(context.defaultDate) && context.defaultDate <= today ? context.defaultDate : null;
     if (clearlyToday) entryDate = today;
+    else if (presetDefault) entryDate = presetDefault;
     else if (hasLogContent && !pastMarkers) entryDate = today; // present-tense symptom/flow log
     else {
       const q = "Which date?";
@@ -1789,7 +1826,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (extraction.periodStart) {
     const frag = text.match(/(?:period\s+(?:started|began|came)|started\s+my\s+period|got\s+my\s+period)\s+([^,.;!?\n]+?)(?=\s+and\s|\s+but\s|\s+with\s|[,.;!?\n]|$)/i)?.[1];
     if (frag) {
-      const r = resolveDateExpression(`period started ${frag}`, today);
+      const r = resolveDateExpression(`period started ${frag}`, today, context.landmarkPacks);
       if (r.date) { entryDate = r.date; dateExplanation = r.explanation || dateExplanation; }
     }
     const firstDayFlow = lower.match(/\bflow\s+was\s+(light|medium|heavy)\s+on\s+the\s+first\s+day\b/) || lower.match(/\b(light|medium|heavy)\s+on\s+the\s+first\s+day\b/);
@@ -1831,7 +1868,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
 
     if (clauseParts.length >= 2) {
       const parsedClauses = clauseParts.map((cl) => {
-        const clRes = resolveDateExpression(cl, today);
+        const clRes = resolveDateExpression(cl, today, context.landmarkPacks);
         let clDate = clRes.date;
         const clExplanation = clRes.explanation;
         if (!clDate && entryDate) {
