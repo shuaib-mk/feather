@@ -40,7 +40,7 @@ const MEDICAL_ADVICE_PATTERNS = [
 
   // English: Fertility, pregnancy risk & etiology inquiries
   /\b(?:can\s+i\s+get\s+pregnant|could\s+i\s+be\s+pregnant|am\s+i\s+pregnant|risk\s+of\s+pregnancy|prevent\s+pregnancy|contracept(?:ion|ive))\b/i,
-  /\b(?:is\s+[\w\s]{0,25}?\s*(?:a\s+)?(?:sign|symptom|indication)s?\s+of\s+(?:pregnancy|disease|infection|miscarriage))\b/i,
+  /\b(?:is\s+[\w\s]{0,25}?\s*(?:a\s+)?(?:sign|symptom|indication)s?\s+of\s+(?:pregnancy|disease|infection|miscarriage|cancer))\b/i,
   /\b(?:pregnancy\s+advice|fertility\s+treatment|fertile\s+enough\s+to\s+conceive)\b/i,
   /\b(?:what\s+does\s+(?:a|my)?\s*(?:missed|late|delayed|skipped)\s+period\s+mean)\b/i,
   /\b(?:why\s+is\s+(?:my|the)?\s*period\s+(?:so\s+)?(?:late|delayed|missing))\b/i,
@@ -71,6 +71,17 @@ const MEDICAL_ADVICE_PATTERNS = [
   /\b(?:how\s+to|can\s+i|ways\s+to|pill\s+to|medicine\s+to|tablet\s+to)\s+(?:delay|postpone|stop|skip|induce)\s+(?:my|a|the)?\s*period\b/i,
   /\b(?:friend|mom|mother|sister|aunt|partner|coworker|someone|people|internet|tiktok|google|reddit)\s+(?:said|told\s+me|suggested|recommended|says|thinks)\s+(?:that\s+)?(?:i\s+should|to\s+take|to\s+use|taking|it'?s\s+(?:normal|safe|okay|bad|dangerous))\b/i,
   /\b(?:log|note|record|save|remember)\s+that\s+i\s+(?:should|need\s+to|ought\s+to|can)\s+(?:take|use|try|stop|start)\s+(?:this|that|a|an|the|my|some)?\s*(?:pill|pills|tablet|tablets|medicine|medication|drug|painkiller|antibiotic|dose|dosage)\b/i,
+  // Q3: "does X mean I have <condition>" diagnostic probes.
+  /\bmean\s+i\s+have\s+(?:a\s+|an\s+)?(?:pcos|pcod|endometriosis|fibroid|infection|cyst|cancer|tumor|disease|miscarriage|vaginosis|yeast\s+infection|disorder|condition)\b/i,
+  // Q3: multilingual medicine questions and "is it normal".
+  // Tamil: marundu (medicine), mathirai (tablet), "normal ah", satharanama.
+  /(?:\bmarundu\b|\bmathirai\b|\bnormal\s+ah\b|\bsatharanama\b)/i,
+  // Kannada: aushadhi/aushadha (medicine), matre (tablet), "idu normal", sahaja.
+  /(?:\baushadh[ai]\b|\bmatre\b|\bidu\s+normal\b|\bsahaja\b)/i,
+  // Malayalam: marunnu (medicine), gulika (tablet), "normal ano/ana", sadharana.
+  /(?:\bmarunnu\b|\bgulika\b|\bnormal\s+an[oa]\b|\bsadharana\b)/i,
+  // Hindi romanized extras: dava/davai/goli (medicine/tablet), "kya ye normal hai".
+  /(?:\bdava\b|\bdavai\b|\bgoli\b|\bkya\s+yeh?\s+normal\s+hai\b)/i,
 ];
 
 
@@ -169,6 +180,15 @@ const SEVERE_SYMPTOM_PATTERNS = [
   /\bsevere\s+(?:pain|cramps?)\b[^.?!]*\bfever\b/i, /\bfever\b[^.?!]*\bsevere\s+(?:pain|cramps?)\b/i,
   // Suicidal thoughts / self-harm
   /\b(?:suicid(?:al|e)|thoughts?\s+of\s+(?:self[-\s]?harm|hurting\s+myself|ending\s+my\s+life|dying)|want(?:ing)?\s+to\s+(?:die|hurt\s+myself|end\s+it\s+all)|self[-\s]?harm)\b/i,
+  // Q3: fainting / dizziness / chest pain in Hindi, Tamil, Kannada, Malayalam (romanized).
+  // Hindi: behosh/behoshi (faint), chakkar (dizzy), seene me(a)dard (chest pain).
+  /\b(?:behosh(?:i)?|chakkar|seene\s+me(?:in)?\s+dard)\b/i,
+  // Tamil: mayakkam (faint/dizzy), nenju vali / nenj vali (chest pain).
+  /\b(?:mayakkam|nenju\s+vali|nenj\s+vali)\b/i,
+  // Kannada: talasutti (dizzy), ede novu / ede nov (chest pain).
+  /\b(?:talasutti|ede\s+novu?)\b/i,
+  // Malayalam: thalakarakkam (dizzy), mayakkam (faint), nenjuvedana (chest pain).
+  /\b(?:thalakarakkam|thalakarakam|mayakkam|nenjuvedana|nenjuv\s+vedana)\b/i,
 ];
 
 /**
@@ -184,6 +204,9 @@ export function checkSevereSymptomEscalation(input: string): {
   const normalized = input.trim();
   if (!normalized) {
     return { isSevere: false, escalationMessage: null };
+  }
+  if (/(hospital|emergency(?:\s+room)?|urgent\s+care)/i.test(normalized) && /(heavy|bleed\w*|soak\w*|spotting|hemorrhag|flooding|flow)/i.test(normalized)) {
+    return { isSevere: true, escalationMessage: SEVERE_SYMPTOM_ESCALATION_MESSAGE };
   }
   for (const pattern of SEVERE_SYMPTOM_PATTERNS) {
     if (pattern.test(normalized)) {

@@ -1621,7 +1621,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   }
   const resolved = resolveDateExpression(logDateText, today);
   if (resolved.needsClarification) {
-    return { message: resolved.clarificationQuestion || "Which date?", entry: null, needsClarification: true, clarificationQuestion: resolved.clarificationQuestion || "Which date?", activityTrail, toolCalls, planOverlaps, ...offline };
+    const dateQ = resolved.clarificationQuestion || "Which date?";
+    const dateQMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
+    return { message: dateQMsg, entry: null, needsClarification: true, clarificationQuestion: dateQ, activityTrail, toolCalls, planOverlaps, ...offline };
   }
   let entryDate: string | null = resolved.date;
   let dateExplanation: string | null = resolved.explanation || null;
@@ -1651,7 +1653,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     else if (hasLogContent && !pastMarkers) entryDate = today; // present-tense symptom/flow log
     else {
       const q = "Which date?";
-      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+      const qMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${q}` : q;
+      return { message: qMsg, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
   if (entryDate > today) {
