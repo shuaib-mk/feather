@@ -98,12 +98,14 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   const saveLog = useCallback((l: Omit<DayLog, "id"> & { id?: number }, opts?: SaveLogEntryOptions): SaveLogEntryResult | null => {
     try {
       const result = saveLogEntry(l, opts);
-      if (result.saved) {
-        refreshData();
-        const count = getEntriesSinceExport();
-        if (count >= 5) {
-          setBackupToast(true);
-        }
+      if (!result || result.saved === false) {
+        setErrorToast((result && result.error) || "Could not save that entry. Nothing was saved.");
+        return null;
+      }
+      refreshData();
+      const count = getEntriesSinceExport();
+      if (count >= 5) {
+        setBackupToast(true);
       }
       return result;
     } catch (err: any) {

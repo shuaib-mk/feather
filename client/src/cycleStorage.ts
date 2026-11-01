@@ -91,20 +91,39 @@ function safeGetItem(key: string): string | null {
   return inMemoryVault.get(key) ?? null;
 }
 
-function safeSetItem(key: string, value: string): void {
+let lastStorageErrorMsg: string | null = null;
+
+/** Last write/quota failure message, if any. Cleared on every successful write. */
+export function lastStorageError(): string | null {
+  return lastStorageErrorMsg;
+}
+
+function safeSetItem(key: string, value: string): boolean {
+  const fail = (message: string): boolean => {
+    lastStorageErrorMsg = message;
+    return false;
+  };
   try {
     if (typeof window !== "undefined" && window.localStorage) {
       window.localStorage.setItem(key, value);
-      return;
+      lastStorageErrorMsg = null;
+      return true;
     }
     if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) {
       (globalThis as any).localStorage.setItem(key, value);
-      return;
+      lastStorageErrorMsg = null;
+      return true;
     }
-  } catch {
-    // ignore quota or private browsing restriction
+  } catch (err: any) {
+    return fail((err && err.message) || ("Write failed for " + key));
   }
-  inMemoryVault.set(key, value);
+  try {
+    inMemoryVault.set(key, value);
+  } catch (err: any) {
+    return fail((err && err.message) || ("Write failed for " + key));
+  }
+  lastStorageErrorMsg = null;
+  return true;
 }
 
 
@@ -201,13 +220,14 @@ export function loadCycleData(): { periods: Period[]; logs: DayLog[] } {
   }
 }
 
-export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): void {
+export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): boolean {
   try {
     const key = activeVaultKey();
-    if (key === DEMO_STORAGE_KEY) { let prev:any={}; try { prev = JSON.parse(safeGetItem(key) || "{}"); } catch {} safeSetItem(key, JSON.stringify({ ...prev, periods: data.periods, logs: data.logs, events: prev.events || [] })); }
-    else safeSetItem(key, JSON.stringify(data));
+    if (key === DEMO_STORAGE_KEY) { let prev:any={}; try { prev = JSON.parse(safeGetItem(key) || "{}"); } catch {} return safeSetItem(key, JSON.stringify({ ...prev, periods: data.periods, logs: data.logs, events: prev.events || [] })); }
+    return safeSetItem(key, JSON.stringify(data));
   } catch (err) {
     console.error("Failed to save cycle data:", err);
+    return false;
   }
 }
 
@@ -315,7 +335,7 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
 
   candidatePeriods.sort((a, b) => b.startDate.localeCompare(a.startDate));
   data.periods = candidatePeriods;
-  saveCycleData(data);
+  if (!saveCycleData(data)) throw new Error("Could not write to local storage" + (lastStorageError() ? ": " + lastStorageError() : "") + ". Nothing was saved.");
   incrementEntriesSinceExport();
   return newPeriod;
 }
@@ -419,7 +439,9 @@ export function saveLogEntry(
     validateRecords(toPeriodRecords(candidatePeriods));
     candidateLogs.sort((a, b) => b.logDate.localeCompare(a.logDate));
     candidatePeriods.sort((a, b) => b.startDate.localeCompare(a.startDate));
-    saveCycleData({ periods: candidatePeriods, logs: candidateLogs });
+    if (!saveCycleData({ periods: candidatePeriods, logs: candidateLogs })) {
+      return { log: newLog, period: affected, needsConfirmation: false, saved: false, error: lastStorageError() || "Could not write to local storage." };
+    }
     return { log: newLog, period: affected, needsConfirmation: false, saved: true };
   };
 
@@ -652,7 +674,11 @@ export function bulkSavePeriods(rows: BulkPeriodRow[]): BulkSaveResult {
   }
   if (accepted.length > 0) {
     data.periods = [...data.periods, ...accepted].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    saveCycleData(data);
+    if (!saveCycleData(data)) {
+      const writeReason = lastStorageError() || "storage write failed";
+      for (const p of accepted) skipped.push({ row: { startDate: p.startDate, endDate: p.endDate }, reason: writeReason });
+      return { saved: 0, skipped };
+    }
     incrementEntriesSinceExport();
   }
   return { saved: accepted.length, skipped };

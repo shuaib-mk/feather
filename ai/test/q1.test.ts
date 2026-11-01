@@ -82,3 +82,27 @@ if (failed > 0) process.exit(1);
   log = loadCycleData().logs.find((l) => l.logDate === "2026-10-02")!;
   check("Q1.3: replace:true restores overwrite", log.flow === "heavy" && JSON.stringify(log.symptoms) === JSON.stringify(["fatigue"]) && log.mood === "Low" && log.notes === "fresh", log);
 }
+
+// --- Q1.4 storage failures are reported, never silent ---
+{
+  resetVault();
+  const working = (globalThis as any).localStorage;
+  (globalThis as any).localStorage = {
+    getItem: (k: string) => store[k] ?? null,
+    setItem: (_k: string, _v: string) => { throw new Error("QuotaExceededError"); },
+    removeItem: (k: string) => { delete store[k]; },
+  };
+  const res = saveLogEntry({ logDate: "2026-10-02", flow: "medium", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null }, { kind: "period_started" });
+  check("Q1.4: saveLogEntry reports saved:false with reason", res.saved === false && typeof res.error === "string" && res.error.length > 0, res);
+  check("Q1.4: vault untouched after failed write", loadCycleData().periods.length === 0, loadCycleData().periods.length);
+  let threw = "";
+  try { addOrUpdatePeriod({ startDate: "2026-10-02", endDate: "2026-10-02" }); } catch (err: any) { threw = err?.message || ""; }
+  check("Q1.4: addOrUpdatePeriod throws with reason", threw.indexOf("Could not write") !== -1, threw);
+  store["feather_demo_active"] = "1";
+  const resD = saveLogEntry({ logDate: "2026-10-03", flow: "medium", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null }, { kind: "period_started" });
+  check("Q1.4: demo namespace also reports failure", resD.saved === false, resD);
+  delete store["feather_demo_active"];
+  (globalThis as any).localStorage = working;
+  const ok = saveLogEntry({ logDate: "2026-10-04", flow: "medium", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null }, { kind: "period_started" });
+  check("Q1.4: writes work again after restore", ok.saved === true, ok.saved);
+}

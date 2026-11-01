@@ -399,6 +399,10 @@ export function VoiceFlowPage() {
     );
 
     if (!result) return;
+    if (result.saved === false) {
+      setAgentMessage(result.error || "Could not save that entry. Nothing was saved.");
+      return;
+    }
     if (result.needsConfirmation) {
       setLongPeriodWarning(result.confirmationReason || "This would make a period longer than 10 days. Save it anyway?");
       return;
