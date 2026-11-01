@@ -145,5 +145,6 @@ await q23();
     check("Q2.5: live mixed handled offline with slip", !!live.entry && live.mode === "offline" && typeof live.message === "string" && live.message.indexOf("talk to a doctor") !== -1, live.message);
   });
 }
+
 console.log("Q2 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
