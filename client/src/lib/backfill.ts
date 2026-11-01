@@ -1,4 +1,4 @@
-import { prettyDate, diffDays, type Period } from "../cycleStorage";
+import { prettyDate, diffDays, saveLogEntry, loadCycleData, saveCycleData, addOrUpdatePeriod, type Period } from "../cycleStorage";
 import { isValidDateKey } from "./localDate";
 import type { StructuredEntry } from "../../../ai/backend/agent";
 
@@ -72,4 +72,42 @@ export function backfillGapDays(sorted: BackfillRow[], index: number): number | 
   const cur = sorted[index].date;
   if (!isValidDateKey(prev) || !isValidDateKey(cur)) return null;
   return diffDays(prev, cur);
+}
+
+// Atomic multi-save through the existing period model: every selected row is
+// written, or none is. Validation runs before any write; a storage snapshot
+// is restored if any row throws mid-batch.
+export function saveBackfillRows(rows: BackfillRow[], today: string, confirmLongPeriod: boolean): number {
+  const problem = validateBackfillRows(rows, today);
+  if (problem) throw new Error(problem);
+  const snapshot = loadCycleData();
+  try {
+    const ordered = [...backfillSelected(rows)].sort((a, b) => a.date.localeCompare(b.date));
+    for (const row of ordered) {
+      const saved = saveLogEntry(
+        {
+          logDate: row.date,
+          flow: null,
+          symptoms: [],
+          mood: null,
+          energy: null,
+          sleepHours: null,
+          notes: null,
+          kind: "period_started",
+        },
+        { kind: "period_started", confirmLongPeriod },
+      );
+      if (!saved || saved.needsConfirmation) {
+        throw new Error(saved && saved.confirmationReason ? saved.confirmationReason : "A row needs confirmation.");
+      }
+      if (row.endDate) {
+        const per = loadCycleData().periods.find((p) => p.startDate === row.date);
+        if (per) addOrUpdatePeriod({ ...per, endDate: row.endDate });
+      }
+    }
+  } catch (err) {
+    saveCycleData(snapshot);
+    throw err;
+  }
+  return backfillSelected(rows).length;
 }

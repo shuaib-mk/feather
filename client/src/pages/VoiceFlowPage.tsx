@@ -7,8 +7,8 @@ import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
-import { prettyDate, todayStr, addDays, saveLogEntry, loadCycleData, saveCycleData, addOrUpdatePeriod } from "../cycleStorage";
-import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, type BackfillRow } from "../lib/backfill";
+import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod } from "../cycleStorage";
+import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
 export const VOICE_PENDING_SESSION_KEY = "feather_voice_pending_v1";
 
@@ -430,41 +430,16 @@ export function VoiceFlowPage() {
       setBackfillLongWarn("One or more periods is longer than 10 days. Save them anyway?");
       return;
     }
-    // Atomic: snapshot first; any failure restores the vault untouched.
-    const snapshot = loadCycleData();
+    let savedCount = 0;
     try {
-      const ordered = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-      for (const row of ordered) {
-        const saved = saveLogEntry(
-          {
-            logDate: row.date,
-            flow: null,
-            symptoms: [],
-            mood: null,
-            energy: null,
-            sleepHours: null,
-            notes: null,
-            kind: "period_started",
-          },
-          { kind: "period_started", confirmLongPeriod: confirmed },
-        );
-        if (!saved || saved.needsConfirmation) {
-          throw new Error(saved && saved.confirmationReason ? saved.confirmationReason : "A row needs confirmation.");
-        }
-        if (row.endDate) {
-          const per = loadCycleData().periods.find((p) => p.startDate === row.date);
-          if (per) addOrUpdatePeriod({ ...per, endDate: row.endDate });
-        }
-      }
+      savedCount = saveBackfillRows(backfillRows, todayStr(), confirmed);
     } catch (err: any) {
-      saveCycleData(snapshot);
       refreshData();
       setBackfillLongWarn(null);
-      setAgentMessage("Could not save these periods (" + (err?.message || "validation failed") + "). Nothing was saved.");
+      setAgentMessage(err?.message || "Could not save these periods. Nothing was saved.");
       return;
     }
     refreshData();
-    const savedCount = rows.length;
     setSavedSuccessMessage(savedCount + (savedCount === 1 ? " period" : " periods") + " saved to your device vault.");
     setSavedLink({ to: "/chronicle", label: "View in Chronicle" });
     setBackfillRows(null);
