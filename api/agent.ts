@@ -1889,6 +1889,8 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
   let usedPersonalAnchorLive = false;
   let structuredEntry = null;
   const structuredEntries = [];
+  const backfillShape = extractBackfillDates(userPrompt, today);
+  const collectBackfillEntries = backfillShape !== null && backfillShape.seeds.length > 0;
   let planOverlaps = void 0;
   let needsClarification = false;
   let clarificationQuestion = null;
@@ -2023,7 +2025,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
               kind: fnArgs.kind || "daily_log"
             };
             toolResultObj = { success: true, entry: structuredEntry };
-            structuredEntries.push(structuredEntry);
+            if (collectBackfillEntries) structuredEntries.push(structuredEntry);
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
@@ -2084,7 +2086,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
     }
     return ensureFactCoverageDisclosure({
       message: finalMessage,
-      entry: structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
+      entry: collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
       entries: structuredEntries.length > 0 ? structuredEntries : void 0,
       needsClarification,
       clarificationQuestion,
