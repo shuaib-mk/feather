@@ -127,6 +127,7 @@ export function DashboardPage() {
               >
                 Record First Entry
               </Link>
+              <p className="basis-full text-center text-[11px] text-stone-500">Tell me your last few periods, for example: my periods started October 2nd and September 9th.</p>
             </div>
           }
         />

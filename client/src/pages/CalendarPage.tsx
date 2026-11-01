@@ -49,7 +49,7 @@ export function CalendarPage(){
   const weekdayNames = buildWeekdayHeader(month.weekStart, locale);
   return <div className="space-y-5" onTouchStart={(e)=>{touchX.current=e.touches[0].clientX;}} onTouchEnd={(e)=>{ if(touchX.current==null) return; const dx=e.changedTouches[0].clientX-touchX.current; if(Math.abs(dx)>50) move(dx<0?1:-1); touchX.current=null; }}>
     <PageHeader title="Calendar" subtitle="Logged days and estimated windows from your cycles." badge="Calendar" />
-    {data.periods.length===0 && <div className="liquid-glass-card rounded-[24px] p-5 text-xs">No cycles logged yet. The calendar still works — log a period to see estimates. <Link className="underline font-semibold" to="/voice">Log by voice</Link></div>}
+    {data.periods.length===0 && <div className="liquid-glass-card rounded-[24px] p-5 text-xs">No cycles logged yet. The calendar still works — log a period to see estimates. <Link className="underline font-semibold" to="/voice">Log by voice</Link><p className="mt-1 text-stone-500">Tell me your last few periods, for example: my periods started October 2nd and September 9th.</p></div>}
     <div className="liquid-glass-card rounded-[24px] p-4 sm:p-6 space-y-3">
       <div className="flex items-center justify-between gap-2"><button type="button" aria-label="Previous month" className="liquid-glass-button rounded-full px-4 min-h-[44px]" onClick={()=>move(-1)}>‹</button><h2 className="font-serif text-lg font-semibold">{monthName}</h2><div className="flex gap-2"><button type="button" className="liquid-glass-button rounded-full px-4 min-h-[44px]" onClick={()=>{const [y,m]=today.split("-").map(Number); setCursor({y,m}); setSelected(today);}}>Today</button><button type="button" aria-label="Next month" className="liquid-glass-button rounded-full px-4 min-h-[44px]" onClick={()=>move(1)}>›</button></div></div>
       <div role="grid" aria-label={monthName} className="grid grid-cols-7 gap-1">
@@ -128,3 +128,4 @@ export function NextThirtyDaysStrip(){
     </Link>
   );
 }
+
