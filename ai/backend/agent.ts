@@ -649,7 +649,7 @@ export async function runLavenderAgent(
       detail: "Medical advice request intercepted",
       status: "done",
     });
-    if (hasLogContentForMixed(userPrompt)) {
+    if (hasClearLogStatement(userPrompt)) {
       const fb = parseLocally(userPrompt, context.currentDate || todayLocal(), context);
       return { ...fb, mode: "offline", modeReason: "Offline parser - medical part refused; log handled by offline rules" };
     }
@@ -1315,13 +1315,34 @@ export function extractBackfillDates(text: string, today: string): BackfillParse
   return null;
 }
 
-/** Log content check for mixed messages (log + medical question): lexicon hits or energy/sleep numbers. */
-function hasLogContentForMixed(text: string): boolean {
-  const ext = extractWithLexicon(text);
-  if (ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd) return true;
-  const lower = text.toLowerCase();
-  if (/\benergy\s*(?:is|level|:)?\s*[1-5]\b/.test(lower)) return true;
-  if (/(?:slept|sleep)\s*(?:for\s*)?\d/.test(lower)) return true;
+/** Q5: an explicit log statement that can stand alone as a log: a declarative
+ * period start/end, a flow level stated as fact, or symptoms with a log anchor
+ * (temporal marker or having-verb framing). Bare symptom nouns inside a pure
+ * medical question ("is this cramp normal?", "should I take X for cramps",
+ * "home remedy for cramps") are NOT log statements: those refuse outright. */
+function hasClearLogStatement(text: string): boolean {
+  const t = text.trim();
+  // A message led by a question word is a pure question, even when it names
+  // a flow level ("does heavy flow mean I have PCOS?"): never a log statement.
+  if (/^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)\b/i.test(t)) return false;
+  // Declarative period start/end ("my period started yesterday").
+  if (/\b(?:my\s+period|period)\s+(?:started|began|came|ended|stopped|finished)\b/i.test(t)) return true;
+  if (/\b(?:started|got)\s+my\s+period\b/i.test(t)) return true;
+  // Flow with a stated level, as fact ("heavy flow", "flow was heavy").
+  if (/\b(?:heavy|medium|light|spotting|none)\s+flow\b/i.test(t)) return true;
+  if (/\bflow\s+(?:was|is)\s+(?:very|really|so|quite|pretty\s+)?(?:heavy|medium|light|spotting|none)\b/i.test(t)) return true;
+  if (/\bhad\s+spotting\b/i.test(t)) return true;
+  // Symptoms with a log anchor: temporal markers or having-verb framing.
+  // ("cramps today", "headache yesterday", "having cramps"). Bare nouns
+  // ("is this cramp normal?") and untimed "I have X" do not count.
+  const symptomHit = /\b(?:cramps?|headaches?|nausea|fatigue|bloating|back\s+pain|tender|acne|cravings|insomnia|dizziness|hot\s+flashes|spotting|bleeding)\b/i.test(t);
+  if (!symptomHit) return false;
+  if (/\b(?:today|tonight|yesterday|this\s+morning|last\s+night|tomorrow)\b/i.test(t)) return true;
+  if (/\bago\b/i.test(t)) return true;
+  if (/\b(?:last|this|next)\s+(?:week|month|night)\b/i.test(t)) return true;
+  if (/\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(t)) return true;
+  if (/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(t)) return true;
+  if (/\bhaving\b/i.test(t)) return true;
   return false;
 }
 
@@ -1337,7 +1358,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
 
   let medicalTail: string | null = null;
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    if (!hasLogContentForMixed(text)) {
+    if (!hasClearLogStatement(text)) {
           return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
