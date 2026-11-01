@@ -33,9 +33,9 @@ export function PrivacySettings() {
       setMsg("Passphrases do not match.");
       return;
     }
-    if (pass.length < 4) {
-      setMsg("Use 6+ words or 12+ characters. A numeric PIN is allowed but short PINs are weak against offline guessing.");
-      if (!/^\d+$/.test(pass)) return;
+    if (pass.length < 8) {
+      setMsg("Use a passphrase with at least 8 characters (12+ recommended).");
+      return;
     }
     try {
       await enableAppLock(pass);
@@ -96,6 +96,9 @@ export function PrivacySettings() {
       <p className="text-xs text-stone-600 leading-relaxed">
         Cycle data is stored on this device. It is <strong>not encrypted unless App Lock is on</strong>. What leaves this device: audio is sent for transcription, and text is sent to the assistant agent. Cycle dates are not sent unless you ask about them in text.
       </p>
+      <p className="text-xs text-stone-600 leading-relaxed">
+        while unlocked the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
+      </p>
       <p className="text-xs text-amber-950 liquid-glass-card border border-amber-200/80 bg-amber-50/40 rounded-[18px] p-4 font-sans leading-relaxed shadow-xs">
         Forgotten passphrase = your data cannot be recovered. Export a backup first. App Lock protects against casual access, not a determined attacker with your device.
       </p>
@@ -120,7 +123,7 @@ export function PrivacySettings() {
         </label>
       </div>
       <label className="block text-xs font-sans text-stone-700">
-        Passphrase (6+ words or 12+ characters recommended; numeric PIN allowed with the warning above)
+        Passphrase (12+ characters recommended, 8 minimum)
         <input type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} className="mt-1 w-full liquid-glass-input rounded-xl px-3 py-2 min-h-[44px]" />
       </label>
       <label className="block text-xs font-sans text-stone-700">

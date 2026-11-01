@@ -21,6 +21,14 @@ export async function decryptJSON<T=any>(passphrase:string, payload:EncryptedPay
 }
 export function isEncryptedPayload(x:any): x is EncryptedPayload { return !!x && x.version===1 && typeof x.ciphertext==="string" && typeof x.salt==="string"; }
 export const ENCRYPTED_VAULT_KEY = "feather_encrypted_vault_v1";
+/** True when any plaintext vault key is still present in this storage. */
+export function hasPlaintextVault(storage: Storage): boolean {
+  try {
+    return VAULT_PLAINTEXT_KEYS.some((k) => storage.getItem(k) != null);
+  } catch {
+    return false;
+  }
+}
 export const VAULT_PLAINTEXT_KEYS = ["feather_cycle_vault_v1","feather_events_v1","feather_landmark_packs","feather_entries_since_export","feather_last_export_ts"];
-export async function encryptVaultToStorage(passphrase:string, storage:Storage): Promise<void> { const data:Record<string,string|null>={}; for(const k of VAULT_PLAINTEXT_KEYS) data[k]=storage.getItem(k); const payload=await encryptJSON(passphrase,{keys:data}); storage.setItem(ENCRYPTED_VAULT_KEY, JSON.stringify(payload)); for(const k of VAULT_PLAINTEXT_KEYS) storage.removeItem(k); }
+export async function encryptVaultToStorage(passphrase:string, storage:Storage): Promise<void> { const data:Record<string,string|null>={}; for(const k of VAULT_PLAINTEXT_KEYS) data[k]=storage.getItem(k); const payload=await encryptJSON(passphrase,{keys:data}); const check:any=await decryptJSON(passphrase, payload); if(JSON.stringify((check&&check.keys)||null)!==JSON.stringify(data)) throw new Error("Encryption verification failed; nothing was changed."); storage.setItem(ENCRYPTED_VAULT_KEY, JSON.stringify(payload)); for(const k of VAULT_PLAINTEXT_KEYS) storage.removeItem(k); }
 export async function decryptVaultFromStorage(passphrase:string, storage:Storage): Promise<void> { const raw=storage.getItem(ENCRYPTED_VAULT_KEY); if(!raw) throw new Error("No encrypted vault found."); const data:any=await decryptJSON(passphrase, JSON.parse(raw)); for(const [k,v] of Object.entries(data.keys||{})) { if(typeof v==="string") storage.setItem(k,v); } storage.removeItem(ENCRYPTED_VAULT_KEY); }

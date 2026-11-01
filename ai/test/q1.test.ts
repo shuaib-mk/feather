@@ -1,6 +1,7 @@
 /** Q1: data integrity + app lock. */
 import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods, saveLogEntry, importCycleDataJSON } from "../../client/src/cycleStorage";
 import { saveEvents, loadEvents } from "../../client/src/lib/events";
+import { enableAppLock, unlockApp, lockNow, disableAppLock, isAppLockEnabled, needsUnlockOnLoad, forgetPassphrase } from "../../client/src/lib/appLock";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -143,4 +144,27 @@ if (failed > 0) process.exit(1);
   check("Q4.7: import without events keeps local events", keep.success === true && loadEvents().some((e) => e.id === "evt-9"), loadEvents().map((e) => e.id));
   const badEv = importCycleDataJSON(JSON.stringify({ periods: [], logs: [], events: [{ id: "x", title: "", date: "2026-13-45", source: "manual" }] }));
   check("Q4.7: invalid event skipped with reasons", badEv.success === false && badEv.skipped.length === 1, badEv);
+}
+
+// --- Q1.6 App Lock ---
+{
+  resetVault();
+  saveCycleData({ periods: [{ id: 1, startDate: "2026-10-02", endDate: "2026-10-05" } as any], logs: [] });
+  let threw = "";
+  try { await enableAppLock("short"); } catch (err: any) { threw = err?.message || ""; }
+  check("Q1.6: short passphrase rejected", threw.indexOf("8 characters") !== -1, threw);
+  await enableAppLock("long-enough-passphrase");
+  check("Q1.6: enable encrypts and clears plaintext", loadCycleData().periods.length === 0 && store["feather_encrypted_vault_v1"] !== undefined && store["feather_app_lock_enabled"] === "1", Object.keys(store));
+  const blobBefore = store["feather_encrypted_vault_v1"];
+  await lockNow();
+  check("Q1.6: lockNow does not re-encrypt an empty vault", store["feather_encrypted_vault_v1"] === blobBefore, "blob changed");
+  await unlockApp("long-enough-passphrase");
+  check("Q1.6: unlock restores data intact", loadCycleData().periods.length === 1 && loadCycleData().periods[0].startDate === "2026-10-02", loadCycleData().periods);
+  check("Q1.6: flag-based enabled", isAppLockEnabled() === true, null);
+  forgetPassphrase();
+  check("Q1.6: reload still asks (flag set)", needsUnlockOnLoad() === true, null);
+  delete store["feather_encrypted_vault_v1"];
+  check("Q1.6: flag set but blob missing still needs unlock (error state, not no-lock)", needsUnlockOnLoad() === true, null);
+  await disableAppLock("long-enough-passphrase");
+  check("Q1.6: disable clears flag", isAppLockEnabled() === false, null);
 }

@@ -119,7 +119,7 @@ Safety scope (guardrail v2): Feather refuses diagnosis, medication, fertility an
 
 ---
 
-Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features.
+Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features. while unlocked the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
 
 ### Local Vault & Unmissable Backup
 Because all cycle data lives exclusively on the user's device, clearing browser cache or changing devices would lose data. Feather makes backup prominent:
