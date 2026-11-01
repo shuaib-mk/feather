@@ -1441,6 +1441,10 @@ var TOOLS = [
             type: "string",
             description: "Calendar date in YYYY-MM-DD format. Defaults to current date if not specified."
           },
+          endDate: {
+            type: "string",
+            description: "Optional period end date (YYYY-MM-DD) when the user gives a range, e.g. from October 2 to October 6. Only for period starts."
+          },
           flow: {
             type: "string",
             enum: ["none", "spotting", "light", "medium", "heavy"],
@@ -1591,6 +1595,7 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Slip Correction: If the user provides conversational corrections to a pending slip ("no, make it the 3rd", "add headache", "change flow to light"), call \`update_entry\`.
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before vacation"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
+   - Backfill (several past periods in one message): call one log_entry per period, each with its own date and kind "period_started". If the user lists several periods, log them ALL (one call each), never just the first. If she gives a start and an end ("from October 2 to October 6", "started Sept 9 and ended Sept 13"), put the start in date and the end in endDate on a single period_started call.
 
 Tone: Warm, respectful, concise, neutral, non-medical.
 Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
@@ -1776,13 +1781,14 @@ function findStatedDatedFacts(userPrompt, today) {
   return facts;
 }
 function structuredEntriesOf(result) {
+  if (result.entries && result.entries.length > 0) return result.entries;
   return result.entry ? [result.entry] : [];
 }
 function factIsPlaced(fact, entries, events) {
   if (fact.eventNoun) {
     return events.some((e) => e.date === fact.date && (e.title || "").toLowerCase().includes(fact.eventNoun));
   }
-  return entries.some((e) => e.date === fact.date && (!fact.flow || e.flow === fact.flow) && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym))));
+  return entries.some((e) => (e.date === fact.date || e.endDate != null && e.endDate === fact.date) && (!fact.flow || e.flow === fact.flow) && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym))));
 }
 function ensureFactCoverageDisclosure(result, userPrompt, today) {
   if (!result || typeof result.message !== "string") return result;
@@ -1882,6 +1888,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
   ];
   let usedPersonalAnchorLive = false;
   let structuredEntry = null;
+  const structuredEntries = [];
   let planOverlaps = void 0;
   let needsClarification = false;
   let clarificationQuestion = null;
@@ -2004,6 +2011,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
             activityTrail.push({ step: "Structured Entry", detail: `Prepared log for ${fnArgs.date}`, status: "done" });
             structuredEntry = {
               date: fnArgs.date || today,
+              endDate: fnArgs.endDate || null,
               flow: fnArgs.flow || null,
               symptoms: (fnArgs.symptoms || []).filter((s) => VALID_SYMPTOMS.includes(s)),
               mood: fnArgs.mood || null,
@@ -2015,6 +2023,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
               kind: fnArgs.kind || "daily_log"
             };
             toolResultObj = { success: true, entry: structuredEntry };
+            structuredEntries.push(structuredEntry);
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
@@ -2068,13 +2077,15 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
     if (severeCheck.isSevere) {
       if (!structuredEntry && fallbackResult.entry) {
         structuredEntry = fallbackResult.entry;
+        if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
       }
       const cleanTail = !finalMessage.trim() || finalMessage.includes("talk to a doctor") ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.` : finalMessage.trim();
       finalMessage = cleanTail.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE) ? cleanTail : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
     }
     return ensureFactCoverageDisclosure({
       message: finalMessage,
-      entry: structuredEntry,
+      entry: structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
+      entries: structuredEntries.length > 0 ? structuredEntries : void 0,
       needsClarification,
       clarificationQuestion,
       activityTrail,
@@ -2171,10 +2182,15 @@ function extractWithLexicon(text) {
   return { symptoms, flow, mood, periodStart, periodEnd };
 }
 function validateEntryArgs(args, today) {
+  const min = addDaysToKey(today, -731);
   if (args.date !== void 0) {
     if (typeof args.date !== "string" || !isValidDateKey(args.date)) return "Invalid date: expected YYYY-MM-DD calendar date.";
-    const min = addDaysToKey(today, -731);
     if (args.date < min || args.date > today) return `Invalid date: must be between ${min} and ${today} (today).`;
+  }
+  if (args.endDate !== void 0 && args.endDate !== null) {
+    if (typeof args.endDate !== "string" || !isValidDateKey(args.endDate)) return "Invalid endDate: expected YYYY-MM-DD calendar date.";
+    if (typeof args.date === "string" && isValidDateKey(args.date) && args.endDate < args.date) return "Invalid endDate: must not be before date.";
+    if (args.endDate > today || args.endDate < min) return "Invalid endDate: must be within the past 731 days and not in the future.";
   }
   if (args.flow !== void 0 && args.flow !== null && !["none", "spotting", "light", "medium", "heavy"].includes(args.flow)) return "Invalid flow value.";
   if (args.kind !== void 0 && !["period_started", "period_ended", "daily_log"].includes(args.kind)) return "Invalid kind value.";
@@ -2195,6 +2211,7 @@ function applyModelPatch(pending, patch, today) {
   if (patch.mood !== void 0) updated.mood = patch.mood;
   if (patch.energy !== void 0) updated.energy = patch.energy;
   if (patch.sleep !== void 0) updated.sleep = patch.sleep;
+  if (patch.endDate !== void 0) updated.endDate = patch.endDate;
   if (patch.notes !== void 0) updated.notes = patch.notes;
   const add = patch.symptoms_add || patch.addSymptoms || [];
   const remove = patch.symptoms_remove || patch.removeSymptoms || [];
@@ -2221,6 +2238,164 @@ function findMatchedEvent(text, matched) {
     }
   }
   return bestScore > 0 ? best : null;
+}
+var BACKFILL_MAX_ENTRIES = 12;
+var BACKFILL_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+var BACKFILL_EVENT_NOUNS = "exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday";
+var BACKFILL_NUMBER_WORDS = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12
+};
+var BACKFILL_MONTH_FULL = {
+  jan: "January",
+  january: "January",
+  feb: "February",
+  february: "February",
+  mar: "March",
+  march: "March",
+  apr: "April",
+  april: "April",
+  may: "May",
+  jun: "June",
+  june: "June",
+  jul: "July",
+  july: "July",
+  aug: "August",
+  august: "August",
+  sep: "September",
+  sept: "September",
+  september: "September",
+  oct: "October",
+  october: "October",
+  nov: "November",
+  november: "November",
+  dec: "December",
+  december: "December"
+};
+function backfillNumber(token) {
+  const t = token.toLowerCase().trim();
+  if (/^\d+$/.test(t)) return parseInt(t, 10);
+  return BACKFILL_NUMBER_WORDS[t] ?? null;
+}
+function resolveBackfillDate(seg, today) {
+  const year = parseInt(today.slice(0, 4), 10);
+  const iso = seg.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const key = iso[1] + "-" + iso[2] + "-" + iso[3];
+    if (!isValidDateKey(key)) return { none: true };
+    if (key > today) return { future: key };
+    return { date: key };
+  }
+  const ago = seg.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?)\s+ago\b/i);
+  if (ago) {
+    const n = backfillNumber(ago[1]);
+    if (n === null) return { none: true };
+    const days = /week/i.test(ago[2]) ? n * 7 : n;
+    return { date: addDaysToKey(today, -days) };
+  }
+  if (/\byesterday\b/i.test(seg)) return { date: addDaysToKey(today, -1) };
+  if (/\btoday\b/i.test(seg)) return { date: today };
+  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+\\d{1,2}(?:st|nd|rd|th)?)", "i"));
+  if (md) {
+    const raw = md[1].replace(/,/g, " ").replace(/\s+/g, " ").trim();
+    const explicit = seg.match(/\b(20\d{2})\b/);
+    if (explicit) {
+      const key2 = parseMonthDay(raw, parseInt(explicit[1], 10));
+      if (!key2) return { none: true };
+      if (key2 > today) return { future: key2 };
+      return { date: key2 };
+    }
+    let key = parseMonthDay(raw, year);
+    if (!key) return { none: true };
+    if (key > today) key = parseMonthDay(raw, year - 1);
+    if (!key) return { none: true };
+    return { date: key };
+  }
+  return { none: true };
+}
+function backfillBareMonth(seg) {
+  let c = " " + seg.toLowerCase() + " ";
+  c = c.replace(/\b(i|we|my|our|the|last|this|had|have|has|got|periods|period|started|starts|began|came|were|was|on|in|for|and|then|also)\b/g, " ");
+  c = c.replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
+  if (!/^[a-z]+$/.test(c)) return null;
+  return BACKFILL_MONTH_FULL[c] || null;
+}
+function backfillRangeSeed(text, today) {
+  const lower = text.toLowerCase();
+  const finish = (a, b) => {
+    const r1 = resolveBackfillDate(a, today);
+    const r2 = resolveBackfillDate(b, today);
+    if (!r1.date || !r2.date) return null;
+    if (!(r1.date < r2.date) || r2.date > today) return null;
+    return { date: r1.date, endDate: r2.date };
+  };
+  const started = lower.match(/\bstarted\s+(.+?)\s+and\s+ended\s+(.+)/);
+  if (started) return finish(started[1], started[2]);
+  const fromTo = lower.match(/\bfrom\s+(.+?)\s+(?:to|till|until|through)\s+(.+)/);
+  if (fromTo) return finish(fromTo[1], fromTo[2]);
+  const till = lower.match(/\b(.+?)\s+till\s+(.+)/);
+  if (till) return finish(till[1], till[2]);
+  const parts = text.split(/\s+[-\u2013\u2014]\s+/);
+  if (parts.length === 2) return finish(parts[0], parts[1]);
+  return null;
+}
+function extractBackfillDates(text, today) {
+  if (!/\bperiods?\b/i.test(text)) return null;
+  const ext = extractWithLexicon(text);
+  const lower = text.toLowerCase();
+  const hasDetail = ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || /\benergy\s*(?:is|level|:)?\s*([1-5])\b/i.test(lower) || /(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/i.test(lower) || /\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/i.test(lower);
+  if (hasDetail) return null;
+  const range = backfillRangeSeed(text, today);
+  if (range) return { seeds: [range], warnings: [], monthAsk: null };
+  const eventRe = new RegExp("\\b(" + BACKFILL_EVENT_NOUNS + ")\\b", "i");
+  const segments = text.split(/(?:,|;|&|\bthen\b|\balso\b|\band\b)/i).map((s) => s.trim()).filter(Boolean);
+  const dates = [];
+  const warnings = [];
+  const bareMonths = [];
+  for (const seg of segments) {
+    if (eventRe.test(seg)) continue;
+    const bare = backfillBareMonth(seg);
+    if (bare) {
+      if (!bareMonths.includes(bare)) bareMonths.push(bare);
+      continue;
+    }
+    const r = resolveBackfillDate(seg, today);
+    if (r.date) {
+      dates.push(r.date);
+      continue;
+    }
+    if (r.future) {
+      warnings.push(r.future + " is in the future, so I left it out.");
+      continue;
+    }
+    if (/\d/.test(seg) || new RegExp("\\b(?:" + BACKFILL_MONTHS + ")\\b", "i").test(seg)) {
+      warnings.push("I could not place a date for: " + seg);
+    }
+  }
+  const dupes = dates.length - new Set(dates).size;
+  const unique = [...new Set(dates)].sort();
+  if (dupes > 0) warnings.push("One date was mentioned twice, so I counted it once.");
+  if (unique.length > BACKFILL_MAX_ENTRIES) {
+    const dropped = unique.length - BACKFILL_MAX_ENTRIES;
+    warnings.push("Keeping the " + BACKFILL_MAX_ENTRIES + " most recent of " + unique.length + " dates (" + dropped + " oldest left out).");
+  }
+  const seeds = unique.slice(Math.max(0, unique.length - BACKFILL_MAX_ENTRIES)).map((d) => ({ date: d }));
+  if (seeds.length >= 2 && bareMonths.length > 0) {
+    warnings.push(bareMonths[0] + " still needs a day: add it like " + bareMonths[0] + " 9.");
+  }
+  if (seeds.length >= 2) return { seeds, warnings, monthAsk: null };
+  if (bareMonths.length > 0) return { seeds: [], warnings, monthAsk: bareMonths[0] };
+  return null;
 }
 function parseLocally(text, today, context) {
   const startTime = Date.now();
@@ -2454,6 +2629,49 @@ function parseLocally(text, today, context) {
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
     }
+  }
+  const backfill = extractBackfillDates(text, today);
+  if (backfill) {
+    if (backfill.monthAsk) {
+      const q = "Which day in " + backfill.monthAsk + '? Reply like "period started ' + backfill.monthAsk + ' 9".';
+      return { message: q, entry: null, entries: [], needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, usedPersonalAnchor, ...offline };
+    }
+    const seeds = backfill.seeds;
+    const dated = seeds.map((s) => s.date);
+    const rangeNote = seeds.length === 1 && seeds[0].endDate ? " to " + seeds[0].endDate : "";
+    const baseMsg = seeds.length === 1 ? "I found 1 period: " + dated[0] + rangeNote + ". Review and confirm below." : "I found " + seeds.length + " period starts: " + dated.join(", ") + ". Review and confirm below.";
+    const warnMsg = backfill.warnings.length > 0 ? " " + backfill.warnings.join(" ") : "";
+    const entries = seeds.map((s) => ({
+      date: s.date,
+      endDate: s.endDate || null,
+      flow: null,
+      symptoms: [],
+      mood: null,
+      energy: null,
+      sleep: null,
+      notes: text,
+      isApproximate: false,
+      landmarkName: null,
+      kind: "period_started",
+      dateExplanation: null,
+      dateWindow: null
+    }));
+    for (const e of entries) {
+      toolCalls.push({ id: "call_backfill_" + Date.now() + "_" + e.date, toolName: "log_entry", args: { date: e.date, kind: "period_started" }, result: { entry: { date: e.date } }, latencyMs: 1, model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    }
+    activityTrail.push({ step: "Backfill", detail: "Extracted " + seeds.length + " past period date" + (seeds.length === 1 ? "" : "s"), status: "done" });
+    return ensureFactCoverageDisclosure({
+      message: baseMsg + warnMsg,
+      entry: entries[0],
+      entries,
+      needsClarification: false,
+      activityTrail,
+      toolCalls,
+      planOverlaps,
+      plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })),
+      usedPersonalAnchor,
+      ...offline
+    }, text, today);
   }
   if (intent === "other" || !hasLogContent && intent !== "plan_event") {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {

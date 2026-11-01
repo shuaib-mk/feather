@@ -315,6 +315,7 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Slip Correction: If the user provides conversational corrections to a pending slip ("no, make it the 3rd", "add headache", "change flow to light"), call \`update_entry\`.
    - Landmark Recall: If user gives fuzzy dates ("around New Year's", "after International Women's Day", "two days before vacation"), call tool \`milestone_lookup\`. If ambiguous, ask a polite, concise clarifying question ("Was it before or after New Year's?").
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
+   - Backfill (several past periods in one message): call one log_entry per period, each with its own date and kind "period_started". If the user lists several periods, log them ALL (one call each), never just the first. If she gives a start and an end ("from October 2 to October 6", "started Sept 9 and ended Sept 13"), put the start in date and the end in endDate on a single period_started call.
 
 Tone: Warm, respectful, concise, neutral, non-medical.
 Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
@@ -691,6 +692,7 @@ export async function runLavenderAgent(
 
   let usedPersonalAnchorLive = false;
   let structuredEntry: StructuredEntry | null = null;
+  const structuredEntries: StructuredEntry[] = [];
   let planOverlaps: any[] | undefined = undefined;
   let needsClarification = false;
   let clarificationQuestion: string | null = null;
@@ -828,6 +830,7 @@ export async function runLavenderAgent(
               isApproximate: fnArgs.isApproximate || false, landmarkName: fnArgs.landmarkName || null, kind: fnArgs.kind || "daily_log",
             };
             toolResultObj = { success: true, entry: structuredEntry };
+            structuredEntries.push(structuredEntry);
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "update_entry") {
@@ -890,6 +893,7 @@ export async function runLavenderAgent(
     if (severeCheck.isSevere) {
       if (!structuredEntry && fallbackResult.entry) {
         structuredEntry = fallbackResult.entry;
+        if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
       }
       const cleanTail =
         !finalMessage.trim() || finalMessage.includes("talk to a doctor")
@@ -902,7 +906,8 @@ export async function runLavenderAgent(
 
     return ensureFactCoverageDisclosure({
       message: finalMessage,
-      entry: structuredEntry,
+      entry: structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
+      entries: structuredEntries.length > 0 ? structuredEntries : undefined,
       needsClarification,
       clarificationQuestion,
       activityTrail,
