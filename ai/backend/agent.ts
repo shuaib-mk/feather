@@ -432,6 +432,8 @@ export interface StatedDatedFact {
   symptoms?: string[];
   eventNoun?: string;
   label: string;
+  /** Bare multi-date mention: counted only by the combined live disclosure, never per-fact. */
+  multiDateOnly?: boolean;
 }
 
 const COVERAGE_EVENT_NOUNS = [
@@ -523,6 +525,8 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
       push({ date: resolved, flow: flowMatch[1].toLowerCase(), label: `${flowMatch[1].toLowerCase()} flow (${resolved}) as a separate day` });
     } else if (/\bperiod\s+(started|began|came)\b/i.test(clause)) {
       push({ date: resolved, label: `period start (${resolved}) as a separate day` });
+    } else {
+      push({ date: resolved, multiDateOnly: true, label: `period date (${resolved})` });
     }
   }
 
@@ -577,11 +581,26 @@ export function ensureFactCoverageDisclosure<T extends AgentResult>(result: T, u
   const events = result.plannedEvents || [];
   let message = result.message;
   for (const fact of facts) {
+    if (fact.multiDateOnly) continue;
     if (factIsPlaced(fact, entries, events)) continue;
     if (message.includes("couldn't place") && message.includes(fact.date)) continue;
     message += fact.eventNoun
       ? ` I couldn't place: ${fact.label} \u2014 add it from the calendar if you want it saved.`
       : ` I couldn't place: ${fact.label} \u2014 log that day separately if you want it saved.`;
+  }
+  if (result.mode === "live") {
+    const stated = [...new Set(facts.filter((f) => f.multiDateOnly && !f.eventNoun).map((f) => f.date))].sort();
+    if (stated.length >= 2) {
+      const placedDates = new Set<string>();
+      for (const e of entries) {
+        placedDates.add(e.date);
+        if (e.endDate) placedDates.add(e.endDate);
+      }
+      const missing = stated.filter((d) => !placedDates.has(d));
+      if (missing.length > 0) {
+        message += " I only prepared " + (stated.length - missing.length) + " of " + stated.length + " dates: " + missing.join(", ") + ". Say the rest again.";
+      }
+    }
   }
   return message === result.message ? result : { ...result, message };
 }

@@ -79,5 +79,39 @@ async function q22() {
 
 await q21();
 await q22();
-console.log("Q2 part 1 Results: " + passed + " passed, " + failed + " failed.");
+if (failed > 0) process.exit(1);
+
+// --- Q2.3 multi-date coverage: model logs fewer dates than stated ---
+async function q23() {
+  await withMock([
+    toolMsg([logCall("e1", { date: "2026-10-02", kind: "period_started" })]),
+    textMsg("Logged."),
+  ], async () => {
+    const r: any = await runLavenderAgent("I had my period on October 2nd and September 9th", { currentDate: TODAY });
+    check("Q2.3: partial multi-date disclosed", typeof r.message === "string" && r.message.indexOf("I only prepared 1 of 2 dates: 2026-09-09. Say the rest again.") !== -1, r.message);
+    check("Q2.3: logged date kept", !!r.entry && r.entry.date === "2026-10-02", r.entry);
+  });
+  await withMock([
+    toolMsg([logCall("e2", { date: "2026-10-02", kind: "period_started" })]),
+    textMsg("Logged."),
+  ], async () => {
+    const r: any = await runLavenderAgent("my period was from October 2 to October 6", { currentDate: TODAY });
+    check("Q2.3: range end missing is disclosed", typeof r.message === "string" && r.message.indexOf("I only prepared 1 of 2 dates: 2026-10-06. Say the rest again.") !== -1, r.message);
+  });
+  await withMock([
+    toolMsg([
+      logCall("e3", { date: "2026-10-02", kind: "period_started" }),
+      logCall("e4", { date: "2026-09-09", kind: "period_started" }),
+    ]),
+    textMsg("Logged both."),
+  ], async () => {
+    const r: any = await runLavenderAgent("I had my period on October 2nd and September 9th", { currentDate: TODAY });
+    check("Q2.3: all dates logged means silence", typeof r.message === "string" && r.message.indexOf("I only prepared") === -1, r.message);
+  });
+}
+
+
+await q23();
+
+console.log("Q2 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
