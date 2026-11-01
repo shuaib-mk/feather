@@ -10,6 +10,7 @@ Meta Global AI Developer Hackathon · Indie Developer · Build for Your World
 - Voice logging with Meta Muse Voice Transcribe (`muse-voice-transcribe-1.0`): speak an entry, review the Accession Slip, confirm to save.
 - Landmark Recall: phrases such as "two days before Onam" are resolved to real dates by a Muse Spark tool-calling agent, always with a confirm card before anything is saved.
 - Plan Around It: event-overlap estimates for planned events (exams, weddings, trips) against the estimated window, in neutral planning wording.
+- Backfill: log several past periods in one sentence.
 - Calendar page with .ics export/import for planned events.
 - App Lock encryption and Discreet Mode (Settings -> Privacy).
 - Isolated Demo Mode with fictional data in its own namespace; exiting demo leaves the real vault untouched.
