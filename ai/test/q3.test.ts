@@ -93,5 +93,24 @@ const TODAY = "2026-11-01";
   check("Q3.2 end-to-end: earlier this month asks", e2eAsk.entry === null && typeof e2eAsk.message === "string" && e2eAsk.message.indexOf("earlier this month") !== -1, e2eAsk.message);
 }
 
+
+// --- Q3.3 correction scoping: today-statements never edit old entries ---
+{
+  const mk = (date: string, flow: any, symptoms: any[]) => ({ date, flow, symptoms, mood: null, energy: null, sleep: null, notes: "x", landmarkName: null, isApproximate: false, kind: "daily_log" });
+  const old = mk("2026-10-30", "heavy", ["cramps"]);
+  const rToday = parseLocally("no cramps today", TODAY, { recentEntry: old } as any);
+  check("Q3.3: no-cramps-today does not edit old entry", !rToday.replacesExisting && (rToday.entry === null || (rToday.entry as any).date !== "2026-10-30" || (rToday.entry as any).flow !== "light"), JSON.stringify(rToday.entry));
+  const rSpot = parseLocally("not heavy today, just spotting", TODAY, { recentEntry: old } as any);
+  check("Q3.3: today-statement logs today, no replace", !rSpot.replacesExisting && (rSpot.entry as any)?.date === TODAY && (rSpot.entry as any)?.flow === "spotting", JSON.stringify(rSpot.entry));
+  const rLast = parseLocally("change my last entry to medium flow", TODAY, { recentEntry: old } as any);
+  check("Q3.3: my-last-entry corrects recent", rLast.replacesExisting === true && (rLast.entry as any)?.date === "2026-10-30" && (rLast.entry as any)?.flow === "medium", JSON.stringify(rLast.entry));
+  const oct3 = mk("2026-10-03", "heavy", []);
+  const oct31 = mk("2026-10-31", "heavy", []);
+  const rNamed = parseLocally("change my october 3 entry to medium flow", TODAY, { recentEntry: oct31, recentEntries: [oct31, oct3] } as any);
+  check("Q3.3: date-named entry corrected", rNamed.replacesExisting === true && (rNamed.entry as any)?.date === "2026-10-03" && (rNamed.entry as any)?.flow === "medium", JSON.stringify(rNamed.entry));
+  const rBare = parseLocally("actually it was light, not heavy", TODAY, { recentEntry: oct31, recentEntries: [oct31, oct3] } as any);
+  check("Q3.3: bare contradiction still targets negated flow", rBare.replacesExisting === true && (rBare.entry as any)?.flow === "light", JSON.stringify(rBare.entry));
+}
+
 console.log("Q3 part 1 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);

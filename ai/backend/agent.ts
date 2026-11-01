@@ -120,6 +120,14 @@ export function selectCorrectionTarget(text: string, pending: StructuredEntry | 
   return pool[0] ?? recent ?? null;
 }
 
+// Q3.3: a date named by anything other than bare today-words (digits, month
+// names, weekdays, relative phrases, landmarks). Bare "today" never counts:
+// statements about today must never edit old entries.
+function namesNonTodayDate(text: string, today: string): string | null {
+  const stripped = text.replace(/\b(today|tonight|this morning|right now)\b/gi, " ");
+  return resolveDateExpression(stripped, today).date;
+}
+
 export interface AgentResult {
   kind?: "own_data_answer";
   usedLiveModel?: boolean;
@@ -1327,8 +1335,25 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     /\bset\s+(?:the\s+)?date\b/i.test(text) ||
     /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) ||
     /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
-  const targetSlip = context.pendingEntry || (isExplicitCorrection ? selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries) : null);
-  if (targetSlip && (context.pendingEntry || isExplicitCorrection)) {
+  // Q3.3: corrections target only the pending slip, an entry named by date, or
+  // "my last entry". Statements about today never edit old entries.
+  const lastEntryMentioned = /\b(?:my\s+)?last\s+entry\b/i.test(text);
+  const hasCorrectionVerb = /\b(change|changed|correct|correction|fix|fixed|update|updated|edit|edited)\b/i.test(text);
+  const namedDate = (isExplicitCorrection || lastEntryMentioned || hasCorrectionVerb) && !context.pendingEntry ? namesNonTodayDate(text, today) : null;
+  const mentionsToday = /\b(today|tonight|this morning|right now)\b/i.test(text);
+  const todayOnlyStatement = mentionsToday && !namedDate && !lastEntryMentioned;
+  let targetSlip: StructuredEntry | null = context.pendingEntry ?? null;
+  let namedDateMatched = false;
+  if (!targetSlip && (isExplicitCorrection || lastEntryMentioned || (hasCorrectionVerb && namedDate)) && !todayOnlyStatement) {
+    if (namedDate) {
+      const pool = context.recentEntries && context.recentEntries.length ? context.recentEntries : (context.recentEntry ? [context.recentEntry] : []);
+      const namedHit = pool.find((e) => e.date === namedDate) ?? null;
+      if (namedHit) { targetSlip = namedHit; namedDateMatched = true; }
+    } else {
+      targetSlip = selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries);
+    }
+  }
+  if (targetSlip && (context.pendingEntry || isExplicitCorrection || lastEntryMentioned || namedDateMatched)) {
     const correctionRes = applySlipCorrections(targetSlip, text);
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
