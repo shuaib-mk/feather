@@ -89,6 +89,7 @@ export function VoiceFlowPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const presetDate = searchParams.get("date");
+  const allowMatchedCalendar = (() => { try { return typeof localStorage !== "undefined" && localStorage.getItem("feather_allow_matched_events") === "true"; } catch { return false; } })();
 
   const initialPending = loadVoicePendingSession();
   const [plannedEventsState, setPlannedEventsState] = useState<any[]>(() => initialPending?.plannedEventsState || []);
@@ -217,6 +218,10 @@ export function VoiceFlowPage() {
 
     const pending = activePendingEntry !== undefined ? activePendingEntry : null;
 
+    // Q4.2/Q4.4: calendar visibility for the model, validated ?date= default, stored events, landmark packs.
+    const calendarPresetDate = presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate) ? presetDate : undefined;
+    const landmarkPackPrefs = (() => { try { const raw = localStorage.getItem("feather_landmark_packs"); if (raw) return JSON.parse(raw); } catch {} return { global: true, india: typeof navigator !== "undefined" && navigator.language.endsWith("-IN") }; })();
+
     // Resolve most recent saved entry for standalone corrections
     const sortedLogs = [...data.logs].sort((a, b) => b.logDate.localeCompare(a.logDate));
     const recentLog = sortedLogs[0];
@@ -277,6 +282,10 @@ export function VoiceFlowPage() {
           logs: data.logs,
           currentDate: todayStr(),
           pendingEntry: pending,
+          events: (() => { try { return loadEvents(); } catch { return []; } })(),
+          calendarVisible: allowMatchedCalendar,
+          defaultDate: calendarPresetDate,
+          landmarkPacks: landmarkPackPrefs,
           recentEntry,
           recentEntries,
           locale: typeof navigator !== "undefined" ? navigator.language : "en",
@@ -763,6 +772,9 @@ export function VoiceFlowPage() {
           {usedAnchor ? " · Personal calendar anchor used" : ""}
         </p>
       )}
+      <p className="text-xs liquid-glass-pill rounded-full inline-block px-3 py-1.5">
+        {allowMatchedCalendar ? "Calendar: matching titles shared with the model" : "Calendar: stays on this device"}
+      </p>
       {plannedEventsState.length > 0 && (
         <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/95 shadow-md">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">

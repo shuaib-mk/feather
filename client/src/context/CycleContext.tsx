@@ -22,6 +22,9 @@ import {
 import { todayLocal } from "../lib/localDate";
 import { enterDemoMode, exitDemoMode, isDemoActive as isDemoModeActive } from "../lib/demoMode";
 import { saveEvents } from "../lib/events";
+import { forgetPassphrase } from "../lib/appLock";
+import { ENCRYPTED_VAULT_KEY } from "../lib/vaultCrypto";
+import { DEMO_KEY, DEMO_ACTIVE_KEY, DEMO_EVENTS_KEY } from "../lib/demoMode";
 
 interface CycleContextValue {
   data: { periods: Period[]; logs: DayLog[] };
@@ -120,9 +123,25 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   }, [refreshData]);
 
   const clearAllVaultData = useCallback(() => {
+    // Q4.6: purge everything recoverable, then reload to a clean first-run state.
+    try { forgetPassphrase(); } catch {}
+    try {
+      const ls = localStorage;
+      ls.removeItem(ENCRYPTED_VAULT_KEY);
+      ls.removeItem("feather_app_lock_enabled");
+      ls.removeItem("feather_allow_matched_events");
+      ls.removeItem("feather_landmark_packs");
+      ls.removeItem("feather_entries_since_export");
+      ls.removeItem("feather_last_export_ts");
+      ls.removeItem(DEMO_KEY);
+      ls.removeItem(DEMO_ACTIVE_KEY);
+      ls.removeItem(DEMO_EVENTS_KEY);
+      try { exitDemoMode(); } catch {}
+    } catch {}
     saveCycleData({ periods: [], logs: [] });
     saveEvents([]);
     refreshData();
+    try { if (typeof window !== "undefined" && window.location) window.location.reload(); } catch {}
   }, [refreshData]);
 
   const loadDemo = useCallback(() => { enterDemoMode(); refreshData(); }, [refreshData]);

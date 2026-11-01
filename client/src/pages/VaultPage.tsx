@@ -252,7 +252,7 @@ export function VaultPage() {
       <ConfirmDialog
         isOpen={isClearModalOpen}
         title="Clear All Vault Data?"
-        message="This will completely erase all your logged cycles and symptom entries from your device's browser memory. Make sure to download a JSON backup first if you need your data."
+        message="This will completely erase your logged cycles and symptom entries, calendar events, the encrypted vault and app-lock passphrase flag, calendar consent, landmark pack choices, export reminders, and demo data, then reload to a fresh start. Download a JSON backup first if you need your data."
         confirmLabel="Erase Everything"
         cancelLabel="Keep My Data"
         isDestructive={true}
