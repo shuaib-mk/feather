@@ -56,6 +56,29 @@ interface CycleContextValue {
 
 const CycleContext = createContext<CycleContextValue | null>(null);
 
+
+/** Q4.6: purge everything recoverable (vault, encrypted blob, lock, consent,
+ * packs, export counters, demo namespace), then refresh. Exported for tests. */
+export function purgeVaultStorage(refresh: () => void): void {
+  try { forgetPassphrase(); } catch {}
+  try {
+    const ls = localStorage;
+    ls.removeItem(ENCRYPTED_VAULT_KEY);
+    ls.removeItem("feather_app_lock_enabled");
+    ls.removeItem("feather_allow_matched_events");
+    ls.removeItem("feather_landmark_packs");
+    ls.removeItem("feather_entries_since_export");
+    ls.removeItem("feather_last_export_ts");
+    ls.removeItem(DEMO_KEY);
+    ls.removeItem(DEMO_ACTIVE_KEY);
+    ls.removeItem(DEMO_EVENTS_KEY);
+    try { exitDemoMode(); } catch {}
+  } catch {}
+  try { saveCycleData({ periods: [], logs: [] }); } catch {}
+  try { saveEvents([]); } catch {}
+  try { refresh(); } catch {}
+}
+
 export function CycleProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<{ periods: Period[]; logs: DayLog[] }>(() => loadCycleData());
   const [stats, setStats] = useState<CycleStats>(() => computeCycleStats(data.periods, data.logs));
@@ -74,6 +97,12 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     setStats(newStats);
     setIsDemoActive(isDemoModeActive());
   }, []);
+  const clearAllVaultData = useCallback(() => {
+    // Q4.6: purge everything recoverable, then reload to a clean first-run state.
+    purgeVaultStorage(refreshData);
+    try { if (typeof window !== "undefined" && window.location) window.location.reload(); } catch {}
+  }, [refreshData]);
+
 
   useEffect(() => {
     const newStats = computeCycleStats(data.periods, data.logs);
@@ -122,27 +151,6 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     try { deleteDayLog(date); refreshData(); } catch (err: any) { setErrorToast(err?.message || "Could not delete that log."); }
   }, [refreshData]);
 
-  const clearAllVaultData = useCallback(() => {
-    // Q4.6: purge everything recoverable, then reload to a clean first-run state.
-    try { forgetPassphrase(); } catch {}
-    try {
-      const ls = localStorage;
-      ls.removeItem(ENCRYPTED_VAULT_KEY);
-      ls.removeItem("feather_app_lock_enabled");
-      ls.removeItem("feather_allow_matched_events");
-      ls.removeItem("feather_landmark_packs");
-      ls.removeItem("feather_entries_since_export");
-      ls.removeItem("feather_last_export_ts");
-      ls.removeItem(DEMO_KEY);
-      ls.removeItem(DEMO_ACTIVE_KEY);
-      ls.removeItem(DEMO_EVENTS_KEY);
-      try { exitDemoMode(); } catch {}
-    } catch {}
-    saveCycleData({ periods: [], logs: [] });
-    saveEvents([]);
-    refreshData();
-    try { if (typeof window !== "undefined" && window.location) window.location.reload(); } catch {}
-  }, [refreshData]);
 
   const loadDemo = useCallback(() => { enterDemoMode(); refreshData(); }, [refreshData]);
 

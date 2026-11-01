@@ -26,7 +26,7 @@ function cleanKeyword(s: string): string | null {
     .replace(/[?.!]+$/g, "")
     .replace(/^(an?\s+|the\s+|my\s+)/, "")
     .trim();
-  if (!t || /^(anything|something|events?|plans?|coming|up|next\s+week|this\s+week|tomorrow)$/.test(t)) return null;
+  if (!t || /^(anything|something|events?|plans?|coming|up|next|this|next\s+week|this\s+week|tomorrow)$/.test(t)) return null;
   return t;
 }
 
