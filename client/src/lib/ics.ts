@@ -7,7 +7,7 @@ export function icsDate(d:string): string { return d.replace(/-/g,""); }
 export function stableUID(seed:string): string { let h=0; for (let i=0;i<seed.length;i++) h=(h*31 + seed.charCodeAt(i))|0; return `feather-${Math.abs(h).toString(36)}-${seed.replace(/[^a-z0-9]/gi,"").slice(0,24)}@feather.local`; }
 export interface ICSBuildOptions { title?: string; dtstamp?: string; }
 export function buildICS(events: CalendarEvent[], options: ICSBuildOptions={}): string {
-  const stamp = options.dtstamp || "20260101T000000Z";
+  const stamp = options.dtstamp || new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Feather//Cycle Calendar//EN","CALSCALE:GREGORIAN"];
   for (const e of events){ const title = options.title ?? (e.private ? "Private" : e.title); lines.push("BEGIN:VEVENT", `UID:${e.uid || stableUID(`${e.id}|${e.date}|${e.title}`)}`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${icsDate(e.date)}`, `DTEND;VALUE=DATE:${icsDate(addDays(e.endDate||e.date,1))}`, `SUMMARY:${escapeICSText(title)}`, "END:VEVENT"); }
   lines.push("END:VCALENDAR");
@@ -66,7 +66,10 @@ export function parseICS(text:string, windowStart:string, windowEnd:string): ICS
     const dates = expandRRULE(start, r.RRULE?.value, r.EXDATE, windowStart, windowEnd, warnings);
     for (const date of dates){ const key=`${uid||title}|${date}`; if(seen.has(key)) continue; seen.add(key); if(events.length>=2000){ warnings.push("Import capped at 2000 events."); break; } events.push({ id:`ics-${stableUID(key)}`, title, date, endDate: end && date===start ? end : undefined, source:"ics", uid }); }
   }
-  return { events: events.filter((e)=>e.date>=windowStart && e.date<=windowEnd), warnings };
+  const kept = events.filter((e)=>e.date>=windowStart && e.date<=windowEnd);
+  const dropped = events.length - kept.length;
+  if (dropped > 0) warnings.push(dropped + " imported event" + (dropped === 1 ? "" : "s") + " fell outside the import window (" + windowStart + " to " + windowEnd + ") and " + (dropped === 1 ? "was" : "were") + " not imported.");
+  return { events: kept, warnings };
 }
 function expandRRULE(start:string, rrule:string|undefined, exdate:any, windowStart:string, windowEnd:string, warnings:string[]): string[] {
   const ex = new Set<string>(); if(exdate){ for(const part of String(exdate.value).split(",")){ const d=parseICSDate(part.trim(), exdate.params); if(d) ex.add(d); } }
@@ -75,6 +78,30 @@ function expandRRULE(start:string, rrule:string|undefined, exdate:any, windowSta
   const freq=parts.FREQ; if(!["DAILY","WEEKLY","MONTHLY","YEARLY"].includes(freq)){ warnings.push(`Skipped unsupported recurrence rule: ${rrule}`); return [start]; }
   const interval=parseInt(parts.INTERVAL||"1",10)||1; const count=parts.COUNT?parseInt(parts.COUNT,10):Infinity; const until=parts.UNTIL?parseICSDate(parts.UNTIL,""):windowEnd;
   const out:string[]=[]; let cur=start; let n=0;
-  while(cur<=windowEnd && n<count && out.length<2000){ if(cur>=windowStart && !ex.has(cur)) out.push(cur); n++; if(freq==="DAILY") cur=addDays(cur,interval); else if(freq==="WEEKLY") cur=addDays(cur,7*interval); else { const d=new Date(Date.UTC(+cur.slice(0,4), +cur.slice(5,7)-1, +cur.slice(8,10))); if(freq==="MONTHLY") d.setUTCMonth(d.getUTCMonth()+interval); else d.setUTCFullYear(d.getUTCFullYear()+interval); cur=d.toISOString().slice(0,10); } if(until && cur>until) break; }
+  if (freq==="DAILY" || freq==="WEEKLY") {
+    while(cur<=windowEnd && n<count && out.length<2000){ if(cur>=windowStart && !ex.has(cur)) out.push(cur); n++; if(freq==="DAILY") cur=addDays(cur,interval); else cur=addDays(cur,7*interval); if(until && cur>until) break; }
+    return out;
+  }
+  // MONTHLY / YEARLY step calendar months from the start date. Months
+  // without the start day-of-month are skipped per RFC 5545 (never rolled
+  // over into the next month) and do not count toward COUNT.
+  const startDay = +start.slice(8,10);
+  const daysIn = (y:number, m:number):number => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let step = 0; let guard = 0;
+  while(n<count && out.length<2000 && guard<2400){
+    guard++;
+    const total = step*interval;
+    const y0=+start.slice(0,4), m0=+start.slice(5,7);
+    const nm = (m0-1) + (freq==="MONTHLY" ? total : total*12);
+    const yy = y0 + Math.floor(nm/12);
+    const mm = ((nm%12)+12)%12 + 1;
+    step++;
+    if(startDay > daysIn(yy,mm)) continue;
+    const cand = yy + "-" + String(mm).padStart(2,"0") + "-" + String(startDay).padStart(2,"0");
+    if(until && cand>until) break;
+    if(cand>windowEnd) break;
+    if(cand>=windowStart && !ex.has(cand)) out.push(cand);
+    n++;
+  }
   return out;
 }

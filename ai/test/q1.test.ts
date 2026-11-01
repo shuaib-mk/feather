@@ -2,6 +2,7 @@
 import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods, saveLogEntry, importCycleDataJSON } from "../../client/src/cycleStorage";
 import { saveEvents, loadEvents } from "../../client/src/lib/events";
 import { enableAppLock, unlockApp, lockNow, disableAppLock, isAppLockEnabled, needsUnlockOnLoad, forgetPassphrase } from "../../client/src/lib/appLock";
+import { buildICS, parseICS } from "../../client/src/lib/ics";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -27,8 +28,6 @@ function resetVault() { for (const k in store) delete store[k]; }
   check("Q1.1: ids stay numeric", ids.every((x) => typeof x === "number"), ids.slice(0, 3));
 }
 
-console.log("Q1 Results: " + passed + " passed, " + failed + " failed.");
-if (failed > 0) process.exit(1);
 
 // --- Q1.2 diary bulk import: one atomic save with skipped reasons ---
 {
@@ -168,3 +167,21 @@ if (failed > 0) process.exit(1);
   await disableAppLock("long-enough-passphrase");
   check("Q1.6: disable clears flag", isAppLockEnabled() === false, null);
 }
+
+// --- Q1.7 ICS: RFC monthly skip, live DTSTAMP, outside-window warning ---
+{
+  const monthly = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:m1", "SUMMARY:Dues", "DTSTART;VALUE=DATE:20260131", "RRULE:FREQ=MONTHLY;COUNT=5", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const res = parseICS(monthly, "2026-01-01", "2026-12-31");
+  const got = res.events.map((e) => e.date);
+  check("Q1.7: Jan 31 monthly skips short months", got.length === 5 && got.join(",") === "2026-01-31,2026-03-31,2026-05-31,2026-07-31,2026-08-31", got.join(","));
+  check("Q1.7: no rollover dates", got.every((d) => d.slice(8, 10) === "31"), got.join(","));
+  const stamped = buildICS([{ id: "1", title: "x", date: "2026-11-05", source: "manual" }]);
+  const m = stamped.match(/DTSTAMP:(\d{8}T\d{6}Z)/);
+  check("Q1.7: DTSTAMP is export time", !!m && m[1].slice(0, 4) === String(new Date().getUTCFullYear()), m && m[1]);
+  const far = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:f1", "SUMMARY:Future", "DTSTART;VALUE=DATE:20300101", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  const res2 = parseICS(far, "2026-01-01", "2026-12-31");
+  check("Q1.7: outside-window event dropped with count", res2.events.length === 0 && res2.warnings.some((w) => w.indexOf("1 imported event") !== -1 && w.indexOf("outside the import window") !== -1), res2.warnings);
+}
+
+console.log("Q1 Results: " + passed + " passed, " + failed + " failed.");
+if (failed > 0) process.exit(1);
