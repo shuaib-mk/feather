@@ -48,6 +48,8 @@ export type ValidSymptom = (typeof VALID_SYMPTOMS)[number];
 
 export interface StructuredEntry {
   date: string; // YYYY-MM-DD
+  /** Optional period end date for a backfilled range, e.g. from X to Y. Only on period_started entries. */
+  endDate?: string | null;
   flow: "none" | "spotting" | "light" | "medium" | "heavy" | null;
   symptoms: ValidSymptom[];
   mood: string | null;
@@ -126,6 +128,8 @@ export interface AgentResult {
   usedPersonalAnchor?: boolean;
   message: string;
   entry?: StructuredEntry | null;
+  /** All backfilled entries, oldest first. entry is always entries[0] for old code. */
+  entries?: StructuredEntry[];
   needsClarification: boolean;
   clarificationQuestion?: string | null;
   activityTrail: ActivityStep[];
@@ -155,6 +159,10 @@ const TOOLS = [
           date: {
             type: "string",
             description: "Calendar date in YYYY-MM-DD format. Defaults to current date if not specified.",
+          },
+          endDate: {
+            type: "string",
+            description: "Optional period end date (YYYY-MM-DD) when the user gives a range, e.g. from October 2 to October 6. Only for period starts.",
           },
           flow: {
             type: "string",
@@ -531,10 +539,10 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
 }
 
 function structuredEntriesOf(result: AgentResult): StructuredEntry[] {
-  // Only the slip actually returned for rendering/saving counts as placed.
-  // Entries that appear solely in tool-call history (the model called
-  // log_entry more than once; the renderer keeps result.entry) are NOT
-  // placed - live runs showed exactly that gap.
+  // Only slips actually returned for rendering/saving count as placed.
+  // With backfill, every collected entry is returned in result.entries, so
+  // all of them count; single-entry results keep the old entry-only path.
+  if (result.entries && result.entries.length > 0) return result.entries;
   return result.entry ? [result.entry] : [];
 }
 
@@ -814,7 +822,7 @@ export async function runLavenderAgent(
           } else {
             activityTrail.push({ step: "Structured Entry", detail: `Prepared log for ${fnArgs.date}`, status: "done" });
             structuredEntry = {
-              date: fnArgs.date || today, flow: fnArgs.flow || null,
+              date: fnArgs.date || today, endDate: fnArgs.endDate || null, flow: fnArgs.flow || null,
               symptoms: (fnArgs.symptoms || []).filter((s: string) => (VALID_SYMPTOMS as readonly string[]).includes(s)),
               mood: fnArgs.mood || null, energy: fnArgs.energy ?? null, sleep: fnArgs.sleep ?? null, notes: fnArgs.notes || null,
               isApproximate: fnArgs.isApproximate || false, landmarkName: fnArgs.landmarkName || null, kind: fnArgs.kind || "daily_log",
@@ -978,10 +986,15 @@ export function extractWithLexicon(text: string): LexiconExtraction {
   return { symptoms, flow, mood, periodStart, periodEnd };
 }
 export function validateEntryArgs(args: Record<string, any>, today: string): string | null {
+  const min = addDaysToKey(today, -731);
   if (args.date !== undefined) {
     if (typeof args.date !== "string" || !isValidDateKey(args.date)) return "Invalid date: expected YYYY-MM-DD calendar date.";
-    const min = addDaysToKey(today, -731);
     if (args.date < min || args.date > today) return `Invalid date: must be between ${min} and ${today} (today).`;
+  }
+  if (args.endDate !== undefined && args.endDate !== null) {
+    if (typeof args.endDate !== "string" || !isValidDateKey(args.endDate)) return "Invalid endDate: expected YYYY-MM-DD calendar date.";
+    if (typeof args.date === "string" && isValidDateKey(args.date) && args.endDate < args.date) return "Invalid endDate: must not be before date.";
+    if (args.endDate > today || args.endDate < min) return "Invalid endDate: must be within the past 731 days and not in the future.";
   }
   if (args.flow !== undefined && args.flow !== null && !["none","spotting","light","medium","heavy"].includes(args.flow)) return "Invalid flow value.";
   if (args.kind !== undefined && !["period_started","period_ended","daily_log"].includes(args.kind)) return "Invalid kind value.";
@@ -1002,6 +1015,7 @@ export function applyModelPatch(pending: StructuredEntry, patch: Record<string, 
   if (patch.mood !== undefined) updated.mood = patch.mood;
   if (patch.energy !== undefined) updated.energy = patch.energy;
   if (patch.sleep !== undefined) updated.sleep = patch.sleep;
+  if (patch.endDate !== undefined) updated.endDate = patch.endDate;
   if (patch.notes !== undefined) updated.notes = patch.notes;
   const add = patch.symptoms_add || patch.addSymptoms || [];
   const remove = patch.symptoms_remove || patch.removeSymptoms || [];
