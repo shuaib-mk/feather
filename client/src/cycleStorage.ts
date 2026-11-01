@@ -525,6 +525,89 @@ export function deletePeriodEntry(id: number): void {
 /**
  * Converts stored Period array into domain engine PeriodRecord array.
  */
+export interface BulkPeriodRow {
+  startDate: string;
+  endDate?: string | null;
+  landmarkName?: string | null;
+}
+
+export interface BulkSkippedRow {
+  row: { startDate: string; endDate?: string | null };
+  reason: string;
+}
+
+export interface BulkSaveResult {
+  saved: number;
+  skipped: BulkSkippedRow[];
+}
+
+/**
+ * ONE atomic bulk save for imports (diary scanner and similar lists):
+ * validates every row, writes once. Never throws for row problems - they
+ * land in skipped with reasons (invalid, duplicate, overlap).
+ */
+export function bulkSavePeriods(rows: BulkPeriodRow[]): BulkSaveResult {
+  const skipped: BulkSkippedRow[] = [];
+  const data = loadCycleData();
+  const takenStarts = new Set(data.periods.map((p) => p.startDate));
+  const accepted: Period[] = [];
+  const acceptedIds = new Set<number>(data.periods.map((p) => p.id));
+  const newId = (): number => {
+    let id = newNumericId();
+    while (acceptedIds.has(id)) id += 1;
+    acceptedIds.add(id);
+    return id;
+  };
+  const overlapsExisting = (start: string, end: string): boolean =>
+    [...data.periods, ...accepted].some((p) => {
+      const pEnd = p.endDate || p.startDate;
+      return start <= pEnd && end >= p.startDate;
+    });
+  for (const row of rows) {
+    const start = row.startDate;
+    const end = row.endDate || row.startDate;
+    let rowValid = true;
+    try {
+      toDate(start);
+      if (row.endDate) toDate(row.endDate);
+    } catch {
+      rowValid = false;
+    }
+    if (!start || !rowValid) {
+      skipped.push({ row: { startDate: start, endDate: row.endDate || null }, reason: "invalid date" });
+      continue;
+    }
+    if (end < start) {
+      skipped.push({ row: { startDate: start, endDate: row.endDate || null }, reason: "end date precedes start date" });
+      continue;
+    }
+    if (takenStarts.has(start)) {
+      skipped.push({ row: { startDate: start, endDate: row.endDate || null }, reason: "duplicate start date" });
+      continue;
+    }
+    if (overlapsExisting(start, end)) {
+      skipped.push({ row: { startDate: start, endDate: row.endDate || null }, reason: "overlaps an existing period" });
+      continue;
+    }
+    takenStarts.add(start);
+    accepted.push({
+      id: newId(),
+      startDate: start,
+      endDate: row.endDate || null,
+      landmarkName: row.landmarkName ?? null,
+      isApproximate: false,
+      startEarliest: null,
+      startLatest: null,
+    });
+  }
+  if (accepted.length > 0) {
+    data.periods = [...data.periods, ...accepted].sort((a, b) => b.startDate.localeCompare(a.startDate));
+    saveCycleData(data);
+    incrementEntriesSinceExport();
+  }
+  return { saved: accepted.length, skipped };
+}
+
 function toPeriodRecords(periods: Period[]): PeriodRecord[] {
   return (periods || []).map((p) => ({
     id: String(p.id),

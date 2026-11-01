@@ -5,9 +5,10 @@ import { PageHeader } from "../components/PageHeader";
 import { analyzeDiaryPhoto } from "../../../ai/frontend/aiClient";
 import type { ExtractedPeriod } from "../../../ai/backend/vision";
 import { todayLocal } from "../lib/localDate";
+import { bulkSavePeriods, type BulkSkippedRow } from "../cycleStorage";
 
 export function DiaryScannerPage() {
-  const { savePeriod } = useCycle();
+  const { refreshData } = useCycle();
   const navigate = useNavigate();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -17,6 +18,7 @@ export function DiaryScannerPage() {
   const [summary, setSummary] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
+  const [skippedRows, setSkippedRows] = useState<BulkSkippedRow[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -26,6 +28,7 @@ export function DiaryScannerPage() {
       setExtractedPeriods([]);
       setError(null);
       setSuccessCount(null);
+      setSkippedRows([]);
     }
   };
 
@@ -67,14 +70,16 @@ export function DiaryScannerPage() {
 
   const handleConfirmImport = () => {
     if (extractedPeriods.length === 0) return;
-    for (const p of extractedPeriods) {
-      savePeriod({
+    const result = bulkSavePeriods(
+      extractedPeriods.map((p) => ({
         startDate: p.startDate,
         endDate: p.endDate || null,
         landmarkName: p.notes || "Calendar Photo Import",
-      });
-    }
-    setSuccessCount(extractedPeriods.length);
+      })),
+    );
+    refreshData();
+    setSuccessCount(result.saved > 0 ? result.saved : null);
+    setSkippedRows(result.skipped);
     setExtractedPeriods([]);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -108,6 +113,17 @@ export function DiaryScannerPage() {
           <Link to="/chronicle" className="liquid-glass-pill rounded-full px-3 py-1 font-sans text-xs font-semibold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
             View in Chronicle →
           </Link>
+        </div>
+      )}
+      {skippedRows.length > 0 && (
+        <div className="rounded-[20px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 p-4 text-xs text-amber-950 font-sans space-y-1.5 shadow-xs animate-in fade-in" role="status">
+          <span className="font-semibold block">Skipped {skippedRows.length} row{skippedRows.length === 1 ? "" : "s"} (not saved):</span>
+          {skippedRows.map((s, i) => (
+            <span key={i} className="block">
+              {s.row.startDate || "(missing date)"}
+              {s.row.endDate ? " to " + s.row.endDate : ""} � {s.reason}.
+            </span>
+          ))}
         </div>
       )}
 

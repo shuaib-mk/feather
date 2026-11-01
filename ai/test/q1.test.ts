@@ -1,5 +1,5 @@
 /** Q1: data integrity + app lock. */
-import { saveCycleData, loadCycleData, addOrUpdatePeriod } from "../../client/src/cycleStorage";
+import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods } from "../../client/src/cycleStorage";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -27,3 +27,31 @@ function resetVault() { for (const k in store) delete store[k]; }
 
 console.log("Q1 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
+
+// --- Q1.2 diary bulk import: one atomic save with skipped reasons ---
+{
+  resetVault();
+  saveCycleData({ periods: [{ id: 1, startDate: "2026-09-01", endDate: "2026-09-05" } as any], logs: [] });
+  let vaultWrites = 0;
+  const rawSet = (globalThis as any).localStorage.setItem;
+  (globalThis as any).localStorage.setItem = (k: string, v: string) => { if (k === "feather_cycle_vault_v1") vaultWrites++; return rawSet(k, v); };
+  const res = bulkSavePeriods([
+    { startDate: "2026-10-02", endDate: null },
+    { startDate: "not-a-date", endDate: null },
+    { startDate: "2026-10-06", endDate: "2026-10-02" },
+    { startDate: "2026-09-01", endDate: null },
+    { startDate: "2026-09-03", endDate: "2026-09-10" },
+    { startDate: "2026-10-09", endDate: null },
+    { startDate: "2026-10-09", endDate: null },
+  ]);
+  (globalThis as any).localStorage.setItem = rawSet;
+  check("Q1.2: 2 saved", res.saved === 2, res);
+  check("Q1.2: 5 skipped with reasons", res.skipped.length === 5, res.skipped);
+  const reasons = res.skipped.map((s) => s.reason).sort().join("|");
+  check("Q1.2: reasons cover invalid/duplicate/overlap/end", reasons.indexOf("invalid date") !== -1 && reasons.indexOf("duplicate start date") !== -1 && reasons.indexOf("overlaps an existing period") !== -1 && reasons.indexOf("end date precedes start date") !== -1, reasons);
+  check("Q1.2: single vault write", vaultWrites === 1, vaultWrites);
+  const data = loadCycleData();
+  check("Q1.2: existing period intact plus 2 new", data.periods.length === 3 && data.periods.some((p) => p.startDate === "2026-10-02") && data.periods.some((p) => p.startDate === "2026-10-09"), data.periods.map((p) => p.startDate));
+  const empty = bulkSavePeriods([]);
+  check("Q1.2: empty batch saves nothing", empty.saved === 0 && empty.skipped.length === 0, empty);
+}
