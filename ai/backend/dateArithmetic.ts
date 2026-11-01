@@ -239,7 +239,7 @@ export function applySlipCorrections(
   // 1. Date correction
   // "no, make it the 3rd", "make it 3rd", "change to the 12th", "actually 5th"
   const dayMatch = lower.match(
-    /\b(?:no,?\s+)?(?:make\s+it\s+(?:the\s+)?|change\s+(?:the\s+)?date\s+to\s+(?:the\s+)?|actually\s+(?:it\s+was\s+)?(?:the\s+)?|set\s+date\s+to\s+(?:the\s+)?|on\s+the\s+)(\d{1,2})(?:st|nd|rd|th)?\b/i,
+    /\b(?:no,?\s+)?(?:make\s+it\s+(?:the\s+)?|change\s+(?:the\s+)?date\s+to\s+(?:the\s+)?|actually\s+(?:it\s+was\s+)?(?:the\s+)?|set\s+date\s+to\s+(?:the\s+)?|on\s+the\s+|no\s+wait,?\s+(?:it\s+was\s+)?(?:the\s+)?|i\s+meant\s+(?:it\s+was\s+)?(?:the\s+)?|move\s+(?:it\s+)?to\s+(?:the\s+)?)(\d{1,2})(?:st|nd|rd|th)?\b/i,
   );
   if (dayMatch) {
     const dayNum = parseInt(dayMatch[1], 10);
@@ -251,6 +251,27 @@ export function applySlipCorrections(
       updated.date = `${year}-${month}-${newDayStr}`;
       changes.push(`Date updated to ${updated.date}`);
     }
+  }
+
+  // Q3.4: "I meant October 3rd" moves the slip to that month/day (slip year).
+  const meantMonthDay = lower.match(/\bi\s+meant\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+  if (meantMonthDay) {
+    const mm = MONTH_NAME_TO_NUM[meantMonthDay[1]];
+    const dd = parseInt(meantMonthDay[2], 10);
+    if (mm) {
+      const y = (updated.date || todayLocal()).slice(0, 4);
+      const k = `${y}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      if (isValidDateKey(k)) {
+        updated.date = k;
+        changes.push(`Date updated to ${updated.date}`);
+      }
+    }
+  }
+
+  // Q3.4: "a day later" shifts the slip one day forward.
+  if (/\ba\s+day\s+later\b/i.test(lower)) {
+    updated.date = addDaysToKey(updated.date || todayLocal(), 1);
+    changes.push(`Date updated to ${updated.date}`);
   }
 
   // 2. Flow correction

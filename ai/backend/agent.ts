@@ -1322,6 +1322,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
   }
 
+  // Q3.4: deleting is never done by chat.
+  if (/\bdelete\s+(?:my\s+)?last\s+entry\b/i.test(text)) {
+    return { message: "Open Chronicle or Calendar to delete entries.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+  // Q3.4: undo/cancel discards the pending slip; nothing is saved.
+  if (/\b(?:undo\s+that|cancel\s+that|don't\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(text)) {
+    if (context.pendingEntry) {
+      activityTrail.push({ step: "Slip Discarded", detail: "Pending slip cancelled by user", status: "done" });
+      return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+    }
+    return { message: "There's no pending slip to discard.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+
   // Offline-only regex corrections on a pending slip or recent saved entry (live path lets the model patch).
   // B3: previous entries may ONLY be corrected on explicit correction language;
   // a new log sentence must never inherit their date/flow/symptoms.
@@ -1334,7 +1347,11 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     /\balso had\b/i.test(text) ||
     /\bset\s+(?:the\s+)?date\b/i.test(text) ||
     /\b(?:none|spotting|light|medium|heavy)\s*,?\s*(?:and\s+)?not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) ||
-    /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text);
+    /\bnot\s+(?:none|spotting|light|medium|heavy)\b/i.test(text) ||
+    /\bi\s+meant\b/i.test(text) ||
+    /\bmove\s+(?:it\s+)?to\b/i.test(text) ||
+    /\b(?:a\s+)?day\s+later\b/i.test(text) ||
+    /\bno\s+wait\b/i.test(text);
   // Q3.3: corrections target only the pending slip, an entry named by date, or
   // "my last entry". Statements about today never edit old entries.
   const lastEntryMentioned = /\b(?:my\s+)?last\s+entry\b/i.test(text);
@@ -1362,7 +1379,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     }
   }
 
-  const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting))\b/i.test(text);
+  const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
   if (!targetSlip && isCorrectionAttempt && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
     return {
       message: "I couldn't find a recent entry to correct.",

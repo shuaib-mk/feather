@@ -112,5 +112,29 @@ const TODAY = "2026-11-01";
   check("Q3.3: bare contradiction still targets negated flow", rBare.replacesExisting === true && (rBare.entry as any)?.flow === "light", JSON.stringify(rBare.entry));
 }
 
+
+// --- Q3.4 slip corrections, undo, delete answer; instructions never stored as notes ---
+{
+  const slip = () => ({ date: "2026-10-28", flow: "heavy", symptoms: ["cramps"], mood: null, energy: null, sleep: null, notes: "orig", landmarkName: null, isApproximate: false, kind: "daily_log" });
+  const rWait = parseLocally("no wait, it was the 3rd", TODAY, { pendingEntry: slip() } as any);
+  check("Q3.4: no-wait-the-3rd moves slip, keeps notes", rWait.replacesExisting === true && (rWait.entry as any)?.date === "2026-10-03" && (rWait.entry as any)?.notes === "orig", JSON.stringify(rWait.entry));
+  const rMeant = parseLocally("I meant October 3rd", TODAY, { pendingEntry: slip() } as any);
+  check("Q3.4: i-meant-October-3rd moves slip", rMeant.replacesExisting === true && (rMeant.entry as any)?.date === "2026-10-03", JSON.stringify(rMeant.entry));
+  const rLater = parseLocally("a day later", TODAY, { pendingEntry: slip() } as any);
+  check("Q3.4: a-day-later shifts slip", rLater.replacesExisting === true && (rLater.entry as any)?.date === "2026-10-29", JSON.stringify(rLater.entry));
+  const rMove = parseLocally("move it to the 5th", TODAY, { pendingEntry: slip() } as any);
+  check("Q3.4: move-it-to-the-5th moves slip", rMove.replacesExisting === true && (rMove.entry as any)?.date === "2026-10-05", JSON.stringify(rMove.entry));
+  for (const phrase of ["undo that", "cancel that", "don" + String.fromCharCode(39) + "t log that"]) {
+    const rUndo = parseLocally(phrase, TODAY, { pendingEntry: slip() } as any);
+    check("Q3.4: " + phrase + " discards pending slip", rUndo.entry === null && rUndo.message === "Okay, I discarded that slip. Nothing was saved.", rUndo.message);
+  }
+  const rNoSlip = parseLocally("undo that", TODAY, {} as any);
+  check("Q3.4: undo with no slip says so", rNoSlip.entry === null && rNoSlip.message === "There" + String.fromCharCode(39) + "s no pending slip to discard.", rNoSlip.message);
+  const rDel = parseLocally("delete my last entry", TODAY, { recentEntry: slip() } as any);
+  check("Q3.4: delete-my-last-entry answered, nothing edited", rDel.entry === null && rDel.message === "Open Chronicle or Calendar to delete entries.", rDel.message);
+  const rOrphan = parseLocally("move it to the 5th", TODAY, {} as any);
+  check("Q3.4: orphan correction never stored as notes", rOrphan.entry === null && rOrphan.message.indexOf("couldn" + String.fromCharCode(39) + "t find") !== -1, rOrphan.message);
+}
+
 console.log("Q3 part 1 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
