@@ -247,6 +247,38 @@ function lastBleedingDay(period: Period, logs: DayLog[], periodsAsc: Period[]): 
   return last;
 }
 
+let lastIdMs = 0;
+let msIdCounter = 0;
+// Per-tab random base so two tabs creating IDs in the same millisecond still differ.
+function idTabSalt(): number {
+  try {
+    const g = (globalThis as any).crypto;
+    if (g && typeof g.randomUUID === "function") {
+      return parseInt(g.randomUUID().replace(/-/g, "").slice(-6), 16) % 1000;
+    }
+    if (g && typeof g.getRandomValues === "function") {
+      const a = new Uint32Array(1);
+      g.getRandomValues(a);
+      return a[0] % 1000;
+    }
+  } catch { /* fall through */ }
+  return Math.floor(Math.random() * 1000);
+}
+const idSalt = idTabSalt();
+
+/**
+ * Numeric IDs that stay unique even within the same millisecond.
+ * Uniqueness comes from a per-millisecond counter plus a per-tab random
+ * salt (drawn from crypto.randomUUID with a safe fallback); existing
+ * numeric IDs keep working unchanged.
+ */
+export function newNumericId(): number {
+  const now = Date.now();
+  if (now === lastIdMs) msIdCounter += 1;
+  else { lastIdMs = now; msIdCounter = 0; }
+  return now * 1000 + ((idSalt + msIdCounter) % 1000);
+}
+
 export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }): Period {
   toDate(period.startDate);
   if (period.endDate) {
@@ -257,7 +289,7 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
   }
 
   const data = loadCycleData();
-  const id = period.id || Date.now();
+  const id = period.id || newNumericId();
   const isApproximate = Boolean(period.isApproximate || period.landmarkName || period.startEarliest);
   const window = isApproximate
     ? approximateWindow(period.startDate, period.startEarliest, period.startLatest)
@@ -318,7 +350,7 @@ export function saveLogEntry(
   toDate(logInput.logDate);
   const data = loadCycleData();
   const periodsAsc = sortedPeriodsAsc(data.periods);
-  const logId = logInput.id || Date.now();
+  const logId = logInput.id || newNumericId();
   const newLog: DayLog = { ...logInput, id: logId, kind };
 
   const candidateLogs = [...data.logs];
@@ -397,7 +429,9 @@ export function saveLogEntry(
     const window = isApproximate
       ? approximateWindow(date, options.startEarliest, options.startLatest)
       : { startEarliest: null as string | null, startLatest: null as string | null };
-    const newPeriodId = Math.max(Date.now(), ...candidatePeriods.map((x) => x.id), logId) + 1;
+    let newPeriodId = newNumericId();
+    const takenIds = new Set<number>([...candidatePeriods.map((x) => x.id), logId]);
+    while (takenIds.has(newPeriodId)) newPeriodId += 1;
     affected = {
       id: newPeriodId,
       startDate: date,
@@ -658,7 +692,7 @@ export function importCycleDataJSON(jsonStr: string): { success: boolean; count:
           if (p.endDate < p.startDate) continue;
         }
         validPeriods.push({
-          id: typeof p.id === "number" ? p.id : Date.now() + Math.floor(Math.random() * 100000),
+          id: typeof p.id === "number" ? p.id : newNumericId(),
           startDate: p.startDate,
           endDate: p.endDate || null,
           landmarkName: p.landmarkName || null,
@@ -678,7 +712,7 @@ export function importCycleDataJSON(jsonStr: string): { success: boolean; count:
       try {
         toDate(l.logDate);
         validLogs.push({
-          id: typeof l.id === "number" ? l.id : Date.now() + Math.floor(Math.random() * 100000),
+          id: typeof l.id === "number" ? l.id : newNumericId(),
           logDate: l.logDate,
           flow: l.flow || null,
           symptoms: Array.isArray(l.symptoms) ? l.symptoms : [],
