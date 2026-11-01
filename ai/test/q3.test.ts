@@ -1,5 +1,6 @@
 /** Q3: offline floor - guardrail additions and resolver coverage. */
 import { checkMedicalAdviceGuardrail, checkSevereSymptomEscalation } from "../backend/guardrail";
+import { resolveDateExpression } from "../backend/dateArithmetic";
 import { parseLocally } from "../backend/agent";
 
 let passed = 0, failed = 0;
@@ -54,6 +55,42 @@ const TODAY = "2026-11-01";
     const r = parseLocally(text, TODAY, {} as any);
     check("Q3.5 refused: " + name, typeof r.message === "string" && r.message.indexOf("I can only help with logging") !== -1, r.message);
   }
+}
+
+
+// --- Q3.2 resolver additions: never default silently ---
+{
+  const dateCases: Array<[string, string | null, string | null]> = [
+    ["3 days back", "2026-10-29", null],
+    ["three days back", "2026-10-29", null],
+    ["two weeks back", "2026-10-18", null],
+    ["5 days back", "2026-10-27", null],
+    ["a day ago", "2026-10-31", null],
+    ["a week ago", "2026-10-25", null],
+    ["a fortnight ago", "2026-10-18", null],
+    ["a month ago", "2026-10-01", null],
+    ["on monday", "2026-10-26", null],
+    ["on sunday", "2026-11-01", null],
+    ["October twenty second", "2026-10-22", null],
+    ["the twenty-first", "2026-10-21", null],
+    ["20.10.2026", "2026-10-20", null],
+    ["15.09.2026", "2026-09-15", null],
+    ["November third", null, "more than 6 months"],
+    ["fifteenth of December", null, "more than 6 months"],
+    ["earlier this month", null, "earlier this month"],
+  ];
+  for (const [text, wantDate, wantAsk] of dateCases) {
+    const r = resolveDateExpression(text, TODAY);
+    if (wantDate !== null) {
+      check("Q3.2 resolves: " + text, r.date === wantDate, r.date);
+    } else {
+      check("Q3.2 asks: " + text, r.date === null && (r.needsClarification === true) && (r.clarificationQuestion || "").indexOf(wantAsk as string) !== -1, r.clarificationQuestion);
+    }
+  }
+  const e2e = parseLocally("I had cramps three days back", TODAY, {} as any);
+  check("Q3.2 end-to-end: cramps three days back", e2e.entry !== null && (e2e.entry as any).date === "2026-10-29", (e2e.entry as any)?.date);
+  const e2eAsk = parseLocally("my period started earlier this month", TODAY, {} as any);
+  check("Q3.2 end-to-end: earlier this month asks", e2eAsk.entry === null && typeof e2eAsk.message === "string" && e2eAsk.message.indexOf("earlier this month") !== -1, e2eAsk.message);
 }
 
 console.log("Q3 part 1 Results: " + passed + " passed, " + failed + " failed.");

@@ -340,7 +340,7 @@ export interface ResolvedDate {
 
 const NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, twenty: 20,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30,
   "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "पाँच": 5, "छह": 6, "सात": 7,
   "ഒന്ന്": 1, "രണ്ട്": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5, "ആറ്": 6,
   "ஒன்று": 1, "இரண்டு": 2, "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5, "ஆறு": 6,
@@ -356,6 +356,65 @@ function explain(key: string): string {
   const d = new Date(key + "T12:00:00Z");
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+
+const MONTH_NAME_TO_NUM: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+};
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function addMonthsToKey(key: string, months: number): string {
+  let y = parseInt(key.slice(0, 4), 10);
+  let m = parseInt(key.slice(5, 7), 10) + months;
+  y += Math.floor((m - 1) / 12);
+  m = (((m - 1) % 12) + 12) % 12 + 1;
+  const d = Math.min(parseInt(key.slice(8, 10), 10), daysInMonth(y, m));
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// Spelled-out day ordinals 1-31: "third", "twenty second", "twenty-second", "thirty first".
+const ONES_ORDINAL: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9,
+  tenth: 10, eleventh: 11, twelfth: 12, thirteenth: 13, fourteenth: 14, fifteenth: 15,
+  sixteenth: 16, seventeenth: 17, eighteenth: 18, nineteenth: 19,
+};
+const TENS_WORD: Record<string, number> = { twenty: 20, thirty: 30 };
+
+function spelledDayValue(phrase: string): number | null {
+  const t = phrase.trim().toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ");
+  if (ONES_ORDINAL[t] !== undefined) return ONES_ORDINAL[t];
+  if (t === "twentieth") return 20;
+  if (t === "thirtieth") return 30;
+  if (t === "thirty first") return 31;
+  const parts = t.split(" ");
+  if (parts.length === 2 && TENS_WORD[parts[0]] !== undefined && ONES_ORDINAL[parts[1]] !== undefined) {
+    return TENS_WORD[parts[0]] + ONES_ORDINAL[parts[1]];
+  }
+  return null;
+}
+
+// Bare "the twenty-first": most recent past day-of-month with that day number.
+function mostRecentDayOfMonth(day: number, today: string): string | null {
+  let y = parseInt(today.slice(0, 4), 10);
+  let m = parseInt(today.slice(5, 7), 10);
+  for (let i = 0; i < 14; i++) {
+    if (day <= daysInMonth(y, m)) {
+      const key = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      if (key <= today) return key;
+    }
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  return null;
+}
+
+// Matches one spelled ordinal day phrase (1-31); used inside larger patterns with a trailing boundary.
+const SPELLED_DAY_SRC = "(?:thirty[\\s-]+first|twenty[\\s-]+(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)|twentieth|thirtieth|twenty|thirty|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth))";
 
 /**
  * Rewritten date resolver on the local-date helper (Batch 2.3).
@@ -405,6 +464,24 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
     return { date: d, confidence: "high", explanation: `yesterday = ${explain(d)}` };
   }
 
+  // "earlier this month" is unresolved: ask for the day, never default silently.
+  if (/\bearlier\s+this\s+month\b/.test(lower)) {
+    return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: "Which day earlier this month did you mean?" };
+  }
+
+  // "a day/week/fortnight/month ago" (also "... back").
+  const aAgoMatch = lower.match(/\b(?:a|an)\s+(day|week|fortnight|month)\s+(?:ago|back)\b/);
+  if (aAgoMatch) {
+    const unit = aAgoMatch[1];
+    if (unit === "month") {
+      const d = addMonthsToKey(today, -1);
+      return { date: d, confidence: "high", explanation: `a month ago = ${explain(d)}` };
+    }
+    const days = unit === "day" ? 1 : unit === "week" ? 7 : 14;
+    const d = addDaysToKey(today, -days);
+    return { date: d, confidence: "high", explanation: `a ${unit} ago = ${explain(d)}` };
+  }
+
   // N days/weeks ago, digits or number words (en/hi/ml/ta/kn)
   const agoMatch = lower.match(/([a-z\u0900-\u0D7F]+|\d+)\s*(days?|weeks?)\s+ago\b/) || lower.match(/(\d+)\s*(days?|weeks?)\s+ago\b/);
   if (agoMatch) {
@@ -416,9 +493,11 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
     }
   }
   // Number-word ago without the word "ago" handled by patterns above; also "3 days back"
-  const backMatch = lower.match(/(\d+)\s*(days?|weeks?)\s+back\b/);
+  const backMatch = lower.match(/([a-z\u0900-\u0D7F]+|\d+)\s*(days?|weeks?)\s+back\b/);
   if (backMatch) {
-    const n = parseInt(backMatch[1], 10);
+    const backN = numberValue(backMatch[1]);
+    if (backN === null) return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: "How many days back did you mean?" };
+    const n = backN;
     const d = addDaysToKey(today, backMatch[2].startsWith("week") ? -n * 7 : -n);
     return { date: d, confidence: "high", explanation: `${n} ${backMatch[2]} back = ${explain(d)}` };
   }
@@ -432,6 +511,34 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
     if (weekdayMatch[1] === "last" && diff === 0) diff = 7;
     const d = addDaysToKey(today, -diff);
     return { date: d, confidence: "high", explanation: `${weekdayMatch[1]} ${weekdayMatch[2]} = ${explain(d)}` };
+  }
+
+  // "on Monday": most recent past weekday (today itself when it matches).
+  const onWeekdayMatch = lower.match(/\bon\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (onWeekdayMatch) {
+    const target = WEEKDAYS.indexOf(onWeekdayMatch[1]);
+    const todayIdx = weekdayOfKey(today);
+    const diff = (todayIdx - target + 7) % 7;
+    const d = addDaysToKey(today, -diff);
+    return { date: d, confidence: "high", explanation: `on ${onWeekdayMatch[1]} = ${explain(d)}` };
+  }
+
+  // Dotted dates: "20.10.2026" is day.month.year (also "20.10" without a year).
+  const dottedMatch = lower.match(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\b/);
+  if (dottedMatch) {
+    const day = parseInt(dottedMatch[1], 10);
+    const month = parseInt(dottedMatch[2], 10);
+    let yr = dottedMatch[3]
+      ? (dottedMatch[3].length === 2 ? 2000 + parseInt(dottedMatch[3], 10) : parseInt(dottedMatch[3], 10))
+      : parseInt(today.slice(0, 4), 10);
+    let key = `${yr}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isValidDateKey(key)) return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: "That date does not exist. Which date did you mean?" };
+    if (!dottedMatch[3] && key > today) yr -= 1;
+    key = `${yr}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (key > today) {
+      return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year${String.fromCharCode(39)}s ${explain(key)}?` };
+    }
+    return { date: key, confidence: "high", explanation: `${dottedMatch[0]} = ${explain(key)}` };
   }
 
   // Numeric dates: D/M vs M/D
@@ -455,6 +562,51 @@ export function resolveDateExpression(text: string, today: string): ResolvedDate
   }
 
   // "the Monday before/after X" is handled by landmark resolution below via weekday check
+  // Spelled-out ordinals: "October twenty second", "November third", "fifteenth of December".
+  const spelledMonthNames = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+  const spelledMonthFirst = lower.match(new RegExp(`\\b(${spelledMonthNames})\\s+(${SPELLED_DAY_SRC})\\b`));
+  const spelledOfMonth = !spelledMonthFirst ? lower.match(new RegExp(`\\b(${SPELLED_DAY_SRC})\\s+of\\s+(${spelledMonthNames})\\b`)) : null;
+  const spelledHit = spelledMonthFirst
+    ? { month: spelledMonthFirst[1], day: spelledDayValue(spelledMonthFirst[2]), raw: spelledMonthFirst[0].trim() }
+    : spelledOfMonth
+      ? { month: spelledOfMonth[2], day: spelledDayValue(spelledOfMonth[1]), raw: spelledOfMonth[0].trim() }
+      : null;
+  if (spelledHit && spelledHit.day !== null && !landmarkRes.found) {
+    const mm = MONTH_NAME_TO_NUM[spelledHit.month];
+    if (mm) {
+      const year = parseInt(today.slice(0, 4), 10);
+      const explicitYear = lower.match(/\b(20\d{2})\b/);
+      let spelledKey: string | null = null;
+      const trySpelledKey = (y: number): string | null => {
+        const k = `${y}-${String(mm).padStart(2, "0")}-${String(spelledHit.day).padStart(2, "0")}`;
+        return isValidDateKey(k) ? k : null;
+      };
+      if (explicitYear) {
+        spelledKey = trySpelledKey(parseInt(explicitYear[1], 10));
+        if (spelledKey && spelledKey > today) {
+          return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean last year${String.fromCharCode(39)}s ${explain(spelledKey)}?` };
+        }
+      } else {
+        spelledKey = trySpelledKey(year);
+        if (spelledKey && spelledKey > today) spelledKey = trySpelledKey(year - 1);
+      }
+      if (spelledKey && !explicitYear && diffDateKeys(spelledKey, today) > 182) {
+        return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: `Did you mean ${explain(spelledKey)}? That is more than 6 months ago - please confirm the date.` };
+      }
+      if (spelledKey) return { date: spelledKey, confidence: "high", explanation: `${spelledHit.raw} = ${explain(spelledKey)}` };
+    }
+  }
+
+  // Bare "the twenty-first": most recent past day-of-month with that number.
+  const bareSpelled = lower.match(new RegExp(`\\bthe\\s+(${SPELLED_DAY_SRC})\\b`));
+  if (bareSpelled && !spelledHit && !landmarkRes.found) {
+    const bareDay = spelledDayValue(bareSpelled[1]);
+    if (bareDay !== null) {
+      const bareKey = mostRecentDayOfMonth(bareDay, today);
+      if (bareKey) return { date: bareKey, confidence: "high", explanation: `${bareSpelled[0].trim()} = ${explain(bareKey)}` };
+    }
+  }
+
   // Month/day ordinals: "3rd November", "3 Nov", "Nov 3"
   const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) ||
     lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
