@@ -550,7 +550,7 @@ function factIsPlaced(fact: StatedDatedFact, entries: StructuredEntry[], events:
   if (fact.eventNoun) {
     return events.some((e) => e.date === fact.date && (e.title || "").toLowerCase().includes(fact.eventNoun!));
   }
-  return entries.some((e) => e.date === fact.date
+  return entries.some((e) => (e.date === fact.date || (e.endDate != null && e.endDate === fact.date))
     && (!fact.flow || e.flow === fact.flow)
     && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym as any))));
 }
@@ -1046,6 +1046,169 @@ export function findMatchedEvent(text: string, matched?: Array<{title:string;dat
  * Intent first (Batch 2.1), lexicon word-boundary parser with negation (2.2),
  * rewritten date resolver (2.3). Never fabricates a log for plan-only or empty messages.
  */
+// ---------- Backfill: several past periods in one message ----------
+// Pure-additive branch: only period-list messages with zero flow, symptom,
+// mood, energy or sleep detail take this path. Everything else falls through
+// to the single-entry flow unchanged.
+const BACKFILL_MAX_ENTRIES = 12;
+const BACKFILL_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec";
+const BACKFILL_EVENT_NOUNS = "exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|deadline|meeting|travel|holiday";
+const BACKFILL_NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+  seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+const BACKFILL_MONTH_FULL: Record<string, string> = {
+  jan: "January", january: "January", feb: "February", february: "February",
+  mar: "March", march: "March", apr: "April", april: "April", may: "May",
+  jun: "June", june: "June", jul: "July", july: "July", aug: "August",
+  august: "August", sep: "September", sept: "September", september: "September",
+  oct: "October", october: "October", nov: "November", november: "November",
+  dec: "December", december: "December",
+};
+
+export interface BackfillSeed {
+  date: string;
+  endDate?: string | null;
+}
+
+export interface BackfillParse {
+  seeds: BackfillSeed[];
+  warnings: string[];
+  monthAsk?: string | null;
+}
+
+function backfillNumber(token: string): number | null {
+  const t = token.toLowerCase().trim();
+  if (/^\d+$/.test(t)) return parseInt(t, 10);
+  return BACKFILL_NUMBER_WORDS[t] ?? null;
+}
+
+// Resolve one date mention inside a backfill segment. Past-only: a bare
+// month/day rolls to the most recent past occurrence; explicit future years
+// and future ISO dates are reported as future drops.
+function resolveBackfillDate(seg: string, today: string): { date?: string; future?: string; none?: true } {
+  const year = parseInt(today.slice(0, 4), 10);
+  const iso = seg.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const key = iso[1] + "-" + iso[2] + "-" + iso[3];
+    if (!isValidDateKey(key)) return { none: true };
+    if (key > today) return { future: key };
+    return { date: key };
+  }
+  const ago = seg.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?)\s+ago\b/i);
+  if (ago) {
+    const n = backfillNumber(ago[1]);
+    if (n === null) return { none: true };
+    const days = /week/i.test(ago[2]) ? n * 7 : n;
+    return { date: addDaysToKey(today, -days) };
+  }
+  if (/\byesterday\b/i.test(seg)) return { date: addDaysToKey(today, -1) };
+  if (/\btoday\b/i.test(seg)) return { date: today };
+  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+\\d{1,2}(?:st|nd|rd|th)?)", "i"));
+  if (md) {
+    const raw = md[1].replace(/,/g, " ").replace(/\s+/g, " ").trim();
+    const explicit = seg.match(/\b(20\d{2})\b/);
+    if (explicit) {
+      const key = parseMonthDay(raw, parseInt(explicit[1], 10));
+      if (!key) return { none: true };
+      if (key > today) return { future: key };
+      return { date: key };
+    }
+    let key = parseMonthDay(raw, year);
+    if (!key) return { none: true };
+    if (key > today) key = parseMonthDay(raw, year - 1);
+    if (!key) return { none: true };
+    return { date: key };
+  }
+  return { none: true };
+}
+
+// A segment naming a month with no day ("in September") cannot be saved;
+// it becomes a clarifying question instead.
+function backfillBareMonth(seg: string): string | null {
+  let c = " " + seg.toLowerCase() + " ";
+  c = c.replace(/\b(i|we|my|our|the|last|this|had|have|has|got|periods|period|started|starts|began|came|were|was|on|in|for|and|then|also)\b/g, " ");
+  c = c.replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
+  if (!/^[a-z]+$/.test(c)) return null;
+  return BACKFILL_MONTH_FULL[c] || null;
+}
+
+// Range seed ("from X to Y", "X till Y", "X - Y", "started X and ended Y"),
+// or null when this message holds no valid range.
+function backfillRangeSeed(text: string, today: string): BackfillSeed | null {
+  const lower = text.toLowerCase();
+  const finish = (a: string, b: string): BackfillSeed | null => {
+    const r1 = resolveBackfillDate(a, today);
+    const r2 = resolveBackfillDate(b, today);
+    if (!r1.date || !r2.date) return null;
+    if (!(r1.date < r2.date) || r2.date > today) return null;
+    return { date: r1.date, endDate: r2.date };
+  };
+  const started = lower.match(/\bstarted\s+(.+?)\s+and\s+ended\s+(.+)/);
+  if (started) return finish(started[1], started[2]);
+  const fromTo = lower.match(/\bfrom\s+(.+?)\s+(?:to|till|until|through)\s+(.+)/);
+  if (fromTo) return finish(fromTo[1], fromTo[2]);
+  const till = lower.match(/\b(.+?)\s+till\s+(.+)/);
+  if (till) return finish(till[1], till[2]);
+  const parts = text.split(/\s+[-\u2013\u2014]\s+/);
+  if (parts.length === 2) return finish(parts[0], parts[1]);
+  return null;
+}
+
+// Split one message into candidate period dates. Returns null when this is
+// not a backfill message (single date, dated detail, no period cue, ...).
+export function extractBackfillDates(text: string, today: string): BackfillParse | null {
+  if (!/\bperiods?\b/i.test(text)) return null;
+  const ext = extractWithLexicon(text);
+  const lower = text.toLowerCase();
+  const hasDetail = ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null
+    || /\benergy\s*(?:is|level|:)?\s*([1-5])\b/i.test(lower)
+    || /(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/i.test(lower)
+    || /\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/i.test(lower);
+  if (hasDetail) return null;
+  const range = backfillRangeSeed(text, today);
+  if (range) return { seeds: [range], warnings: [], monthAsk: null };
+  const eventRe = new RegExp("\\b(" + BACKFILL_EVENT_NOUNS + ")\\b", "i");
+  const segments = text.split(/(?:,|;|&|\bthen\b|\balso\b|\band\b)/i).map((s) => s.trim()).filter(Boolean);
+  const dates: string[] = [];
+  const warnings: string[] = [];
+  const bareMonths: string[] = [];
+  for (const seg of segments) {
+    if (eventRe.test(seg)) continue;
+    const bare = backfillBareMonth(seg);
+    if (bare) {
+      if (!bareMonths.includes(bare)) bareMonths.push(bare);
+      continue;
+    }
+    const r = resolveBackfillDate(seg, today);
+    if (r.date) {
+      dates.push(r.date);
+      continue;
+    }
+    if (r.future) {
+      warnings.push(r.future + " is in the future, so I left it out.");
+      continue;
+    }
+    if (/\d/.test(seg) || new RegExp("\\b(?:" + BACKFILL_MONTHS + ")\\b", "i").test(seg)) {
+      warnings.push("I could not place a date for: " + seg);
+    }
+  }
+  const dupes = dates.length - new Set(dates).size;
+  const unique = [...new Set(dates)].sort();
+  if (dupes > 0) warnings.push("One date was mentioned twice, so I counted it once.");
+  if (unique.length > BACKFILL_MAX_ENTRIES) {
+    const dropped = unique.length - BACKFILL_MAX_ENTRIES;
+    warnings.push("Keeping the " + BACKFILL_MAX_ENTRIES + " most recent of " + unique.length + " dates (" + dropped + " oldest left out).");
+  }
+  const seeds = unique.slice(Math.max(0, unique.length - BACKFILL_MAX_ENTRIES)).map((d) => ({ date: d }));
+  if (seeds.length >= 2 && bareMonths.length > 0) {
+    warnings.push(bareMonths[0] + " still needs a day: add it like " + bareMonths[0] + " 9.");
+  }
+  if (seeds.length >= 2) return { seeds, warnings, monthAsk: null };
+  if (bareMonths.length > 0) return { seeds: [], warnings, monthAsk: bareMonths[0] };
+  return null;
+}
+
 export function parseLocally(text: string, today: string, context: AgentContext): AgentResult {
   const startTime = Date.now();
   const lower = text.toLowerCase();
@@ -1291,6 +1454,38 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
     }
+  }
+  // Backfill: several past periods in one message. Pure-additive branch with
+  // zero flow or symptom detail; everything else falls through unchanged.
+  const backfill = extractBackfillDates(text, today);
+  if (backfill) {
+    if (backfill.monthAsk) {
+      const q = "Which day in " + backfill.monthAsk + "? Reply like " + '"' + "period started " + backfill.monthAsk + " 9" + '"' + ".";
+      return { message: q, entry: null, entries: [], needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, usedPersonalAnchor, ...offline };
+    }
+    const seeds = backfill.seeds;
+    const dated = seeds.map((s) => s.date);
+    const rangeNote = seeds.length === 1 && seeds[0].endDate ? " to " + seeds[0].endDate : "";
+    const baseMsg = seeds.length === 1
+      ? "I found 1 period: " + dated[0] + rangeNote + ". Review and confirm below."
+      : "I found " + seeds.length + " period starts: " + dated.join(", ") + ". Review and confirm below.";
+    const warnMsg = backfill.warnings.length > 0 ? " " + backfill.warnings.join(" ") : "";
+    const entries: StructuredEntry[] = seeds.map((s) => ({
+      date: s.date, endDate: s.endDate || null, flow: null, symptoms: [],
+      mood: null, energy: null, sleep: null, notes: text,
+      isApproximate: false, landmarkName: null, kind: "period_started",
+      dateExplanation: null, dateWindow: null,
+    }));
+    for (const e of entries) {
+      toolCalls.push({ id: "call_backfill_" + Date.now() + "_" + e.date, toolName: "log_entry", args: { date: e.date, kind: "period_started" }, result: { entry: { date: e.date } }, latencyMs: 1, model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    }
+    activityTrail.push({ step: "Backfill", detail: "Extracted " + seeds.length + " past period date" + (seeds.length === 1 ? "" : "s"), status: "done" });
+    return ensureFactCoverageDisclosure({
+      message: baseMsg + warnMsg, entry: entries[0], entries,
+      needsClarification: false, activityTrail, toolCalls, planOverlaps,
+      plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })),
+      usedPersonalAnchor, ...offline,
+    }, text, today);
   }
   // Intent first: no loggable content -> no log slip (bare landmark recall is exempt:
   // it is the app's landmark-recall shorthand for a period date).
