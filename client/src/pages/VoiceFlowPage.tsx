@@ -129,6 +129,7 @@ export function VoiceFlowPage() {
   const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(() => Boolean(initialPending?.isOfflineFallback));
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
+  const correctionSaveRef = useRef(false);
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
@@ -329,6 +330,7 @@ export function VoiceFlowPage() {
       }
       }
 
+      correctionSaveRef.current = (res as any).replacesExisting === true && !!res.entry;
       if (res.planOverlaps && res.planOverlaps.length > 0) {
         setPlanOverlaps(res.planOverlaps);
       } else {
@@ -373,6 +375,8 @@ export function VoiceFlowPage() {
     const isBleeding = confirmEntry.flow === "light" || confirmEntry.flow === "medium" || confirmEntry.flow === "heavy";
     const isPeriod = confirmEntry.kind === "period_started" || isBleeding;
     const kind = isPeriod ? "period_started" : confirmEntry.kind || "daily_log";
+    const replaceExisting = correctionSaveRef.current;
+    correctionSaveRef.current = false;
     const result = saveLog(
       {
         logDate: confirmEntry.date,
@@ -386,6 +390,7 @@ export function VoiceFlowPage() {
       },
       {
         kind,
+        replace: replaceExisting,
         landmarkName: confirmEntry.landmarkName || null,
         startEarliest: confirmEntry.isApproximate ? addDays(confirmEntry.date, -3) : null,
         startLatest: confirmEntry.isApproximate ? addDays(confirmEntry.date, 3) : null,

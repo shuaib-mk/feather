@@ -322,6 +322,8 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
 
 export interface SaveLogEntryOptions {
   kind?: EntryKind;
+  /** Explicit full-state edits (calendar day sheet, slip corrections) replace the day log instead of merging. */
+  replace?: boolean;
   /** Set only after the user confirms a period longer than MAX_PERIOD_DAYS in the confirm slip. */
   confirmLongPeriod?: boolean;
   landmarkName?: string | null;
@@ -333,6 +335,8 @@ export interface SaveLogEntryResult {
   log: DayLog;
   period: Period | null;
   needsConfirmation: boolean;
+  /** Write/quota failure reason. Set together with saved:false; never a success. */
+  error?: string;
   confirmationReason?: string;
   saved: boolean;
 }
@@ -342,16 +346,62 @@ export interface SaveLogEntryResult {
  * Bleeding (light/medium/heavy) merges into a period within a 2-day gap;
  * spotting is logged but never starts or extends a period.
  */
+/**
+ * Merges a same-day log: symptoms are unioned, flow is kept unless the new
+ * entry states one, mood/energy/sleep are replaced only when non-null, notes
+ * are appended without duplicating. The existing id is kept.
+ */
+function mergeDayLogs(
+  existing: DayLog,
+  incoming: Omit<DayLog, "id"> & { id?: number },
+): DayLog {
+  const symptoms = [...(existing.symptoms || [])];
+  for (const s of incoming.symptoms || []) {
+    if (!symptoms.includes(s)) symptoms.push(s);
+  }
+  let notes = existing.notes || null;
+  const inNotes = (incoming.notes || "").trim();
+  if (inNotes) {
+    if (!notes) notes = incoming.notes;
+    else if (notes !== incoming.notes && notes.indexOf(inNotes) === -1) notes = notes + "\n" + incoming.notes;
+  }
+  return {
+    ...existing,
+    flow: incoming.flow != null ? incoming.flow : existing.flow,
+    symptoms,
+    mood: incoming.mood != null ? incoming.mood : existing.mood,
+    energy: incoming.energy != null ? incoming.energy : existing.energy,
+    sleepHours: incoming.sleepHours != null ? incoming.sleepHours : existing.sleepHours,
+    notes,
+    kind:
+      incoming.kind && incoming.kind !== "daily_log"
+        ? incoming.kind
+        : existing.kind === "period_started"
+          ? "period_started"
+          : incoming.kind || existing.kind || "daily_log",
+  };
+}
+
 export function saveLogEntry(
   logInput: Omit<DayLog, "id"> & { id?: number },
   options: SaveLogEntryOptions = {},
 ): SaveLogEntryResult {
-  const kind: EntryKind = options.kind || logInput.kind || "daily_log";
+  const requestedKind: EntryKind | undefined = options.kind || logInput.kind || undefined;
   toDate(logInput.logDate);
   const data = loadCycleData();
   const periodsAsc = sortedPeriodsAsc(data.periods);
-  const logId = logInput.id || newNumericId();
-  const newLog: DayLog = { ...logInput, id: logId, kind };
+  const existingSameDay = options.replace ? undefined : data.logs.find((l) => l.logDate === logInput.logDate);
+  const kind: EntryKind =
+    requestedKind && requestedKind !== "daily_log"
+      ? requestedKind
+      : existingSameDay?.kind === "period_started"
+        ? "period_started"
+        : requestedKind || existingSameDay?.kind || "daily_log";
+  const logId = logInput.id || existingSameDay?.id || newNumericId();
+  const newLog: DayLog =
+    existingSameDay && !options.replace
+      ? mergeDayLogs(existingSameDay, { ...logInput, kind })
+      : { ...logInput, id: logId, kind };
 
   const candidateLogs = [...data.logs];
   const existingLogIdx = candidateLogs.findIndex((l) => l.logDate === logInput.logDate);

@@ -128,6 +128,8 @@ export interface AgentResult {
   usedPersonalAnchor?: boolean;
   message: string;
   entry?: StructuredEntry | null;
+  /** True when entry is a corrected slip that must replace (not merge into) the stored day log. */
+  replacesExisting?: boolean;
   /** All backfilled entries, oldest first. entry is always entries[0] for old code. */
   entries?: StructuredEntry[];
   needsClarification: boolean;
@@ -692,6 +694,7 @@ export async function runLavenderAgent(
 
   let usedPersonalAnchorLive = false;
   let structuredEntry: StructuredEntry | null = null;
+  let replacedViaCorrection = false;
   const structuredEntries: StructuredEntry[] = [];
   // Multi mode only for backfill-shaped prompts (several period dates, no
   // detail): single-period turns keep the old overwrite behavior exactly.
@@ -844,7 +847,7 @@ export async function runLavenderAgent(
           } else {
             const patched = applyModelPatch(entryToPatch, fnArgs, today);
             if (patched.error) toolResultObj = { error: patched.error };
-            else { structuredEntry = patched.entry!; toolResultObj = { success: true, entry: structuredEntry }; }
+            else { structuredEntry = patched.entry!; replacedViaCorrection = true; toolResultObj = { success: true, entry: structuredEntry }; }
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         }
@@ -911,6 +914,7 @@ export async function runLavenderAgent(
     return ensureFactCoverageDisclosure({
       message: finalMessage,
       entry: collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
+      replacesExisting: replacedViaCorrection || undefined,
       entries: structuredEntries.length > 0 ? structuredEntries : undefined,
       needsClarification,
       clarificationQuestion,
@@ -1265,7 +1269,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
-      return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, activityTrail, toolCalls, ...offline };
+      return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline };
     }
   }
 

@@ -1,5 +1,5 @@
 /** Q1: data integrity + app lock. */
-import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods } from "../../client/src/cycleStorage";
+import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods, saveLogEntry } from "../../client/src/cycleStorage";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -54,4 +54,31 @@ if (failed > 0) process.exit(1);
   check("Q1.2: existing period intact plus 2 new", data.periods.length === 3 && data.periods.some((p) => p.startDate === "2026-10-02") && data.periods.some((p) => p.startDate === "2026-10-09"), data.periods.map((p) => p.startDate));
   const empty = bulkSavePeriods([]);
   check("Q1.2: empty batch saves nothing", empty.saved === 0 && empty.skipped.length === 0, empty);
+}
+
+// --- Q1.3 same-day merge ---
+{
+  resetVault();
+  const mk = (flow: any, symptoms: string[], extra: any = {}) => ({
+    logDate: "2026-10-02", flow, symptoms, mood: null, energy: null, sleepHours: null, notes: null, ...extra,
+  });
+  saveLogEntry(mk("medium", ["cramps"]), { kind: "period_started" });
+  saveLogEntry(mk(null, ["headache"], { mood: "Okay", energy: 3, sleepHours: 7, notes: "note one" }), { kind: "daily_log" });
+  let log = loadCycleData().logs.find((l) => l.logDate === "2026-10-02")!;
+  check("Q1.3: symptoms union", JSON.stringify(log.symptoms) === JSON.stringify(["cramps", "headache"]), log.symptoms);
+  check("Q1.3: flow kept when new is null", log.flow === "medium", log.flow);
+  check("Q1.3: mood/energy/sleep replaced when non-null", log.mood === "Okay" && log.energy === 3 && log.sleepHours === 7, [log.mood, log.energy, log.sleepHours]);
+  check("Q1.3: kind period_started preserved", log.kind === "period_started", log.kind);
+  check("Q1.3: still one period and one log", loadCycleData().periods.length === 1 && loadCycleData().logs.length === 1, loadCycleData().periods.length);
+  const idBefore = log.id;
+  saveLogEntry(mk(null, ["headache"], { notes: "note one" }), { kind: "daily_log" });
+  log = loadCycleData().logs.find((l) => l.logDate === "2026-10-02")!;
+  check("Q1.3: notes not duplicated", log.notes === "note one", log.notes);
+  check("Q1.3: id stable across merges", log.id === idBefore, log.id);
+  saveLogEntry(mk("light", ["nausea"], { mood: "Good" }), { kind: "daily_log" });
+  log = loadCycleData().logs.find((l) => l.logDate === "2026-10-02")!;
+  check("Q1.3: explicit flow wins, symptoms grow", log.flow === "light" && log.symptoms.includes("nausea") && log.symptoms.includes("cramps"), [log.flow, log.symptoms]);
+  saveLogEntry(mk("heavy", ["fatigue"], { mood: "Low", energy: 2, sleepHours: 6, notes: "fresh" }), { kind: "period_started", replace: true });
+  log = loadCycleData().logs.find((l) => l.logDate === "2026-10-02")!;
+  check("Q1.3: replace:true restores overwrite", log.flow === "heavy" && JSON.stringify(log.symptoms) === JSON.stringify(["fatigue"]) && log.mood === "Low" && log.notes === "fresh", log);
 }
