@@ -1,6 +1,6 @@
 /** Q2: live path honesty. */
-import { runLavenderAgent } from "../backend/agent";
-import { REDIRECT_MESSAGES } from "../backend/guardrail";
+import { parseLocally, runLavenderAgent } from "../backend/agent";
+import { REDIRECT_MESSAGES, MEDICAL_REFUSAL_MESSAGE } from "../backend/guardrail";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -113,5 +113,37 @@ async function q23() {
 
 await q23();
 
+
+// --- Q2.4 questions create no log; own data answered ---
+{
+  const ctx: any = { currentDate: TODAY, periods: [{ startDate: "2026-08-14" }, { startDate: "2026-09-09" }, { startDate: "2026-10-02" }] };
+  const last = parseLocally("when did my last period start", TODAY, ctx);
+  check("Q2.4: last start answered", !!last.message && last.message.indexOf("Oct 2") !== -1 && last.entry === null && last.needsClarification === false, last.message);
+  const usual = parseLocally("how long are my cycles usually", TODAY, ctx);
+  check("Q2.4: cycle length answered from logs", !!usual.message && usual.entry === null && usual.message.indexOf("logged cycles") !== -1, usual.message);
+  const longest = parseLocally("what was my longest cycle", TODAY, ctx);
+  check("Q2.4: longest answered, no entry", !!longest.message && longest.entry === null, longest.message);
+  const many = parseLocally("how many periods have I logged", TODAY, ctx);
+  check("Q2.4: count answered, no entry", !!many.message && many.entry === null, many.message);
+  const sept = parseLocally("did I log anything in September", TODAY, { currentDate: TODAY, periods: [{ startDate: "2026-09-09" }, { startDate: "2026-10-02" }], logs: [{ logDate: "2026-09-20" }] } as any);
+  check("Q2.4: month lookup lists logged dates", !!sept.message && sept.message.indexOf("Sep 9") !== -1 && sept.message.indexOf("Sep 20") !== -1 && sept.entry === null, sept.message);
+  const nosept = parseLocally("did I log anything in September", TODAY, { currentDate: TODAY, periods: [{ startDate: "2026-10-02" }], logs: [] } as any);
+  check("Q2.4: empty month says so", !!nosept.message && nosept.message.indexOf("Nothing logged in September") !== -1 && nosept.entry === null, nosept.message);
+  const plain = parseLocally("will it rain tomorrow", TODAY, ctx);
+  check("Q2.4: unrelated question creates no entry", plain.entry === null, plain.entry);
+}
+
+// --- Q2.5 mixed log plus medical question ---
+{
+  const mixed = parseLocally("my period started yesterday and is that normal", TODAY, {} as any);
+  check("Q2.5: mixed keeps the slip", !!mixed.entry && mixed.entry.date === "2026-10-31", mixed.entry);
+  check("Q2.5: mixed refuses only the medical part", typeof mixed.message === "string" && mixed.message.indexOf("t say whether that") !== -1 && mixed.message.indexOf("talk to a doctor") !== -1, mixed.message);
+  const pure = parseLocally("is my flow normal", TODAY, {} as any);
+  check("Q2.5: pure verdict refused with fixed message", !pure.entry && pure.message === MEDICAL_REFUSAL_MESSAGE, pure.message);
+  await withMock([textMsg("Done.")], async () => {
+    const live: any = await runLavenderAgent("my period started yesterday and is that normal", { currentDate: TODAY });
+    check("Q2.5: live mixed handled offline with slip", !!live.entry && live.mode === "offline" && typeof live.message === "string" && live.message.indexOf("talk to a doctor") !== -1, live.message);
+  });
+}
 console.log("Q2 Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);

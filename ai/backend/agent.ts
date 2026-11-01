@@ -89,6 +89,7 @@ export interface AgentContext {
     isDefault?: boolean;
   };
   periods?: Array<{ startDate: string; endDate?: string | null }>;
+  logs?: Array<{ logDate: string }>;
   currentDate?: string; // YYYY-MM-DD
   provider?: "meta" | "baseten";
   pendingEntry?: StructuredEntry | null;
@@ -622,6 +623,10 @@ export async function runLavenderAgent(
       detail: "Medical advice request intercepted",
       status: "done",
     });
+    if (hasLogContentForMixed(userPrompt)) {
+      const fb = parseLocally(userPrompt, context.currentDate || todayLocal(), context);
+      return { ...fb, mode: "offline", modeReason: "Offline parser - medical part refused; log handled by offline rules" };
+    }
     return {
       message: getGuardrailResponseMessage(userPrompt),
       needsClarification: false,
@@ -1268,6 +1273,16 @@ export function extractBackfillDates(text: string, today: string): BackfillParse
   return null;
 }
 
+/** Log content check for mixed messages (log + medical question): lexicon hits or energy/sleep numbers. */
+function hasLogContentForMixed(text: string): boolean {
+  const ext = extractWithLexicon(text);
+  if (ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd) return true;
+  const lower = text.toLowerCase();
+  if (/\benergy\s*(?:is|level|:)?\s*[1-5]\b/.test(lower)) return true;
+  if (/(?:slept|sleep)\s*(?:for\s*)?\d/.test(lower)) return true;
+  return false;
+}
+
 export function parseLocally(text: string, today: string, context: AgentContext): AgentResult {
   const startTime = Date.now();
   const lower = text.toLowerCase();
@@ -1278,8 +1293,12 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const toolCalls: ToolCallRecord[] = [];
   const offline = { mode: "offline" as const, modeReason: "Offline parser — Meta model not used (offline rule engine)" };
 
+  let medicalTail: string | null = null;
   if (checkMedicalAdviceGuardrail(text).isRefusal) {
-    return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
+    if (!hasLogContentForMixed(text)) {
+          return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
+    }
+    medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
   const severeCheck = checkSevereSymptomEscalation(text);
   if (severeCheck.isSevere) {
@@ -1314,7 +1333,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
-      return { message: "I've updated your Accession Slip with your corrections. Please review below.", entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline };
+      return { message: "I've updated your Accession Slip with your corrections. Please review below." + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline };
     }
   }
 
@@ -1769,5 +1788,6 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (severeCheck.isSevere && !message.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
     message = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
+  if (medicalTail) message += medicalTail;
   return { message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
 }

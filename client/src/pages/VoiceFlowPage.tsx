@@ -274,6 +274,7 @@ export function VoiceFlowPage() {
             lastPeriodStart: stats.lastPeriodStart,
           },
           periods: data.periods,
+          logs: data.logs,
           currentDate: todayStr(),
           pendingEntry: pending,
           recentEntry,

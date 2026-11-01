@@ -16,11 +16,24 @@ export const VERDICT_TAIL =
 
 export interface OwnDataContext {
   periods?: Array<{ startDate: string; endDate?: string | null }>;
+  logs?: Array<{ logDate: string }>;
+  periods?: Array<{ startDate: string; endDate?: string | null }>;
   cycleStats?: { avgPeriodLength?: number; nextPeriodEarliest?: string | null; nextPeriodLatest?: string | null };
 }
 export interface OwnDataResult { kind: "own_data_answer"; message: string; usedLiveModel: false }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NUM: Record<string, number> = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+};
+const MONTH_FULL: Record<string, string> = {
+  january: "January", february: "February", march: "March", april: "April", may: "May", june: "June",
+  july: "July", august: "August", september: "September", october: "October", november: "November", december: "December",
+  jan: "January", feb: "February", mar: "March", apr: "April", jun: "June", jul: "July", aug: "August",
+  sep: "September", sept: "September", oct: "October", nov: "November", dec: "December",
+};
 function label(key: string): string {
   const m = parseInt(key.slice(5, 7), 10), d = parseInt(key.slice(8, 10), 10);
   return MONTHS[(m || 1) - 1] + " " + d;
@@ -55,6 +68,18 @@ export function computeOwnDataStats(ctx: OwnDataContext): { completedCycles: num
 export function buildOwnDataAnswer(text: string, ctx: OwnDataContext): OwnDataResult | null {
   if (!isOwnDataQuestion(text)) return null;
   const s = computeOwnDataStats(ctx);
+  if (/\bwhen\s+did\s+my\s+last\s+period\s+start\b|\bwhen\s+was\s+my\s+last\s+period\b|\blast\s+period\s+start\b/i.test(text)) {
+    if (!s.lastStart) return { kind: "own_data_answer", message: "You have not logged any periods yet. Log your first period to get started.", usedLiveModel: false };
+    return { kind: "own_data_answer", message: "Your last logged period started " + label(s.lastStart) + ".", usedLiveModel: false };
+  }
+  const monthQ = text.toLowerCase().match(/\bdid\s+i\s+log\s+anything\s+in\s+([a-z]+)\b/);
+  if (monthQ && MONTH_NUM[monthQ[1]]) {
+    const m = MONTH_NUM[monthQ[1]];
+    const monthDates = [...new Set([...(ctx.periods || []).map((p) => p.startDate), ...(ctx.logs || []).map((l) => l.logDate)])].filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && +d.slice(5, 7) === m).sort().map((d) => label(d));
+    const monthName = MONTH_FULL[monthQ[1]];
+    if (monthDates.length === 0) return { kind: "own_data_answer", message: "Nothing logged in " + monthName + ".", usedLiveModel: false };
+    return { kind: "own_data_answer", message: "Logged in " + monthName + ": " + monthDates.join(", ") + ".", usedLiveModel: false };
+  }
   if (s.completedCycles < 2 || s.medianDays == null) {
     return { kind: "own_data_answer", message: NOT_ENOUGH_DATA_MESSAGE, usedLiveModel: false };
   }
