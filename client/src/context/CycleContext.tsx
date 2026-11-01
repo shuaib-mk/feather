@@ -10,6 +10,7 @@ import {
   deleteDayLog,
   computeCycleStats,
   exportCycleDataJSON,
+  describeSkipped,
   importCycleDataJSON,
 
   isExportOverdue,
@@ -143,13 +144,18 @@ export function CycleProvider({ children }: { children: ReactNode }) {
 
   const importBackup = useCallback((jsonContent: string) => {
     const result = importCycleDataJSON(jsonContent);
+    const skippedNote = result.skipped.length > 0
+      ? " Skipped " + result.skipped.length + ": " + describeSkipped(result.skipped) + "."
+      : "";
     if (result.success) {
       refreshData();
       setBackupToast(false);
       setOverdueDismissed(true);
-      return { success: true, message: `Imported ${result.count} records successfully.`, count: result.count };
+      const parts = result.added.periods + " periods, " + result.added.logs + " logs, " + result.added.events + " events";
+      return { success: true, message: "Imported " + result.count + " records (" + parts + ")." + skippedNote, count: result.count };
     }
-    return { success: false, message: result.error || "Failed to import JSON backup.", count: 0 };
+    return { success: false, message: (result.error || "Failed to import JSON backup.") + skippedNote, count: 0 };
+  }, [refreshData]);
   }, [refreshData]);
 
   const showOverdueBanner = !overdueDismissed && isExportOverdue(14) && data.periods.length > 0;

@@ -831,66 +831,252 @@ export function exportCycleDataJSON(): string {
   );
 }
 
-export function importCycleDataJSON(jsonStr: string): { success: boolean; count: number; error?: string } {
-  try {
-    const parsed = JSON.parse(jsonStr);
-    const rawPeriods = Array.isArray(parsed.periods) ? parsed.periods : [];
-    const rawLogs = Array.isArray(parsed.logs) ? parsed.logs : [];
-
-    if (rawPeriods.length === 0 && rawLogs.length === 0) {
-      return { success: false, count: 0, error: "No valid periods or logs found in file." };
-    }
-
-    const validPeriods: Period[] = [];
-    for (const p of rawPeriods) {
-      if (!p || typeof p.startDate !== "string") continue;
-      try {
-        toDate(p.startDate);
-        if (p.endDate) {
-          toDate(p.endDate);
-          if (p.endDate < p.startDate) continue;
-        }
-        validPeriods.push({
-          id: typeof p.id === "number" ? p.id : newNumericId(),
-          startDate: p.startDate,
-          endDate: p.endDate || null,
-          landmarkName: p.landmarkName || null,
-          isApproximate: Boolean(p.isApproximate),
-        });
-      } catch {
-        // Skip malformed entries
-      }
-    }
-
-    // Validate period relationships (e.g. overlaps, duplicate starts)
-    validateRecords(toPeriodRecords(validPeriods));
-
-    const validLogs: DayLog[] = [];
-    for (const l of rawLogs) {
-      if (!l || typeof l.logDate !== "string") continue;
-      try {
-        toDate(l.logDate);
-        validLogs.push({
-          id: typeof l.id === "number" ? l.id : newNumericId(),
-          logDate: l.logDate,
-          flow: l.flow || null,
-          symptoms: Array.isArray(l.symptoms) ? l.symptoms : [],
-          mood: l.mood || null,
-          energy: typeof l.energy === "number" ? l.energy : null,
-          sleepHours: typeof l.sleepHours === "number" ? l.sleepHours : null,
-          notes: l.notes || null,
-        });
-      } catch {
-        // Skip malformed log
-      }
-    }
-
-    try { if (Array.isArray((parsed as any).events)) saveEvents((parsed as any).events); } catch {}
-    saveCycleData({ periods: validPeriods, logs: validLogs });
-    recordExportTimestamp();
-    return { success: true, count: validPeriods.length + validLogs.length };
-  } catch (e: any) {
-    return { success: false, count: 0, error: e.message || "Invalid JSON backup file." };
-  }
+export interface ImportSkippedRow {
+  kind: "period" | "log" | "event";
+  key: string;
+  reason: string;
 }
+
+export interface ImportResult {
+  success: boolean;
+  count: number;
+  added: { periods: number; logs: number; events: number };
+  skipped: ImportSkippedRow[];
+  error?: string;
+}
+
+function sameImportedPeriod(a: Period, startDate: string, endDate: string | null): boolean {
+  return a.startDate === startDate && (a.endDate || null) === (endDate || null);
+}
+
+function sameImportedLog(a: DayLog, b: { flow: any; symptoms: any; mood: any; energy: any; sleepHours: any; notes: any }): boolean {
+  const symA = [...(a.symptoms || [])].sort().join("|");
+  const symB = [...(b.symptoms || [])].sort().join("|");
+  return (a.flow || null) === (b.flow || null) && symA === symB
+    && (a.mood || null) === (b.mood || null)
+    && (a.energy ?? null) === (b.energy ?? null)
+    && (a.sleepHours ?? null) === (b.sleepHours ?? null)
+    && (a.notes || null) === (b.notes || null);
+}
+
+function sameImportedEvent(a: CalendarEvent, b: CalendarEvent): boolean {
+  return a.title === b.title && a.date === b.date
+    && (a.endDate || undefined) === (b.endDate || undefined)
+    && (a.uid || undefined) === (b.uid || undefined);
+}
+
+/** Short human summary of skipped rows for status messages. */
+export function describeSkipped(skipped: ImportSkippedRow[], max = 5): string {
+  const shown = skipped.slice(0, max).map((s) => s.key + " (" + s.reason + ")");
+  return shown.join("; ") + (skipped.length > max ? ", and " + (skipped.length - max) + " more" : "");
+}
+
+/**
+ * Validates every record, merges with the local vault (never replaces it),
+ * writes once. Returns per-row skip reasons; id collisions with different
+ * content get a fresh id instead of overwriting.
+ */
+export function importCycleDataJSON(jsonStr: string): ImportResult {
+  const empty: ImportResult = { success: false, count: 0, added: { periods: 0, logs: 0, events: 0 }, skipped: [] };
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e: any) {
+    return { ...empty, error: (e && e.message) || "Invalid JSON backup file." };
+  }
+  const rawPeriods = Array.isArray(parsed.periods) ? parsed.periods : [];
+  const rawLogs = Array.isArray(parsed.logs) ? parsed.logs : [];
+  const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
+  if (rawPeriods.length === 0 && rawLogs.length === 0 && rawEvents.length === 0) {
+    return { ...empty, error: "No valid periods, logs or events found in file." };
+  }
+  const skipped: ImportSkippedRow[] = [];
+  const existing = loadCycleData();
+  const existingEvents = loadEvents();
+
+  const acceptedPeriods: Period[] = [];
+  const takenStarts = new Set(existing.periods.map((p) => p.startDate));
+  const takenIds = new Set<number>(existing.periods.map((p) => p.id));
+  const freshPeriodId = (): number => {
+    let id = newNumericId();
+    while (takenIds.has(id)) id += 1;
+    takenIds.add(id);
+    return id;
+  };
+  const overlapsPool = (start: string, end: string, pool: Period[]): boolean =>
+    pool.some((p) => {
+      const pEnd = p.endDate || p.startDate;
+      return start <= pEnd && end >= p.startDate;
+    });
+  for (const p of rawPeriods) {
+    const label = p && typeof p.startDate === "string" ? p.startDate : "(missing date)";
+    if (!p || typeof p.startDate !== "string") {
+      skipped.push({ kind: "period", key: label, reason: "invalid record: missing start date" });
+      continue;
+    }
+    try {
+      toDate(p.startDate);
+      if (p.endDate) toDate(p.endDate);
+    } catch {
+      skipped.push({ kind: "period", key: p.startDate, reason: "invalid date" });
+      continue;
+    }
+    const end: string | null = p.endDate || null;
+    if (end && end < p.startDate) {
+      skipped.push({ kind: "period", key: p.startDate, reason: "end date precedes start date" });
+      continue;
+    }
+    if (takenStarts.has(p.startDate)) {
+      skipped.push({ kind: "period", key: p.startDate, reason: "a period already starts on that date" });
+      continue;
+    }
+    if (overlapsPool(p.startDate, end || p.startDate, [...existing.periods, ...acceptedPeriods])) {
+      skipped.push({ kind: "period", key: p.startDate, reason: "overlaps an existing period" });
+      continue;
+    }
+    let id = typeof p.id === "number" ? p.id : freshPeriodId();
+    if (typeof p.id === "number" && takenIds.has(id)) {
+      id = freshPeriodId();
+    } else {
+      takenIds.add(id);
+    }
+    takenStarts.add(p.startDate);
+    acceptedPeriods.push({
+      id,
+      startDate: p.startDate,
+      endDate: end,
+      startEarliest: typeof p.startEarliest === "string" ? p.startEarliest : null,
+      startLatest: typeof p.startLatest === "string" ? p.startLatest : null,
+      landmarkName: p.landmarkName || null,
+      isApproximate: Boolean(p.isApproximate),
+    });
+  }
+
+  const acceptedLogs: DayLog[] = [];
+  const takenDates = new Set(existing.logs.map((l) => l.logDate));
+  const takenLogIds = new Set<number>(existing.logs.map((l) => l.id));
+  for (const l of rawLogs) {
+    const label = l && typeof l.logDate === "string" ? l.logDate : "(missing date)";
+    if (!l || typeof l.logDate !== "string") {
+      skipped.push({ kind: "log", key: label, reason: "invalid record: missing date" });
+      continue;
+    }
+    try {
+      toDate(l.logDate);
+    } catch {
+      skipped.push({ kind: "log", key: l.logDate, reason: "invalid date" });
+      continue;
+    }
+    const row = {
+      flow: l.flow || null,
+      symptoms: Array.isArray(l.symptoms) ? l.symptoms : [],
+      mood: l.mood || null,
+      energy: typeof l.energy === "number" ? l.energy : null,
+      sleepHours: typeof l.sleepHours === "number" ? l.sleepHours : null,
+      notes: l.notes || null,
+    };
+    const localSameDate = [...existing.logs, ...acceptedLogs].find((x) => x.logDate === l.logDate);
+    if (localSameDate && sameImportedLog(localSameDate, row)) {
+      skipped.push({ kind: "log", key: l.logDate, reason: "duplicate log" });
+      continue;
+    }
+    if (localSameDate) {
+      skipped.push({ kind: "log", key: l.logDate, reason: "a different log for that date already exists" });
+      continue;
+    }
+    takenDates.add(l.logDate);
+    let id = typeof l.id === "number" ? l.id : newNumericId();
+    if (takenLogIds.has(id)) {
+      id = newNumericId();
+      while (takenLogIds.has(id)) id += 1;
+    }
+    takenLogIds.add(id);
+    acceptedLogs.push({ id, logDate: l.logDate, ...row });
+  }
+
+  const mergedEvents: CalendarEvent[] = [...existingEvents];
+  const acceptedEvents: CalendarEvent[] = [];
+  const matchEvent = (title: string, date: string, id: string | undefined): number =>
+    mergedEvents.findIndex((e) => (id !== undefined && e.id === id) || (e.title === title && e.date === date));
+  for (const e of rawEvents) {
+    const title = e && typeof e.title === "string" ? e.title.trim() : "";
+    const date = e && typeof e.date === "string" ? e.date : "";
+    const key = (title || "(missing title)") + " @ " + (date || "(missing date)");
+    if (!title) {
+      skipped.push({ kind: "event", key, reason: "missing title" });
+      continue;
+    }
+    if (title.length > 200) {
+      skipped.push({ kind: "event", key, reason: "title too long" });
+      continue;
+    }
+    try {
+      toDate(date);
+    } catch {
+      skipped.push({ kind: "event", key, reason: "invalid date" });
+      continue;
+    }
+    let end: string | undefined;
+    if (typeof e.endDate === "string" && e.endDate) {
+      try {
+        toDate(e.endDate);
+      } catch {
+        skipped.push({ kind: "event", key, reason: "invalid end date" });
+        continue;
+      }
+      if (e.endDate < date) {
+        skipped.push({ kind: "event", key, reason: "end date precedes start date" });
+        continue;
+      }
+      end = e.endDate;
+    }
+    const src = e.source === "manual" || e.source === "ics" || e.source === "voice" ? e.source : "manual";
+    const row: CalendarEvent = {
+      id: typeof e.id === "string" && e.id ? e.id : "",
+      title,
+      date,
+      endDate: end,
+      source: src,
+      uid: typeof e.uid === "string" && e.uid ? e.uid : undefined,
+      private: e.private === true ? true : undefined,
+    };
+    const idx = matchEvent(title, date, row.id || undefined);
+    if (idx >= 0) {
+      const cur = mergedEvents[idx];
+      if (sameImportedEvent(cur, row)) {
+        skipped.push({ kind: "event", key, reason: "duplicate event" });
+        continue;
+      }
+      mergedEvents[idx] = { ...cur, title: row.title, date: row.date, endDate: row.endDate, source: row.source, uid: row.uid, private: row.private };
+      acceptedEvents.push(mergedEvents[idx]);
+      continue;
+    }
+    row.id = row.id || "evt-" + newNumericId();
+    while (mergedEvents.some((x) => x.id === row.id)) row.id = "evt-" + newNumericId();
+    mergedEvents.push(row);
+    acceptedEvents.push(row);
+  }
+
+  const added = { periods: acceptedPeriods.length, logs: acceptedLogs.length, events: acceptedEvents.length };
+  const count = added.periods + added.logs + added.events;
+  if (count === 0) {
+    const reason = skipped.length > 0
+      ? "Every record was skipped: " + describeSkipped(skipped)
+      : "No valid periods, logs or events found in file.";
+    return { success: false, count: 0, added, skipped, error: reason };
+  }
+  const mergedPeriods = [...existing.periods, ...acceptedPeriods].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const mergedLogs = [...existing.logs, ...acceptedLogs].sort((a, b) => b.logDate.localeCompare(a.logDate));
+  if (!saveCycleData({ periods: mergedPeriods, logs: mergedLogs })) {
+    return { success: false, count: 0, added: { periods: 0, logs: 0, events: 0 }, skipped, error: lastStorageError() || "Could not write to local storage." };
+  }
+  try {
+    saveEvents(mergedEvents);
+  } catch {
+    return { success: false, count: 0, added: { periods: 0, logs: 0, events: 0 }, skipped, error: "Could not save imported events." };
+  }
+  recordExportTimestamp();
+  return { success: true, count, added, skipped };
+}
+
 

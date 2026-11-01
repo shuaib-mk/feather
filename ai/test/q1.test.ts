@@ -1,5 +1,6 @@
 /** Q1: data integrity + app lock. */
-import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods, saveLogEntry } from "../../client/src/cycleStorage";
+import { saveCycleData, loadCycleData, addOrUpdatePeriod, bulkSavePeriods, saveLogEntry, importCycleDataJSON } from "../../client/src/cycleStorage";
+import { saveEvents, loadEvents } from "../../client/src/lib/events";
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -105,4 +106,41 @@ if (failed > 0) process.exit(1);
   (globalThis as any).localStorage = working;
   const ok = saveLogEntry({ logDate: "2026-10-04", flow: "medium", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null }, { kind: "period_started" });
   check("Q1.4: writes work again after restore", ok.saved === true, ok.saved);
+}
+
+// --- Q1.5 + Q4.7 backup import: merge, new ids, skip reasons ---
+{
+  resetVault();
+  saveCycleData({ periods: [{ id: 50, startDate: "2026-09-01", endDate: "2026-09-05" } as any], logs: [] });
+  const r = importCycleDataJSON(JSON.stringify({
+    periods: [{ id: 50, startDate: "2026-10-05", endDate: "2026-10-08" }],
+    logs: [],
+  }));
+  check("Q1.5: colliding id gets a new id", r.success === true && r.added.periods === 1, r);
+  const data = loadCycleData();
+  const imported = data.periods.find((p) => p.startDate === "2026-10-05");
+  check("Q1.5: no overwrite, both present", data.periods.length === 2 && !!imported && imported.id !== 50, data.periods.map((p) => p.id + ":" + p.startDate));
+  const allSkip = importCycleDataJSON(JSON.stringify({
+    periods: [{ id: 51, startDate: "2026-09-02", endDate: "2026-09-04" }],
+    logs: [],
+  }));
+  check("Q1.5: all skipped means success:false", allSkip.success === false && allSkip.count === 0, allSkip);
+  check("Q1.5: skip reasons reported", allSkip.skipped.length === 1 && allSkip.skipped[0].reason.indexOf("verlap") !== -1 && (allSkip.error || "").indexOf("skipped") !== -1, allSkip);
+  check("Q1.5: vault unchanged after all-skipped", loadCycleData().periods.length === 2, loadCycleData().periods.length);
+  const bad = importCycleDataJSON("not json{{{");
+  check("Q1.5: malformed file fails cleanly", bad.success === false && typeof bad.error === "string", bad);
+}
+{
+  resetVault();
+  saveEvents([{ id: "evt-1", title: "exam", date: "2026-11-20", source: "manual" } as any]);
+  const dup = importCycleDataJSON(JSON.stringify({ periods: [], logs: [], events: [{ id: "evt-1", title: "exam", date: "2026-11-20", source: "manual" }] }));
+  check("Q4.7: identical event skipped as duplicate", dup.added.events === 0 && dup.skipped.some((s) => s.kind === "event" && s.reason.indexOf("uplicate") !== -1), dup);
+  const upd = importCycleDataJSON(JSON.stringify({ periods: [], logs: [], events: [{ id: "evt-1", title: "final exam", date: "2026-11-20", source: "manual" }] }));
+  check("Q4.7: same id new title merges", upd.success === true && upd.added.events === 1, upd);
+  check("Q4.7: newer local event keeps its id", loadEvents().some((e) => e.id === "evt-1" && e.title === "final exam"), loadEvents());
+  saveEvents([{ id: "evt-9", title: "wedding", date: "2026-12-01", source: "manual" } as any]);
+  const keep = importCycleDataJSON(JSON.stringify({ periods: [{ id: 70, startDate: "2026-10-02", endDate: "2026-10-05" }], logs: [] }));
+  check("Q4.7: import without events keeps local events", keep.success === true && loadEvents().some((e) => e.id === "evt-9"), loadEvents().map((e) => e.id));
+  const badEv = importCycleDataJSON(JSON.stringify({ periods: [], logs: [], events: [{ id: "x", title: "", date: "2026-13-45", source: "manual" }] }));
+  check("Q4.7: invalid event skipped with reasons", badEv.success === false && badEv.skipped.length === 1, badEv);
 }
