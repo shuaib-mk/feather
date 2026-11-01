@@ -134,10 +134,18 @@ export function getGuardrailResponseMessage(input: string): string {
   return REDIRECT_MESSAGES[cat];
 }
 /** Output guard: model text with banned words / verdict phrasing is replaced. */
+/** Output guard: verdict constructions and fertility language in model text.
+ * Narrow on purpose: bare words like "normal flow" or "all safe" in a log
+ * summary do NOT trip it - only verdict phrasing does. */
 export const BANNED_OUTPUT_PATTERNS = [
-  /\bovulat\w*\b/i, /\bfertile\b/i, /\bis\s+normal\b/i, /\bhealthy\s+range\b/i,
-  /\byou\s+are\s+ovulating\b/i, /\bguaranteed\b/i, /\bclear\s+window\b/i,
-  /\bnormal\b/i, /\babnormal\b/i, /\bhealthy\b/i, /\bunhealthy\b/i, /\bsafe\b/i,
+  /\bovulat\w*\b/i,
+  /\bfertil\w*\b/i,
+  /\b(?:is|are|was|were)\b[^.?!]{0,40}\b(?:normal|healthy|safe|fine|okay|ok)\b/i,
+  /\bit(?:'s|s)?\b[^.?!]{0,20}\b(?:normal|healthy|safe|fine)\b/i,
+  /\b(?:completely|totally|perfectly|entirely)\s+(?:normal|healthy|safe|fine)\b/i,
+  /\bguaranteed\b/i,
+  /\bclear\s+window\b/i,
+  /\bsafe\s+days?\b/i,
 ];
 export function checkModelOutputGuard(text: string): { blocked: boolean; message: string } {
   const blocked = BANNED_OUTPUT_PATTERNS.some((p) => p.test(text || ""));

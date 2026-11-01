@@ -870,11 +870,37 @@ export async function runLavenderAgent(
       }
     }
 
-    // v2 output guard: banned words / verdict phrasing in model text -> fixed redirect.
+    // Success claims must come from tool results. If a tool call errored and
+    // no valid entry or event exists, replace the model prose instead of
+    // relaying a success it did not perform.
+    let firstToolError: string | null = null;
+    for (const c of toolCallsRecorded) {
+      const e = (c.result as any)?.error;
+      if (!firstToolError && typeof e === "string" && e) firstToolError = e;
+    }
+    if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0)) {
+      if (firstToolError) {
+        finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
+      } else if (/logged|saved|done|all set|good to go/i.test(finalMessage)) {
+        finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
+      }
+    }
+    // v2 output guard: verdict phrasing never discards structured results.
+    // With results, only the text is replaced by a neutral summary built from
+    // them; a pure verdict with nothing to save keeps the fixed redirect.
     const bannedOut = checkModelOutputGuard(finalMessage);
     if (bannedOut.blocked) {
-      activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
-      return { message: REDIRECT_MESSAGES.verdict, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "live" as const, modeReason: "Output guard replaced the model reply" };
+      const hasResults = !!structuredEntry || structuredEntries.length > 0 || livePlannedEvents.length > 0 || (planOverlaps !== undefined && planOverlaps.length > 0);
+      if (!hasResults) {
+        activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
+        return { message: REDIRECT_MESSAGES.verdict, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "live" as const, modeReason: "Output guard replaced the model reply" };
+      }
+      const summaryEntry = collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry;
+      let summary = summaryEntry ? "Prepared your log for " + shortDateLabel(summaryEntry.date) + ". Please confirm." : "Prepared your log. Please confirm.";
+      if (livePlannedEvents.length > 0) summary += " Prepared " + livePlannedEvents.length + " event" + (livePlannedEvents.length === 1 ? "" : "s") + ".";
+      if (planOverlaps && planOverlaps.length > 0) summary += " Overlap checked.";
+      finalMessage = summary;
+      activityTrail.push({ step: "Output Guard", detail: "Model reply replaced with neutral summary (verdict wording removed)", status: "done" });
     }
     // Server-side check on the final assistant response as secondary guardrail defense
     const outputGuard = checkMedicalAdviceGuardrail(finalMessage);
