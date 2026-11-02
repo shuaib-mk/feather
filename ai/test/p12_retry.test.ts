@@ -1,3 +1,4 @@
+import fs from "node:fs";
 /** Prompt 12A: live agent call retries before any offline fallback. */
 import { sendAgentMessage, AGENT_ATTEMPTS, AGENT_TIMEOUT_MS } from "../../ai/frontend/aiClient";
 let passed = 0, failed = 0;
@@ -33,7 +34,7 @@ async function main() {
     m.restore();
   }
   {
-    const m = mockFetch(async (_u, _i, n) => {
+    const m = mockFetch(async (_url: any, init: any, n) => {
       if (n === 1) return new Promise((res, rej) => {
         const t = setTimeout(() => res(okEntry("2026-11-02")), 150);
         if (init && init.signal) init.signal.addEventListener("abort", () => { clearTimeout(t); const e: any = new Error("aborted"); e.name = "AbortError"; rej(e); });
@@ -59,7 +60,12 @@ async function main() {
     check("P12: 429 keeps the rate-limit message with no retry and no offline parse", m.calls() === 1 && r.rateLimited === true && (r.message || "").indexOf("Slow down") !== -1, r.message);
     m.restore();
   }
-  console.log("P12 Retry Results: " + passed + " passed, " + failed + " failed.");
+  const vpage = fs.readFileSync("client/src/pages/VoiceFlowPage.tsx", "utf8");
+  check("P12B: retry progress reuses the thinking line", vpage.indexOf("retryNotice") !== -1 && vpage.indexOf("Reaching the AI") !== -1, "retry ui");
+  check("P12B: staged progress labels exist", vpage.indexOf("Transcribing") !== -1 && vpage.indexOf("Preparing your log") !== -1 && vpage.indexOf("Thinking...") !== -1 && vpage.indexOf("pipelineStage") !== -1, "stages");
+  check("P12B: round trip is instrumented", vpage.indexOf("featherVoicePerf") !== -1 && vpage.indexOf("markVoiceTiming") !== -1, "marks");
+  check("P12B: API path is pre-warmed on Voice open", vpage.indexOf("/api/agent") !== -1 && vpage.indexOf("OPTIONS") !== -1, "prewarm");
+    console.log("P12 Retry Results: " + passed + " passed, " + failed + " failed.");
   if (failed > 0) process.exit(1);
 }
 main();

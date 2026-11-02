@@ -11,6 +11,16 @@ import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from
 import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts } from "../cycleStorage";
 import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
+/** Prompt 12 (Group B): voice round-trip instrumentation. Marks live in
+ * window.featherVoicePerf.marks for before/after measurement; no UI effect. */
+function markVoiceTiming(key: string): void {
+  try {
+    const w = window as any;
+    w.featherVoicePerf = w.featherVoicePerf || { marks: {} };
+    w.featherVoicePerf.marks[key] = Math.round(performance.now());
+  } catch {}
+}
+
 export const VOICE_PENDING_SESSION_KEY = "feather_voice_pending_v1";
 
 export interface VoicePendingSession {
@@ -121,6 +131,8 @@ const agentMode = thread.agentMode;
     }
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  const [pipelineStage, setPipelineStage] = useState<"transcribing" | "thinking" | "preparing">("thinking");
   const [processingSource, setProcessingSource] = useState<"voice" | "text">("voice");
 const transcript = thread.transcript;
   const setTranscript = (v: string | ((p: string) => string)) =>
@@ -178,6 +190,15 @@ const conversationHistory = thread.conversationHistory;
     }
   }, [isDemoActive]);
 
+  // Prompt 12 (Group B): pre-warm the API path when Voice opens so the first
+  // real call does not pay setup cost. OPTIONS is cheap and never counted.
+  useEffect(() => {
+    try {
+      fetch("/api/agent", { method: "OPTIONS" }).catch(() => {});
+      fetch("/api/transcribe", { method: "OPTIONS" }).catch(() => {});
+    } catch {}
+  }, []);
+
   // Auto-process captured audio blob
   useEffect(() => {
     if (audioBlob && !isRecording) {
@@ -200,6 +221,7 @@ const conversationHistory = thread.conversationHistory;
 
       if (res.text && res.text.trim()) {
         setTranscript(res.text);
+        markVoiceTiming("transcribed");
         setActivityTrail([{ step: "Voice Recognition", detail: `Transcribed (${res.language || "multilingual"}): "${res.text}"`, status: "done" }]);
         await runAgentPipeline(res.text);
       } else {
@@ -223,6 +245,9 @@ const conversationHistory = thread.conversationHistory;
     setProcessingSource(source);
     setIsProcessing(true);
     setTranscript(promptText);
+    setRetryNotice(null);
+    setPipelineStage("thinking");
+    markVoiceTiming("send");
     setRateLimitNotice(null);
     setSavedSuccessMessage(null);
 
@@ -311,9 +336,11 @@ const conversationHistory = thread.conversationHistory;
           })(),
         },
         conversationHistory,
+        (attempt, total) => setRetryNotice("Reaching the AI… trying again (attempt " + attempt + " of " + total + ")"),
       );
 
       setAgentMessage(res.message);
+      markVoiceTiming("agentDone");
       setActivityTrail(res.activityTrail || []);
       if (res.toolCalls && res.toolCalls.length > 0) {
         setToolCalls(res.toolCalls);
@@ -352,6 +379,16 @@ const conversationHistory = thread.conversationHistory;
       }
       }
 
+      if (!isMessageOnly) {
+        setPipelineStage("preparing");
+        markVoiceTiming("slipReady");
+        try {
+          const w = window as any;
+          const m = (w.featherVoicePerf && w.featherVoicePerf.marks) || {};
+          const t0 = m.send || m.stop || 0;
+          if (t0) console.debug("[feather-voice] slip ready", Math.round(performance.now() - t0) + "ms");
+        } catch {}
+      }
       correctionSaveRef.current = (res as any).replacesExisting === true && !!res.entry;
       if (res.planOverlaps && res.planOverlaps.length > 0) {
         setPlanOverlaps(res.planOverlaps);
@@ -371,6 +408,7 @@ const conversationHistory = thread.conversationHistory;
       setAgentMessage(err.message || "Could not process request.");
     } finally {
       setIsProcessing(false);
+      setRetryNotice(null);
     }
   };
 
@@ -743,7 +781,7 @@ const conversationHistory = thread.conversationHistory;
 
       {/* Agent message outcome (clarifying questions, "didn't understand", unplaced-fact disclosures) */}
       {isProcessing && (
-        <p role="status" className="font-sans text-xs text-stone-500">Thinking...</p>
+        <p role="status" className="font-sans text-xs text-stone-500">{retryNotice || (pipelineStage === "transcribing" ? "Transcribing…" : pipelineStage === "preparing" ? "Preparing your log…" : "Thinking...")}</p>
       )}
       <AgentMessageCard message={agentMessage} />
 
