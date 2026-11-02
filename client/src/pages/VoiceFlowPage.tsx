@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { loadEvents, fuzzyMatchEvents, upsertEvent } from "../lib/events";
 import { useCycle } from "../context/CycleContext";
+import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
 import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
@@ -91,9 +92,13 @@ export function VoiceFlowPage() {
   const presetDate = searchParams.get("date");
   const allowMatchedCalendar = (() => { try { return typeof localStorage !== "undefined" && localStorage.getItem("feather_allow_matched_events") === "true"; } catch { return false; } })();
 
-  const initialPending = loadVoicePendingSession();
-  const [plannedEventsState, setPlannedEventsState] = useState<any[]>(() => initialPending?.plannedEventsState || []);
-  const [agentMode, setAgentMode] = useState<any>(() => initialPending?.agentMode || null);
+  const { thread, setThread, clearThread } = useVoiceThread();
+const plannedEventsState = thread.plannedEventsState;
+  const setPlannedEventsState = (v: any[] | ((p: any[]) => any[])) =>
+    setThread((prev) => ({ plannedEventsState: typeof v === "function" ? (v as (p: any[]) => any[])(prev.plannedEventsState) : v }));
+const agentMode = thread.agentMode;
+  const setAgentMode = (v: any | ((p: any) => any)) =>
+    setThread((prev) => ({ agentMode: typeof v === "function" ? (v as (p: any) => any)(prev.agentMode) : v }));
   const [usedAnchor, setUsedAnchor] = useState(false);
 
   // Voice recording hook
@@ -117,48 +122,49 @@ export function VoiceFlowPage() {
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingSource, setProcessingSource] = useState<"voice" | "text">("voice");
-  const [transcript, setTranscript] = useState<string>(() => initialPending?.transcript || "");
+const transcript = thread.transcript;
+  const setTranscript = (v: string | ((p: string) => string)) =>
+    setThread((prev) => ({ transcript: typeof v === "function" ? (v as (p: string) => string)(prev.transcript) : v }));
   const [manualText, setManualText] = useState<string>("");
-  const [agentMessage, setAgentMessage] = useState<string>(() => initialPending?.agentMessage || "");
+const agentMessage = thread.agentMessage;
+  const setAgentMessage = (v: string | ((p: string) => string)) =>
+    setThread((prev) => ({ agentMessage: typeof v === "function" ? (v as (p: string) => string)(prev.agentMessage) : v }));
   const [activityTrail, setActivityTrail] = useState<ActivityStep[]>([]);
-  const [confirmEntry, setConfirmEntry] = useState<StructuredEntry | null>(() => initialPending?.confirmEntry || null);
-  const [backfillRows, setBackfillRows] = useState<BackfillRow[] | null>(() => initialPending?.backfillRows || null);
+const confirmEntry = thread.confirmEntry;
+  const setConfirmEntry = (v: StructuredEntry | null | ((p: StructuredEntry | null) => StructuredEntry | null)) =>
+    setThread((prev) => ({ confirmEntry: typeof v === "function" ? (v as (p: StructuredEntry | null) => StructuredEntry | null)(prev.confirmEntry) : v }));
+const backfillRows = thread.backfillRows;
+  const setBackfillRows = (v: BackfillRow[] | null | ((p: BackfillRow[] | null) => BackfillRow[] | null)) =>
+    setThread((prev) => ({ backfillRows: typeof v === "function" ? (v as (p: BackfillRow[] | null) => BackfillRow[] | null)(prev.backfillRows) : v }));
   const [backfillLongWarn, setBackfillLongWarn] = useState<string | null>(null);
   const [backfillShortWarn, setBackfillShortWarn] = useState<string | null>(null);
   const [backfillLongOk, setBackfillLongOk] = useState(false);
   const [backfillShortOk, setBackfillShortOk] = useState(false);
-  const [planOverlaps, setPlanOverlaps] = useState<any[] | null>(() => initialPending?.planOverlaps || null);
+const planOverlaps = thread.planOverlaps;
+  const setPlanOverlaps = (v: any[] | null | ((p: any[] | null) => any[] | null)) =>
+    setThread((prev) => ({ planOverlaps: typeof v === "function" ? (v as (p: any[] | null) => any[] | null)(prev.planOverlaps) : v }));
   const [toolCalls, setToolCalls] = useState<ToolCallRecord[]>([]);
   const [isUnderHoodOpen, setIsUnderHoodOpen] = useState<boolean>(false);
-  const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(() => Boolean(initialPending?.isOfflineFallback));
+const isOfflineFallback = thread.isOfflineFallback;
+  const setIsOfflineFallback = (v: boolean | ((p: boolean) => boolean)) =>
+    setThread((prev) => ({ isOfflineFallback: typeof v === "function" ? (v as (p: boolean) => boolean)(prev.isOfflineFallback) : v }));
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
   const correctionSaveRef = useRef(false);
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
-  const [conversationHistory, setConversationHistory] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+const conversationHistory = thread.conversationHistory;
+  const setConversationHistory = (v: Array<{ role: "user" | "assistant"; content: string }> | ((p: Array<{ role: "user" | "assistant"; content: string }>) => Array<{ role: "user" | "assistant"; content: string }>)) =>
+    setThread((prev) => ({ conversationHistory: typeof v === "function" ? (v as (p: Array<{ role: "user" | "assistant"; content: string }>) => Array<{ role: "user" | "assistant"; content: string }>)(prev.conversationHistory) : v }));
 
   const textInputRef = useRef<HTMLInputElement | null>(null);
   const prevDemoRef = useRef<boolean>(isDemoActive);
 
   useEffect(() => {
-    saveVoicePendingSession({
-      transcript,
-      agentMessage,
-      confirmEntry,
-      backfillRows,
-      plannedEventsState,
-      planOverlaps,
-      agentMode,
-      isOfflineFallback,
-    });
-  }, [transcript, agentMessage, confirmEntry, backfillRows, plannedEventsState, planOverlaps, agentMode, isOfflineFallback]);
-
-  useEffect(() => {
     if (prevDemoRef.current !== isDemoActive) {
       prevDemoRef.current = isDemoActive;
-      clearVoicePendingSession();
+      clearThread();
       setBackfillRows(null);
       setBackfillLongWarn(null);
       setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
@@ -481,7 +487,7 @@ export function VoiceFlowPage() {
   };
 
   const handleDiscard = () => {
-    clearVoicePendingSession();
+    clearThread();
     setLongPeriodWarning(null);
     setConfirmEntry(null);
     setBackfillRows(null);

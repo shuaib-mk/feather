@@ -43,6 +43,7 @@ const suites = [
   ["q6_polish", ["npx", "tsx", "ai/test/q6_polish.test.ts"]],
   ["q7_negation", ["npx", "tsx", "ai/test/q7_negation.test.ts"]],
   ["q7_export", ["npx", "tsx", "ai/test/q7_export.test.ts"]],
+  ["q7_voice", ["npx", "tsx", "ai/test/q7_voice.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

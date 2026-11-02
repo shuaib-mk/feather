@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { CycleProvider, useCycle } from "./context/CycleContext";
+import { VoiceThreadProvider } from "./context/VoiceThreadContext";
 import { AppLayout } from "./components/AppLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { CalendarPage } from "./pages/CalendarPage";
@@ -54,6 +55,7 @@ export function App() {
       <ScrollToTop />
       <LockGate>
       <CycleProvider>
+        <VoiceThreadProvider>
         <AppLayout>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
@@ -67,6 +69,7 @@ export function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppLayout>
+        </VoiceThreadProvider>
       </CycleProvider>
       </LockGate>
     </BrowserRouter>
