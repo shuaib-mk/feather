@@ -552,7 +552,10 @@ export function saveLogEntry(
       isApproximate,
     };
     const shortGap = shortGapForNewStart(date, candidatePeriods, null);
-    if (shortGap && !options.confirmShortGap) {
+    // Q6.9: gate only explicit period starts (voice slip, backfill pass kind
+    // period_started). Flow-derived starts with no explicit kind keep legacy
+    // gap semantics (batch1 1.2c); scanner/import/typed confirm at the UI layer.
+    if (shortGap && !options.confirmShortGap && requestedKind === "period_started") {
       affected = {
         id: newPeriodId,
         startDate: date,
