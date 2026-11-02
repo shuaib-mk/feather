@@ -740,7 +740,7 @@ function buildOwnDataAnswer(text, ctx) {
   if (/\bwhen\s+is\s+my\s+next\s+period\b|\bmy\s+next\s+period\b/i.test(text) && s.lastStart) {
     const earliest = ctx.cycleStats?.nextPeriodEarliest || addDaysKey(s.lastStart, s.minDays);
     const latest = ctx.cycleStats?.nextPeriodLatest || addDaysKey(s.lastStart, s.maxDays);
-    return { kind: "own_data_answer", message: "Your next period is estimated between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
+    return { kind: "own_data_answer", message: "Your next period estimated window is between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
   }
   if (/\bis\s+\d+\s*days?\s+normal\s+for\s+me\b|\bis\s+my\s+cycle\s+regular\b/i.test(text)) {
     return { kind: "own_data_answer", message: stats + " " + VERDICT_TAIL, usedLiveModel: false };
@@ -1530,6 +1530,13 @@ function explain(key) {
   const d = /* @__PURE__ */ new Date(key + "T12:00:00Z");
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
+function shortMonthDay(key) {
+  const d = /* @__PURE__ */ new Date(key + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+function capWeekday(w) {
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
 var MONTH_NAME_TO_NUM = {
   january: 1,
   february: 2,
@@ -1691,6 +1698,18 @@ function resolveDateExpression(text, today, packs) {
     const n = backN;
     const d = addDaysToKey(today, backMatch[2].startsWith("week") ? -n * 7 : -n);
     return { date: d, confidence: "high", explanation: `${n} ${backMatch[2]} back = ${explain(d)}` };
+  }
+  const nextWeekdayMatch = lower.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (nextWeekdayMatch) {
+    const target = WEEKDAYS.indexOf(nextWeekdayMatch[1]);
+    const todayIdx = weekdayOfKey(today);
+    let diff = (target - todayIdx + 7) % 7;
+    if (diff === 0) diff = 7;
+    const first = addDaysToKey(today, diff);
+    const second = addDaysToKey(first, 7);
+    const name = capWeekday(nextWeekdayMatch[1]);
+    const q = `This coming ${name} ${shortMonthDay(first)}, or ${name} ${shortMonthDay(second)}?`;
+    return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: q };
   }
   const weekdayMatch = lower.match(/\b(last|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
   if (weekdayMatch) {
@@ -2216,6 +2235,8 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Plan Around It: If user mentions upcoming events ("marathon on Nov 15, flight to Tokyo on Dec 4, exam on Oct 10"), call \`check_overlap\`. Use ONLY neutral scheduling language: "Likely overlap", "Possible overlap", or "Unlikely to overlap (estimate)". Never imply certainty or guarantees.
    - Backfill (several past periods in one message): call one log_entry per period, each with its own date and kind "period_started". If the user lists several periods, log them ALL (one call each), never just the first. If she gives a start and an end ("from October 2 to October 6", "started Sept 9 and ended Sept 13"), put the start in date and the end in endDate on a single period_started call.
 
+   - Next-weekday ambiguity: if she says "next <weekday>" (for example "next Tuesday"), do NOT call log_entry yet. Ask which one she means: the coming <weekday> (<month> <day>) or the one a week later (<month> <day>), computing both dates from today, and wait for her answer.
+
 Tone: Warm, respectful, concise, neutral, non-medical.
 Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
 function recordsFromContext(context) {
@@ -2379,9 +2400,12 @@ function findStatedDatedFacts(userPrompt, today) {
     else {
       const noYear = raw.replace(/,?\s+\b\d{4}\b/, "");
       resolved = parseMonthDay(noYear, currentYear);
+      const rangeShape = /\bfrom\b[\s\S]{0,60}?\b(to|till|through|until)\b/i.test(clause) || /\b\d{1,2}(?:st|nd|rd|th)?\s*[-–]\s*\d{1,2}(?:st|nd|rd|th)?\b/.test(clause);
+      const periodWord = /\bperiod\b/i.test(clause);
       if (resolved) {
         if (eventNoun) {
           if (resolved < today) resolved = parseMonthDay(noYear, currentYear + 1);
+        } else if (rangeShape && !periodWord) {
         } else if (resolved > today) {
           resolved = parseMonthDay(noYear, currentYear - 1);
         }
@@ -2442,6 +2466,20 @@ function ensureFactCoverageDisclosure(result, userPrompt, today) {
     const stated = [...new Set(facts.filter((f) => f.multiDateOnly && !f.eventNoun).map((f) => f.date))].sort();
     if (stated.length >= 2) {
       const placedDates = /* @__PURE__ */ new Set();
+      for (const ev of events) {
+        if (!ev.date) continue;
+        placedDates.add(ev.date);
+        const spanEnd = ev.endDate;
+        if (spanEnd && spanEnd > ev.date) {
+          let sd = addDaysToKey(ev.date, 1);
+          let sguard = 0;
+          while (sd <= spanEnd && sguard < 366) {
+            placedDates.add(sd);
+            sd = addDaysToKey(sd, 1);
+            sguard++;
+          }
+        }
+      }
       for (const e of entries) {
         placedDates.add(e.date);
         if (e.endDate) placedDates.add(e.endDate);
@@ -2484,6 +2522,9 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
       detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended",
       status: "done"
     });
+  }
+  if (/\bremind(?:er)?\b/i.test(userPrompt) && /\bperiod\b/i.test(userPrompt) && (/\bbefore\b/i.test(userPrompt) || /\bnext\b/i.test(userPrompt))) {
+    return { message: "I can't set reminders yet; you can export the calendar (.ics) from Settings.", needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline", modeReason: "Offline parser \u2014 reminders are not supported" };
   }
   if (!severeCheck.isSevere) {
     const ownLive = buildOwnDataAnswer(userPrompt, context);
@@ -2547,7 +2588,8 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     { role: "system", content: `${SYSTEM_PROMPT}
 Today's date is ${today}. Locale: ${context.locale || "en"}. Reply in the user's language.${targetEntry ? `
 Pending or recent entry to correct if asked: ${JSON.stringify(targetEntry)}. Call update_entry with a patch (date, flow, symptoms_add, symptoms_remove, mood, energy, sleep, notes).` : ""}${context.matchedEvents && context.matchedEvents.length ? `
-Client-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}${calendarVisibilityNote}` },
+Client-matched personal events (consented): ${JSON.stringify(context.matchedEvents)}. Use find_calendar_events for these.` : ""}${calendarVisibilityNote}${context.defaultDate ? `
+The user opened voice from the calendar on ${context.defaultDate}. If they do not state a date, log for ${context.defaultDate}; a date they state wins.` : ""}` },
     ...conversationHistory,
     { role: "user", content: userPrompt }
   ];
@@ -2668,7 +2710,7 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
           const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           const rawEvents = (fnArgs.events || []).filter((e) => e && typeof e.date === "string" && isValidDateKey(e.date));
-          livePlannedEvents = rawEvents.map((e) => ({ title: e.name || e.title || "Event", date: e.date }));
+          livePlannedEvents = rawEvents.map((e) => ({ title: e.name || e.title || "Event", date: e.date, ...e.endDate && e.endDate !== e.date ? { endDate: e.endDate } : {} }));
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
@@ -2730,8 +2772,12 @@ Client-matched personal events (consented): ${JSON.stringify(context.matchedEven
       const e = c.result?.error;
       if (!firstToolError && typeof e === "string" && e) firstToolError = e;
     }
+    const slipClaimed = /updated your (accession )?slip|slip[^.?!]{0,40}\bupdated\b|made those changes|correction (?:has been |is )?(?:saved|applied)/i.test(finalMessage);
+    const updateSucceeded = toolCallsRecorded.some((c) => c.toolName === "update_entry" && c.result?.success);
     if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0)) {
-      if (firstToolError) {
+      if (slipClaimed && !updateSucceeded) {
+        finalMessage = "There's no entry to change.";
+      } else if (firstToolError) {
         finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
       } else if (/logged|saved|done|all set|good to go/i.test(finalMessage)) {
         finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
@@ -3127,10 +3173,36 @@ function parseLocally(text, today, context) {
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended", status: "done" });
   }
+  if (/\bremind(?:er)?\b/i.test(text) && /\bperiod\b/i.test(text) && (/\bbefore\b/i.test(text) || /\bnext\b/i.test(text))) {
+    return { message: "I can" + String.fromCharCode(39) + "t set reminders yet; you can export the calendar (.ics) from Settings.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
   const ownData = buildOwnDataAnswer(text, context);
   if (ownData) {
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
     return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+  if (!context.pendingEntry) {
+    const negatedToday = [];
+    for (const sym of VALID_SYMPTOMS) {
+      const symKey = sym.replace(/_/g, " ");
+      if (new RegExp(`\\bno\\s+${symKey}\\b`, "i").test(text)) negatedToday.push(symKey);
+    }
+    const hasPositiveContent = (() => {
+      const ext = extractWithLexicon(text);
+      return ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd;
+    })();
+    const mentionsToday2 = /\b(today|tonight|this morning|right now)\b/i.test(text);
+    if (negatedToday.length > 0 && mentionsToday2 && !hasPositiveContent) {
+      const pool = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : []];
+      const todayEntry = pool.find((e) => e && e.date === today);
+      const onNote = todayEntry ? (todayEntry.symptoms || []).map((s) => String(s).replace(/_/g, " ").toLowerCase()) : [];
+      const present = negatedToday.filter((s) => onNote.indexOf(s.toLowerCase()) !== -1);
+      if (present.length > 0) {
+        const q = "Remove " + present.join(" and ") + " from today's note?";
+        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+      }
+      return { message: "Noted, nothing logged.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+    }
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
@@ -3185,9 +3257,12 @@ function parseLocally(text, today, context) {
     }
   }
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
-  if (!targetSlip && isCorrectionAttempt && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+  const namesExplicitDay = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(text) || /\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text);
+  const isDateCorrection = namesExplicitDay && /\b(change|move|correct|fix|update|edit|meant|later|wait)\b/i.test(text);
+  if (!targetSlip && (isCorrectionAttempt || isDateCorrection) && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+    const noEntryMsg = namesExplicitDay ? "There's no entry to change." : "I couldn't find a recent entry to correct.";
     return {
-      message: "I couldn't find a recent entry to correct.",
+      message: noEntryMsg,
       entry: null,
       needsClarification: false,
       activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],

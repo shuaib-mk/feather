@@ -62,7 +62,7 @@ export function DashboardPage() {
         }
       />
 
-      {!isDemoActive && (
+      {!isDemoActive && !hasHistory && (
         <div className="liquid-glass-card rounded-[24px] p-5 flex flex-wrap gap-3 items-center justify-between">
           <div>
             <h2 className="font-serif text-lg font-semibold">New here?</h2>

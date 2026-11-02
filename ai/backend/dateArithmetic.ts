@@ -389,6 +389,15 @@ function explain(key: string): string {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
+function shortMonthDay(key: string): string {
+  const d = new Date(key + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function capWeekday(w: string): string {
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
 const MONTH_NAME_TO_NUM: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
@@ -532,6 +541,20 @@ export function resolveDateExpression(text: string, today: string, packs?: Landm
     const n = backN;
     const d = addDaysToKey(today, backMatch[2].startsWith("week") ? -n * 7 : -n);
     return { date: d, confidence: "high", explanation: `${n} ${backMatch[2]} back = ${explain(d)}` };
+  }
+
+  // "next <weekday>" is ambiguous (the coming one vs the one after): ask.
+  const nextWeekdayMatch = lower.match(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (nextWeekdayMatch) {
+    const target = WEEKDAYS.indexOf(nextWeekdayMatch[1]);
+    const todayIdx = weekdayOfKey(today);
+    let diff = (target - todayIdx + 7) % 7;
+    if (diff === 0) diff = 7;
+    const first = addDaysToKey(today, diff);
+    const second = addDaysToKey(first, 7);
+    const name = capWeekday(nextWeekdayMatch[1]);
+    const q = `This coming ${name} ${shortMonthDay(first)}, or ${name} ${shortMonthDay(second)}?`;
+    return { date: null, confidence: "none", explanation: "", needsClarification: true, clarificationQuestion: q };
   }
 
   // last / this <weekday>

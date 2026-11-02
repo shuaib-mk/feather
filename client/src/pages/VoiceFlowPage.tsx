@@ -736,6 +736,9 @@ export function VoiceFlowPage() {
       )}
 
       {/* Agent message outcome (clarifying questions, "didn't understand", unplaced-fact disclosures) */}
+      {isProcessing && (
+        <p role="status" className="font-sans text-xs text-stone-500">Thinking...</p>
+      )}
       <AgentMessageCard message={agentMessage} />
 
       {/* Plan Overlap Alerts */}
@@ -1087,7 +1090,7 @@ export function VoiceFlowPage() {
               </button>
             </div>
           )}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50 sticky bottom-0 z-10">
             <button
               type="button"
               onClick={handleDiscard}
