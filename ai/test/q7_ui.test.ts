@@ -13,6 +13,8 @@ function check(name: string, cond: boolean, extra?: unknown) {
   const d = fs.readFileSync("client/src/pages/SettingsPage.tsx", "utf8");
   const headAt = d.indexOf(">Diagnostics</h3>");
   const buildAt = d.indexOf("Build: {buildId");
+  const cal = fs.readFileSync("client/src/pages/CalendarPage.tsx", "utf8");
+  check("Q7.8: span day without log says No daily log", cal.indexOf("sel.bleeding ? \"No daily log for this day.\"") !== -1, "day copy");
   check("Q7.4: Build row renders inside Diagnostics", headAt !== -1 && buildAt > headAt && d.slice(headAt, buildAt).indexOf("return") === -1, "build row");
 }
 console.log("Q7 UI Results: " + passed + " passed, " + failed + " failed.");
