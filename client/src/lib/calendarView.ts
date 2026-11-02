@@ -17,7 +17,8 @@ export function buildMonthDayStates(year:number, month:number, periods:Period[],
   const leadingBlanks = (firstDow - weekStart + 7) % 7;
   const days = cal.map((d)=>{
     const log = logs.find((l)=>l.logDate===d.date) || null;
-    const bleeding = log ? (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started") : false; // A3: only a real log may claim "period day logged"
+    const inPeriodRange = periods.some((p) => d.date >= p.startDate && d.date <= (p.endDate || p.startDate));
+    const bleeding = (log && (log.flow==="light"||log.flow==="medium"||log.flow==="heavy"||log.kind==="period_started")) || inPeriodRange; // Q6.7: a period with an end date colours every day start..end
     const spotting = log?.flow==="spotting";
     const predicted = !!(prediction.earliestStart && prediction.latestStart && d.date >= prediction.earliestStart && d.date <= prediction.latestStart && d.date >= today); // D3: one window definition (engine earliest..latest) on every surface
     const evs = eventsOnDate(events, d.date);
