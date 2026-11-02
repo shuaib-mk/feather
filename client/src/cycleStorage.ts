@@ -299,7 +299,43 @@ export function newNumericId(): number {
   return now * 1000 + ((idSalt + msIdCounter) % 1000);
 }
 
-export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }): Period {
+/** Q6.2: gap (in days) from a new period start to its nearest neighbouring
+ * start. Returns null when every neighbour is at least SHORT_GAP_DAYS away.
+ * The previous start is preferred for the message; otherwise the next one. */
+export const SHORT_GAP_DAYS = 21;
+export function shortGapForNewStart(startDate: string, periods: Period[], excludeId?: number | null): { gapDays: number; neighbourStart: string } | null {
+  let prev: string | null = null;
+  let next: string | null = null;
+  for (const p of periods) {
+    if (excludeId != null && p.id === excludeId) continue;
+    if (p.startDate === startDate) continue;
+    if (p.startDate < startDate && (prev === null || p.startDate > prev)) prev = p.startDate;
+    if (p.startDate > startDate && (next === null || p.startDate < next)) next = p.startDate;
+  }
+  const neighbour = prev ?? next;
+  if (!neighbour) return null;
+  const gapDays = Math.abs(dayDifference(neighbour, startDate));
+  if (gapDays >= SHORT_GAP_DAYS) return null;
+  return { gapDays, neighbourStart: neighbour };
+}
+/** Q6.2: confirm copy for a short gap. Cancel is always the default outcome. */
+export function shortGapMessage(gapDays: number): string {
+  return "This starts only " + gapDays + " days after your previous period start. Save anyway?";
+}
+/** Q6.2: subset of start dates that would create a short gap against a pool. */
+export function findShortGapStarts(startDates: string[], periods: Period[]): Array<{ startDate: string; gapDays: number; neighbourStart: string }> {
+  const out: Array<{ startDate: string; gapDays: number; neighbourStart: string }> = [];
+  const pool = [...periods];
+  const ordered = [...startDates].sort();
+  for (const s of ordered) {
+    const hit = shortGapForNewStart(s, pool, null);
+    if (hit) out.push({ startDate: s, gapDays: hit.gapDays, neighbourStart: hit.neighbourStart });
+    pool.push({ id: -1, startDate: s, endDate: null } as Period);
+  }
+  return out;
+}
+
+export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }, opts?: { confirmShortGap?: boolean }): Period {
   toDate(period.startDate);
   if (period.endDate) {
     toDate(period.endDate);
@@ -322,6 +358,10 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }):
     startLatest: window.startLatest,
   };
 
+  const shortGap = shortGapForNewStart(period.startDate, data.periods, period.id ?? id);
+  if (shortGap && !opts?.confirmShortGap) {
+    throw new Error(shortGapMessage(shortGap.gapDays));
+  }
   const existingIdx = data.periods.findIndex((p) => p.id === id || p.startDate === period.startDate);
   const candidatePeriods = [...data.periods];
   if (existingIdx >= 0) {
@@ -344,6 +384,8 @@ export interface SaveLogEntryOptions {
   kind?: EntryKind;
   /** Explicit full-state edits (calendar day sheet, slip corrections) replace the day log instead of merging. */
   replace?: boolean;
+  /** Set only after the user confirms a short gap (<21 days) between period starts. */
+  confirmShortGap?: boolean;
   /** Set only after the user confirms a period longer than MAX_PERIOD_DAYS in the confirm slip. */
   confirmLongPeriod?: boolean;
   landmarkName?: string | null;
@@ -513,6 +555,19 @@ export function saveLogEntry(
       landmarkName: options.landmarkName ?? null,
       isApproximate,
     };
+    const shortGap = shortGapForNewStart(date, candidatePeriods, null);
+    if (shortGap && !options.confirmShortGap) {
+      affected = {
+        id: newPeriodId,
+        startDate: date,
+        endDate: date,
+        startEarliest: window.startEarliest,
+        startLatest: window.startLatest,
+        landmarkName: options.landmarkName ?? null,
+        isApproximate,
+      };
+      return finish(true, shortGapMessage(shortGap.gapDays));
+    }
     candidatePeriods.push(affected);
     return finish();
   }

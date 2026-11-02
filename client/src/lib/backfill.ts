@@ -77,7 +77,7 @@ export function backfillGapDays(sorted: BackfillRow[], index: number): number | 
 // Atomic multi-save through the existing period model: every selected row is
 // written, or none is. Validation runs before any write; a storage snapshot
 // is restored if any row throws mid-batch.
-export function saveBackfillRows(rows: BackfillRow[], today: string, confirmLongPeriod: boolean): number {
+export function saveBackfillRows(rows: BackfillRow[], today: string, confirmLongPeriod: boolean, confirmShortGap = false): number {
   const problem = validateBackfillRows(rows, today);
   if (problem) throw new Error(problem);
   const snapshot = loadCycleData();
@@ -95,7 +95,7 @@ export function saveBackfillRows(rows: BackfillRow[], today: string, confirmLong
           notes: null,
           kind: "period_started",
         },
-        { kind: "period_started", confirmLongPeriod },
+        { kind: "period_started", confirmLongPeriod, confirmShortGap },
       );
       if (!saved || saved.needsConfirmation) {
         throw new Error(saved && saved.confirmationReason ? saved.confirmationReason : "A row needs confirmation.");

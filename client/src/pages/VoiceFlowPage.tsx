@@ -7,7 +7,7 @@ import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
-import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod } from "../cycleStorage";
+import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts } from "../cycleStorage";
 import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
 export const VOICE_PENDING_SESSION_KEY = "feather_voice_pending_v1";
@@ -124,6 +124,9 @@ export function VoiceFlowPage() {
   const [confirmEntry, setConfirmEntry] = useState<StructuredEntry | null>(() => initialPending?.confirmEntry || null);
   const [backfillRows, setBackfillRows] = useState<BackfillRow[] | null>(() => initialPending?.backfillRows || null);
   const [backfillLongWarn, setBackfillLongWarn] = useState<string | null>(null);
+  const [backfillShortWarn, setBackfillShortWarn] = useState<string | null>(null);
+  const [backfillLongOk, setBackfillLongOk] = useState(false);
+  const [backfillShortOk, setBackfillShortOk] = useState(false);
   const [planOverlaps, setPlanOverlaps] = useState<any[] | null>(() => initialPending?.planOverlaps || null);
   const [toolCalls, setToolCalls] = useState<ToolCallRecord[]>([]);
   const [isUnderHoodOpen, setIsUnderHoodOpen] = useState<boolean>(false);
@@ -158,6 +161,7 @@ export function VoiceFlowPage() {
       clearVoicePendingSession();
       setBackfillRows(null);
       setBackfillLongWarn(null);
+      setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
       setConfirmEntry(null);
       setPlannedEventsState([]);
       setPlanOverlaps(null);
@@ -373,7 +377,7 @@ export function VoiceFlowPage() {
     setManualText("");
   };
 
-  const handleSaveConfirmed = (confirmLongPeriod: boolean = false) => {
+  const handleSaveConfirmed = (confirmLongPeriod: boolean = false, confirmShortGap: boolean = false) => {
     if (!confirmEntry || confirmEntry.date > todayStr()) {
       if (confirmEntry && confirmEntry.date > todayStr()) {
         setAgentMessage(`Cannot save a log entry for ${confirmEntry.date} because that date is in the future.`);
@@ -405,6 +409,7 @@ export function VoiceFlowPage() {
         startEarliest: confirmEntry.isApproximate ? addDays(confirmEntry.date, -3) : null,
         startLatest: confirmEntry.isApproximate ? addDays(confirmEntry.date, 3) : null,
         confirmLongPeriod,
+        confirmShortGap,
       },
     );
 
@@ -433,7 +438,7 @@ export function VoiceFlowPage() {
     setLongPeriodWarning(null);
   };
 
-  const handleSaveBackfill = (confirmed: boolean = false) => {
+  const handleSaveBackfill = (longConfirmed: boolean = false, shortConfirmed: boolean = false) => {
     if (!backfillRows) return;
     const rows = backfillSelected(backfillRows);
     const problem = validateBackfillRows(backfillRows, todayStr());
@@ -445,16 +450,23 @@ export function VoiceFlowPage() {
       const d = backfillDurationDays(r);
       return d !== null && d > 10;
     });
-    if (hasLongRow && !confirmed) {
+    if (hasLongRow && !longConfirmed) {
       setBackfillLongWarn("One or more periods is longer than 10 days. Save them anyway?");
       return;
     }
+    const shorts = findShortGapStarts(rows.map((r) => r.date), data.periods);
+    if (shorts.length > 0 && !shortConfirmed) {
+      setBackfillShortWarn(shorts.map((s) => s.startDate + ": this starts only " + s.gapDays + " days after your previous period start.").join(" ") + " Save anyway?");
+      return;
+    }
+    setBackfillShortWarn(null);
     let savedCount = 0;
     try {
-      savedCount = saveBackfillRows(backfillRows, todayStr(), confirmed);
+      savedCount = saveBackfillRows(backfillRows, todayStr(), longConfirmed, shortConfirmed);
     } catch (err: any) {
       refreshData();
       setBackfillLongWarn(null);
+      setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
       setAgentMessage(err?.message || "Could not save these periods. Nothing was saved.");
       return;
     }
@@ -463,6 +475,7 @@ export function VoiceFlowPage() {
     setSavedLink({ to: "/chronicle", label: "View in Chronicle" });
     setBackfillRows(null);
     setBackfillLongWarn(null);
+    setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
   };
 
   const handleDiscard = () => {
@@ -471,6 +484,7 @@ export function VoiceFlowPage() {
     setConfirmEntry(null);
     setBackfillRows(null);
     setBackfillLongWarn(null);
+    setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
     setSlipCorrectionText("");
     setPlanOverlaps(null);
     setPlannedEventsState([]);
@@ -914,7 +928,15 @@ export function VoiceFlowPage() {
           {backfillLongWarn && (
             <div role="alert" className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center gap-2 shadow-xs">
               <span className="flex-1">{backfillLongWarn}</span>
-              <button type="button" onClick={() => handleSaveBackfill(true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
+              <button type="button" onClick={() => handleSaveBackfill(true, backfillShortOk)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
+                Save anyway
+              </button>
+            </div>
+          )}
+          {backfillShortWarn && (
+            <div role="alert" className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center gap-2 shadow-xs">
+              <span className="flex-1">{backfillShortWarn}</span>
+              <button type="button" onClick={() => { setBackfillShortOk(true); handleSaveBackfill(backfillLongOk, true); }} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
                 Save anyway
               </button>
             </div>
@@ -925,6 +947,7 @@ export function VoiceFlowPage() {
               onClick={() => {
                 setBackfillRows(null);
                 setBackfillLongWarn(null);
+                setBackfillShortWarn(null); setBackfillLongOk(false); setBackfillShortOk(false);
               }}
               className="liquid-glass-pill rounded-full px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
@@ -1057,7 +1080,7 @@ export function VoiceFlowPage() {
           {longPeriodWarning && (
             <div role="alert" className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center gap-2 shadow-xs">
               <span className="flex-1">{longPeriodWarning}</span>
-              <button type="button" onClick={() => handleSaveConfirmed(true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
+              <button type="button" onClick={() => handleSaveConfirmed(true, true)} className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer">
                 Save anyway
               </button>
             </div>

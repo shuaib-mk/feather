@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { prettyDate , countDailyNotes } from "../cycleStorage";
+import { prettyDate , countDailyNotes, findShortGapStarts } from "../cycleStorage";
 
 export function VaultPage() {
   const {
@@ -22,6 +22,8 @@ export function VaultPage() {
   const [isClearModalOpen, setIsClearModalOpen] = useState<boolean>(false);
   const [importPendingContent, setImportPendingContent] = useState<string | null>(null);
   const [importStatusMessage, setImportStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [importShortGap, setImportShortGap] = useState<string | null>(null);
+  const [importStaged, setImportStaged] = useState<string | null>(null);
 
   const periodsCount = data.periods.length;
   const logsCount = countDailyNotes(data.periods, data.logs);
@@ -43,12 +45,30 @@ export function VaultPage() {
   };
 
   const handleConfirmImport = () => {
-    if (!importPendingContent) return;
-    const res = importBackup(importPendingContent);
+    if (!importPendingContent && !importStaged) return;
+    if (!importShortGap) {
+      try {
+        const parsed = JSON.parse(importPendingContent);
+        const rawPeriods = Array.isArray(parsed.periods) ? parsed.periods : [];
+        const starts = rawPeriods.map((p: any) => p && p.startDate).filter((s: any) => typeof s === "string");
+        const shorts = findShortGapStarts(starts, data.periods);
+        if (shorts.length > 0) {
+          setImportStaged(importPendingContent);
+          setImportPendingContent(null);
+          setImportShortGap(shorts.map((s) => s.startDate + ": this starts only " + s.gapDays + " days after your previous period start.").join(" ") + " Save anyway?");
+          return;
+        }
+      } catch { /* fall through: the normal import reports malformed files */ }
+    }
+    const target = importStaged || importPendingContent;
+    if (!target) return;
+    const res = importBackup(target);
     setImportStatusMessage({
       text: res.message,
       isError: !res.success,
     });
+    setImportStaged(null);
+    setImportShortGap(null);
     setImportPendingContent(null);
   };
 
@@ -246,6 +266,15 @@ export function VaultPage() {
         cancelLabel="Cancel"
         onConfirm={handleConfirmImport}
         onCancel={() => setImportPendingContent(null)}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(importStaged && importShortGap)}
+        title="Short cycle gap"
+        message={importShortGap || ""}
+        confirmLabel="Save anyway"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmImport}
+        onCancel={() => { setImportStaged(null); setImportShortGap(null); }}
       />
 
       {/* Confirmation Modal for Clearing Vault */}

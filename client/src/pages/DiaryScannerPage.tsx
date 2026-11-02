@@ -5,10 +5,10 @@ import { PageHeader } from "../components/PageHeader";
 import { analyzeDiaryPhoto } from "../../../ai/frontend/aiClient";
 import type { ExtractedPeriod } from "../../../ai/backend/vision";
 import { todayLocal } from "../lib/localDate";
-import { bulkSavePeriods, type BulkSkippedRow } from "../cycleStorage";
+import { bulkSavePeriods, findShortGapStarts, type BulkSkippedRow } from "../cycleStorage";
 
 export function DiaryScannerPage() {
-  const { refreshData } = useCycle();
+  const { data, refreshData } = useCycle();
   const navigate = useNavigate();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -19,6 +19,16 @@ export function DiaryScannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const [skippedRows, setSkippedRows] = useState<BulkSkippedRow[]>([]);
+  const [selectedRows, setSelectedRows] = useState<boolean[]>([]);
+  // Q6.2: rows that would create a short gap (<21 days) start unchecked and labelled.
+  const shortGapIdx = (rows: { startDate: string }[]): Set<number> => {
+    const hits = findShortGapStarts(rows.map((r) => r.startDate).filter(Boolean), data.periods);
+    const idx = new Set<number>();
+    const byDate = new Map<string, number[]>();
+    rows.forEach((r, i) => { if (!byDate.has(r.startDate)) byDate.set(r.startDate, []); (byDate.get(r.startDate) as number[]).push(i); });
+    for (const h of hits) { for (const i of byDate.get(h.startDate) || []) idx.add(i); }
+    return idx;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,6 +51,9 @@ export function DiaryScannerPage() {
     try {
       const res = await analyzeDiaryPhoto(selectedFile);
       setExtractedPeriods(res.periods || []);
+      const rows = res.periods || [];
+      const short = shortGapIdx(rows);
+      setSelectedRows(rows.map((_, i) => !short.has(i)));
       setSummary(res.summary || "");
     } catch (err: any) {
       setError(err.message || "Failed to analyze calendar photo.");
@@ -59,27 +72,31 @@ export function DiaryScannerPage() {
 
   const handleRemovePeriod = (idx: number) => {
     setExtractedPeriods(extractedPeriods.filter((_, i) => i !== idx));
+    setSelectedRows(selectedRows.filter((_, i) => i !== idx));
   };
 
   const handleAddManualRow = () => {
-    setExtractedPeriods([
-      ...extractedPeriods,
-      { startDate: todayLocal(), endDate: undefined, confidence: 1 },
-    ]);
+    const next = [...extractedPeriods, { startDate: todayLocal(), endDate: undefined, confidence: 1 }];
+    const short = shortGapIdx(next);
+    setExtractedPeriods(next);
+    setSelectedRows(next.map((_, i) => !short.has(i)));
   };
 
   const handleConfirmImport = () => {
-    if (extractedPeriods.length === 0) return;
+    const rows = extractedPeriods.map((p, i) => ({ p, i })).filter(({ i }) => selectedRows[i] !== false);
+    if (rows.length === 0) return;
+    // Q6.2: single isolated circled days are saved as start-only entries (no invented end date).
     const result = bulkSavePeriods(
-      extractedPeriods.map((p) => ({
+      rows.map(({ p }) => ({
         startDate: p.startDate,
-        endDate: p.endDate || null,
+        endDate: p.endDate && p.endDate !== p.startDate ? p.endDate : null,
         landmarkName: p.notes || "Calendar Photo Import",
       })),
     );
     refreshData();
     setSuccessCount(result.saved > 0 ? result.saved : null);
     setSkippedRows(result.skipped);
+    setSelectedRows([]);
     setExtractedPeriods([]);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -219,10 +236,14 @@ export function DiaryScannerPage() {
             </p>
           )}
 
+          <div className="rounded-[18px] liquid-glass-card border border-sky-200/70 bg-sky-50/40 p-3.5 text-xs text-sky-950 font-sans leading-relaxed shadow-xs">
+            Each checked date below will be saved as a <strong>period start</strong>. Rows that start less than 21 days after another period start are unchecked by default — check one to save it anyway. Single circled days are saved without an end date.
+          </div>
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full min-w-[500px] text-left text-xs font-sans">
               <thead className="bg-stone-100/60 font-sans text-[11px] font-semibold text-stone-600 border-b border-stone-200/60">
                 <tr>
+                  <th className="py-2.5 px-3 font-semibold">Save</th>
                   <th className="py-2.5 px-3 font-semibold">Start Date</th>
                   <th className="py-2.5 px-3 font-semibold">End Date (Optional)</th>
                   <th className="py-2.5 px-3 font-semibold">Confidence / Source</th>
@@ -230,8 +251,20 @@ export function DiaryScannerPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200/40">
-                {extractedPeriods.map((period, idx) => (
+                {extractedPeriods.map((period, idx) => {
+                  const isShort = shortGapIdx(extractedPeriods).has(idx);
+                  const sg = isShort ? findShortGapStarts([period.startDate], data.periods)[0] : null;
+                  return (
                   <tr key={idx} className="hover:bg-white/60">
+                    <td className="py-2.5 px-3">
+                      <input
+                        type="checkbox"
+                        aria-label="Save row " + (idx + 1)
+                        checked={selectedRows[idx] !== false}
+                        onChange={(e) => { const next = [...selectedRows]; next[idx] = e.target.checked; setSelectedRows(next); }}
+                        className="size-4"
+                      />
+                    </td>
                     <td className="py-2.5 px-3">
                       <input
                         type="date"
@@ -239,6 +272,7 @@ export function DiaryScannerPage() {
                         onChange={(e) => handleDateChange(idx, "startDate", e.target.value)}
                         className="liquid-glass-input rounded-lg p-1.5 text-xs font-sans"
                       />
+                      {isShort && (<span className="block pt-1 font-sans text-[11px] font-medium text-amber-800">Short gap{sg ? " (" + sg.gapDays + " days after " + sg.neighbourStart + ")" : ""} — unchecked. Check to save anyway.</span>)}
                     </td>
                     <td className="py-2.5 px-3">
                       <input
@@ -266,7 +300,7 @@ export function DiaryScannerPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </table>
           </div>
@@ -274,7 +308,7 @@ export function DiaryScannerPage() {
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-stone-200/50">
             <button
               type="button"
-              onClick={() => setExtractedPeriods([])}
+              onClick={() => { setExtractedPeriods([]); setSelectedRows([]); }}
               className="liquid-glass-pill rounded-full px-4 py-2.5 sm:py-2 font-sans text-xs font-medium text-stone-600 hover:text-stone-900 cursor-pointer text-center justify-center flex items-center"
             >
               Cancel
