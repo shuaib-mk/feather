@@ -259,7 +259,7 @@ export function DiaryScannerPage() {
                     <td className="py-2.5 px-3">
                       <input
                         type="checkbox"
-                        aria-label="Save row " + (idx + 1)
+                        aria-label={"Save row " + (idx + 1)}
                         checked={selectedRows[idx] !== false}
                         onChange={(e) => { const next = [...selectedRows]; next[idx] = e.target.checked; setSelectedRows(next); }}
                         className="size-4"
@@ -300,6 +300,7 @@ export function DiaryScannerPage() {
                       </button>
                     </td>
                   </tr>
+                );
                 })}
               </tbody>
             </table>

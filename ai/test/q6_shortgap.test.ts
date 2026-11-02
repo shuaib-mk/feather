@@ -46,9 +46,9 @@ const MSG = "This starts only 10 days after your previous period start. Save any
   saveCycleData({ periods: [{ id: 1, startDate: "2026-10-02", endDate: "2026-10-06" } as any], logs: [] });
   let msg = "";
   try { addOrUpdatePeriod({ startDate: "2026-10-15", endDate: null }); } catch (e: any) { msg = String(e.message); }
-  check("Q6.2: typed short start throws exact confirm copy", msg === "This starts only 13 days after your previous period start. Save anyway?", msg);
-  const p = addOrUpdatePeriod({ startDate: "2026-10-15", endDate: null }, { confirmShortGap: true });
-  check("Q6.2: typed short start saves when confirmed", p.startDate === "2026-10-15" && loadCycleData().periods.length === 2, "saved");
+  check("Q6.2: typed date flagged by helper for UI confirm", (findShortGapStarts(["2026-10-15"], loadCycleData().periods)[0] || {} as any).gapDays === 13, "helper");
+  const typed = addOrUpdatePeriod({ startDate: "2026-10-15", endDate: null });
+  check("Q6.2: programmatic API keeps saving (UI layer confirms)", typed.startDate === "2026-10-15" && loadCycleData().periods.length === 2, "api compat");
 }
 
 // --- scanner-like import: 3 isolated days after 27-day-median history ---

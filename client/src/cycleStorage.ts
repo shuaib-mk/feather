@@ -335,7 +335,7 @@ export function findShortGapStarts(startDates: string[], periods: Period[]): Arr
   return out;
 }
 
-export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }, opts?: { confirmShortGap?: boolean }): Period {
+export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }): Period {
   toDate(period.startDate);
   if (period.endDate) {
     toDate(period.endDate);
@@ -358,10 +358,6 @@ export function addOrUpdatePeriod(period: Omit<Period, "id"> & { id?: number }, 
     startLatest: window.startLatest,
   };
 
-  const shortGap = shortGapForNewStart(period.startDate, data.periods, period.id ?? id);
-  if (shortGap && !opts?.confirmShortGap) {
-    throw new Error(shortGapMessage(shortGap.gapDays));
-  }
   const existingIdx = data.periods.findIndex((p) => p.id === id || p.startDate === period.startDate);
   const candidatePeriods = [...data.periods];
   if (existingIdx >= 0) {
