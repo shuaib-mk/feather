@@ -2551,6 +2551,30 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     status: "pending"
   });
   const fallbackResult = parseLocally(userPrompt, today, context);
+  const liveNegation = detectNegationOnly(userPrompt, today, context);
+  if (liveNegation?.kind === "ask") {
+    return {
+      message: liveNegation.question,
+      entry: null,
+      needsClarification: true,
+      clarificationQuestion: liveNegation.question,
+      activityTrail,
+      toolCalls: toolCallsRecorded,
+      mode: "live",
+      modeReason: "Negated symptom needs confirmation; model not called"
+    };
+  }
+  if (liveNegation?.kind === "noted") {
+    return {
+      message: "Noted, nothing to log.",
+      entry: null,
+      needsClarification: false,
+      activityTrail,
+      toolCalls: toolCallsRecorded,
+      mode: "live",
+      modeReason: "Negation-only message logged nothing; model not called"
+    };
+  }
   if (!hasAnyLoggingOrPlanningCue(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (bare numbers or date without cycle/event cue)" };
   }
@@ -2779,7 +2803,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         finalMessage = "There's no entry to change.";
       } else if (firstToolError) {
         finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
-      } else if (/logged|saved|done|all set|good to go/i.test(finalMessage)) {
+      } else if (/logged|saved|done|all set|good to go|prepared/i.test(finalMessage)) {
         finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
       }
     }
@@ -3153,6 +3177,28 @@ function hasClearLogStatement(text) {
   if (/\bhaving\b/i.test(t)) return true;
   return false;
 }
+function detectNegationOnly(text, today, context) {
+  if (context.pendingEntry) return null;
+  const negatedToday = [];
+  for (const sym of VALID_SYMPTOMS) {
+    const symKey = sym.replace(/_/g, " ");
+    if (new RegExp(`\\bno\\s+${symKey}\\b`, "i").test(text)) negatedToday.push(symKey);
+  }
+  const hasPositiveContent = (() => {
+    const ext = extractWithLexicon(text);
+    return ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd;
+  })();
+  const mentionsToday = /\b(today|tonight|this morning|right now)\b/i.test(text);
+  if (negatedToday.length === 0 || !mentionsToday || hasPositiveContent) return null;
+  const pool = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : []];
+  const todayEntry = pool.find((e) => e && e.date === today);
+  const onNote = todayEntry ? (todayEntry.symptoms || []).map((s) => String(s).replace(/_/g, " ").toLowerCase()) : [];
+  const present = negatedToday.filter((s) => onNote.indexOf(s.toLowerCase()) !== -1);
+  if (present.length > 0) {
+    return { kind: "ask", question: "Remove " + present.join(" and ") + " from today's note?" };
+  }
+  return { kind: "noted" };
+}
 function parseLocally(text, today, context) {
   const startTime = Date.now();
   const lower = text.toLowerCase();
@@ -3181,28 +3227,12 @@ function parseLocally(text, today, context) {
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
     return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
-  if (!context.pendingEntry) {
-    const negatedToday = [];
-    for (const sym of VALID_SYMPTOMS) {
-      const symKey = sym.replace(/_/g, " ");
-      if (new RegExp(`\\bno\\s+${symKey}\\b`, "i").test(text)) negatedToday.push(symKey);
-    }
-    const hasPositiveContent = (() => {
-      const ext = extractWithLexicon(text);
-      return ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd;
-    })();
-    const mentionsToday2 = /\b(today|tonight|this morning|right now)\b/i.test(text);
-    if (negatedToday.length > 0 && mentionsToday2 && !hasPositiveContent) {
-      const pool = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : []];
-      const todayEntry = pool.find((e) => e && e.date === today);
-      const onNote = todayEntry ? (todayEntry.symptoms || []).map((s) => String(s).replace(/_/g, " ").toLowerCase()) : [];
-      const present = negatedToday.filter((s) => onNote.indexOf(s.toLowerCase()) !== -1);
-      if (present.length > 0) {
-        const q = "Remove " + present.join(" and ") + " from today's note?";
-        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
-      }
-      return { message: "Noted, nothing logged.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
-    }
+  const negationOnly = detectNegationOnly(text, today, context);
+  if (negationOnly?.kind === "ask") {
+    return { message: negationOnly.question, entry: null, needsClarification: true, clarificationQuestion: negationOnly.question, activityTrail, toolCalls, ...offline };
+  }
+  if (negationOnly?.kind === "noted") {
+    return { message: "Noted, nothing to log.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
