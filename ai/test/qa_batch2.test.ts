@@ -43,9 +43,14 @@ try {
   const logs: any[] = [{ id: 1, logDate: "2026-10-30", flow: "heavy", symptoms: [], mood: null, energy: null, sleepHours: null, notes: null }];
   const m = buildMonthDayStates(2026, 10, periods, logs, [], "2026-10-30");
   const d31 = m.days.find((x) => x.date === "2026-10-31");
-  check("A3 period span without log is not 'period day logged'", !!d31 && d31.bleeding === false && !d31.label.includes("period day logged"), d31?.label);
+  check("A3 span day without log is a period day but not labelled logged", !!d31 && d31.bleeding === true && !d31.label.includes("period day logged") && d31.label.includes("from your period dates"), d31?.label);
   const m2 = buildMonthDayStates(2026, 10, periods, [], [], "2026-10-30");
-  check("A3 after deletion no bleeding claimed", m2.days.find((x) => x.date === "2026-10-30")?.bleeding === false);
+  const d30 = m.days.find((x) => x.date === "2026-10-30");
+  check("A3 logged start day keeps logged label", !!d30 && d30.bleeding === true && d30.label.includes("period day logged"), d30?.label);
+  const d30b = m2.days.find((x) => x.date === "2026-10-30");
+  const d31b = m2.days.find((x) => x.date === "2026-10-31");
+  check("A3 after log deletion span days still period days, not labelled logged", !!d30b && !!d31b && d30b.bleeding === true && d31b.bleeding === true && !d30b.label.includes("period day logged") && !d31b.label.includes("period day logged"), (d30b?.label || "") + " / " + (d31b?.label || ""));
+  check("A3 day outside any span with no log is not bleeding", m2.days.find((x) => x.date === "2026-10-29")?.bleeding === false);
 } catch (e: any) { check("A3", false, e.message); }
 
 // A4: Daily Notes = distinct entry dates - period starts (demo golden: 14 / 7 / 7).
