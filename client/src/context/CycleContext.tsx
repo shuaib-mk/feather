@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import {
   loadCycleData,
   saveCycleData,
@@ -88,6 +89,8 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   const [overdueDismissed, setOverdueDismissed] = useState<boolean>(false);
   const [backupToast, setBackupToast] = useState<boolean>(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const location = useLocation();
+  useEffect(() => { setErrorToast(null); }, [location.pathname]);
 
 
   const refreshData = useCallback(() => {
@@ -131,8 +134,15 @@ export function CycleProvider({ children }: { children: ReactNode }) {
   const saveLog = useCallback((l: Omit<DayLog, "id"> & { id?: number }, opts?: SaveLogEntryOptions): SaveLogEntryResult | null => {
     try {
       const result = saveLogEntry(l, opts);
-      if (!result || result.saved === false) {
-        setErrorToast((result && result.error) || "Could not save that entry. Nothing was saved.");
+      if (!result) {
+        setErrorToast("Nothing was saved because it could not be written.");
+        return null;
+      }
+      if (result.needsConfirmation) {
+        return result;
+      }
+      if (result.saved === false) {
+        setErrorToast("Nothing was saved because " + (result.error || "it could not be written."));
         return null;
       }
       refreshData();
