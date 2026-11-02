@@ -267,7 +267,8 @@ export function SettingsPage() {
 }
 
 function DiagnosticsPanel() {
-  const [health, setHealth] = useState<any>(null); const [test, setTest] = useState("");
+  const [health, setHealth] = useState<any>(null); const [test, setTest] = useState(""); const [buildId, setBuildId] = useState<string | null>(null);
+  useEffect(() => { let live = true; (async () => { try { const r = await fetch("/api/health"); const j = await r.json(); if (live && j && typeof j.buildId === "string") setBuildId(j.buildId); } catch {} })(); return () => { live = false; }; }, []);
   const load = async () => { try { const r = await fetch("/api/health"); setHealth(await r.json()); } catch { setHealth({ error: "No network or API unavailable" }); } };
   const [sessionCalls, setSessionCalls] = useState(() => { try { return typeof sessionStorage !== "undefined" ? (parseInt(sessionStorage.getItem("feather_session_api_calls") || "0", 10) || 0) : 0; } catch { return 0; } });
   const MAX_TEST_CALLS = 25;
@@ -310,6 +311,7 @@ function DiagnosticsPanel() {
       setTest("No network — check your connection and try again");
     }
   };
+<p className="text-[11px] text-stone-500">Build: {buildId ?? "local"}</p>
   return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}<p className="text-[11px] text-stone-500">API calls made this session: {sessionCalls} / {MAX_TEST_CALLS} (one call per click, no retries)</p></div>;
 }
 function DemoModePanel() {

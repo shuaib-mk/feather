@@ -2,7 +2,8 @@ import { getConfig } from "../ai/backend/config";
 import { corsAllowOrigin } from "../ai/backend/protection";
 export function healthPayload() {
   const c = getConfig();
-  return { metaKeyConfigured: !!c.metaApiKey, voiceModel: c.museVoiceModel, sparkModel: c.museSparkModel, baseUrl: c.metaBaseUrl, basetenConfigured: !!c.basetenApiKey };
+  const sha = (typeof process !== "undefined" && process.env ? String(process.env.VERCEL_GIT_COMMIT_SHA || "") : "").slice(0, 7);
+  return { metaKeyConfigured: !!c.metaApiKey, voiceModel: c.museVoiceModel, sparkModel: c.museSparkModel, baseUrl: c.metaBaseUrl, basetenConfigured: !!c.basetenApiKey, buildId: sha || null };
 }
 export async function handler(req: any, res?: any) {
   const payload = healthPayload();
