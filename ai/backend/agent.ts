@@ -1406,6 +1406,32 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
     return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
+  // Q6.6: "no <symptom> today" never stores the negation. If the symptom is
+  // already on today's note, ask before touching it; otherwise acknowledge.
+  if (!context.pendingEntry) {
+    const negatedToday: string[] = [];
+    for (const sym of VALID_SYMPTOMS) {
+      const symKey = sym.replace(/_/g, " ");
+      if (new RegExp(`\\bno\\s+${symKey}\\b`, "i").test(text)) negatedToday.push(symKey);
+    }
+    const hasPositiveContent = (() => {
+      const ext = extractWithLexicon(text);
+      return ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd;
+    })();
+    const mentionsToday = /\b(today|tonight|this morning|right now)\b/i.test(text);
+    if (negatedToday.length > 0 && mentionsToday && !hasPositiveContent) {
+      const pool = [...(context.recentEntries || []), ...(context.recentEntry ? [context.recentEntry] : [])];
+      const todayEntry = pool.find((e) => e && (e as any).date === today);
+      const onNote = todayEntry ? (todayEntry.symptoms || []).map((s) => String(s).replace(/_/g, " ").toLowerCase()) : [];
+      const present = negatedToday.filter((s) => onNote.indexOf(s.toLowerCase()) !== -1);
+      if (present.length > 0) {
+        const q = "Remove " + present.join(" and ") + " from today's note?";
+        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+      }
+      return { message: "Noted, nothing logged.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+    }
+  }
+
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
