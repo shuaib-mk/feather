@@ -23,3 +23,23 @@ export async function lockNow(): Promise<void> {
 }
 export async function disableAppLock(passphrase:string): Promise<void> { let hasBlob = false; try { hasBlob = !!localStorage.getItem(ENCRYPTED_VAULT_KEY); } catch {} if (isAppLockEnabled() && hasBlob) await decryptVaultFromStorage(passphrase, localStorage); sessionPassphrase = null; locked = false; try { localStorage.removeItem("feather_app_lock_enabled"); } catch {} }
 export function markLockedOnLoad(): void { locked = isAppLockEnabled(); }
+/** Q6.1: lock-gate state. "locked" only when a passphrase can actually be
+ * verified (flag + blob). Flag + blob missing but plaintext present means a
+ * good unlock already restored the vault: show the app, not the error screen. */
+export function getLockState(): "open" | "locked" | "error" {
+  let flag = false;
+  let blob = false;
+  try { flag = localStorage.getItem("feather_app_lock_enabled") === "1"; } catch {}
+  try { blob = !!localStorage.getItem(ENCRYPTED_VAULT_KEY); } catch {}
+  if (!flag) return "open";
+  if (blob) return "locked";
+  try { if (hasPlaintextVault(localStorage)) return "open"; } catch {}
+  return "error";
+}
+/** Q6.1: erase the lock flag and the encrypted blob (data itself is untouched).
+ * Used after explicit confirmation on the lock/error screens. */
+export function eraseLockAndStartFresh(): void {
+  try { localStorage.removeItem("feather_app_lock_enabled"); } catch {}
+  try { localStorage.removeItem(ENCRYPTED_VAULT_KEY); } catch {}
+  sessionPassphrase = null; locked = false;
+}
