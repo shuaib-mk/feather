@@ -532,10 +532,16 @@ export function findStatedDatedFacts(userPrompt: string, today: string): StatedD
     else {
       const noYear = raw.replace(/,?\s+\b\d{4}\b/, "");
       resolved = parseMonthDay(noYear, currentYear);
+      // Q6.3: a from/to (or dashed) range without period words is a plan:
+      // keep the stated occurrence instead of rolling it into the past.
+      const rangeShape = /\bfrom\b[\s\S]{0,60}?\b(to|till|through|until)\b/i.test(clause) || /\b\d{1,2}(?:st|nd|rd|th)?\s*[-–]\s*\d{1,2}(?:st|nd|rd|th)?\b/.test(clause);
+      const periodWord = /\bperiod\b/i.test(clause);
       if (resolved) {
         if (eventNoun) {
           // Plan events roll to the next occurrence (existing plan rule).
           if (resolved < today) resolved = parseMonthDay(noYear, currentYear + 1);
+        } else if (rangeShape && !periodWord) {
+          // Q6.3: plan range — keep the stated occurrence (never roll back).
         } else if (resolved > today) {
           // Log dates default to the most recent occurrence (existing log rule).
           resolved = parseMonthDay(noYear, currentYear - 1);
@@ -619,6 +625,17 @@ export function ensureFactCoverageDisclosure<T extends AgentResult>(result: T, u
     const stated = [...new Set(facts.filter((f) => f.multiDateOnly && !f.eventNoun).map((f) => f.date))].sort();
     if (stated.length >= 2) {
       const placedDates = new Set<string>();
+      // Q6.3: ranged and multi-event ranges count every covered day as placed.
+      for (const ev of events) {
+        if (!ev.date) continue;
+        placedDates.add(ev.date);
+        const spanEnd = (ev as { endDate?: string }).endDate;
+        if (spanEnd && spanEnd > ev.date) {
+          let sd = addDaysToKey(ev.date, 1);
+          let sguard = 0;
+          while (sd <= spanEnd && sguard < 366) { placedDates.add(sd); sd = addDaysToKey(sd, 1); sguard++; }
+        }
+      }
       for (const e of entries) {
         placedDates.add(e.date);
         if (e.endDate) placedDates.add(e.endDate);
@@ -733,7 +750,7 @@ export async function runLavenderAgent(
   // B3: a recent (already-saved) entry is only a correction target on explicit
   // correction language; a pending slip is always available to patch.
   const targetEntry = context.pendingEntry || (isCorrectionPhrase ? selectCorrectionTarget(userPrompt, null, context.recentEntry, context.recentEntries) : null);
-  let livePlannedEvents: Array<{ title: string; date: string }> = [];
+  let livePlannedEvents: Array<{ title: string; date: string; endDate?: string }> = [];
 
   if (!targetEntry && isCorrectionPhrase && !/\bperiod\s+(?:started|ended)\b/i.test(userPrompt)) {
     return {
@@ -887,7 +904,7 @@ export async function runLavenderAgent(
           const overlaps = badEvent ? [] : evaluateContextOverlaps(fnArgs.events || [], context, today);
           planOverlaps = overlaps;
           const rawEvents = (fnArgs.events || []).filter((e: any) => e && typeof e.date === "string" && isValidDateKey(e.date));
-          livePlannedEvents = rawEvents.map((e: any) => ({ title: e.name || e.title || "Event", date: e.date }));
+          livePlannedEvents = rawEvents.map((e: any) => ({ title: e.name || e.title || "Event", date: e.date, ...(e.endDate && e.endDate !== e.date ? { endDate: e.endDate } : {}) }));
           toolResultObj = { overlaps };
           toolResponseContent = JSON.stringify(toolResultObj);
         } else if (fnName === "log_entry") {
@@ -944,8 +961,13 @@ export async function runLavenderAgent(
       const e = (c.result as any)?.error;
       if (!firstToolError && typeof e === "string" && e) firstToolError = e;
     }
+    // Q6.3: a slip-update claim needs a real update_entry success behind it.
+    const slipClaimed = /updated your (accession )?slip|slip[^.?!]{0,40}\bupdated\b|made those changes|correction (?:has been |is )?(?:saved|applied)/i.test(finalMessage);
+    const updateSucceeded = toolCallsRecorded.some((c) => c.toolName === "update_entry" && (c.result as any)?.success);
     if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0)) {
-      if (firstToolError) {
+      if (slipClaimed && !updateSucceeded) {
+        finalMessage = "There's no entry to change.";
+      } else if (firstToolError) {
         finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
       } else if (/logged|saved|done|all set|good to go/i.test(finalMessage)) {
         finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
@@ -1447,9 +1469,14 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   }
 
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
-  if (!targetSlip && isCorrectionAttempt && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+  // Q6.3: a date correction that names an explicit day gets its own answer;
+  // bare-day phrases keep the lookup wording ("move it to the 5th").
+  const namesExplicitDay = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(text) || /\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text);
+  const isDateCorrection = namesExplicitDay && /\b(change|move|correct|fix|update|edit|meant|later|wait)\b/i.test(text);
+  if (!targetSlip && (isCorrectionAttempt || isDateCorrection) && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+    const noEntryMsg = namesExplicitDay ? "There's no entry to change." : "I couldn't find a recent entry to correct.";
     return {
-      message: "I couldn't find a recent entry to correct.",
+      message: noEntryMsg,
       entry: null,
       needsClarification: false,
       activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
