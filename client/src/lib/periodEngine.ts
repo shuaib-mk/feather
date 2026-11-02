@@ -919,3 +919,21 @@ export class FeatherEngine {
   }
 }
 
+/** Q6.5: the single estimated next-period window. Every surface (Dashboard,
+ * Plan Around It, Calendar shading, chat answers) reports this same window with
+ * the same label. Delegates to getPrediction; formulas unchanged. */
+export const ESTIMATED_WINDOW_LABEL = "estimated window";
+export interface EstimatedWindow {
+  start: DateKey;
+  end: DateKey;
+  label: typeof ESTIMATED_WINDOW_LABEL;
+}
+export function getEstimatedWindow(
+  records: PeriodRecord[],
+  asOfDate: DateKey,
+  settings = DEFAULT_SETTINGS,
+): EstimatedWindow | null {
+  const p = getPrediction(records, asOfDate, settings);
+  if (!p.earliestStart || !p.latestStart) return null;
+  return { start: p.earliestStart, end: p.latestStart, label: ESTIMATED_WINDOW_LABEL };
+}

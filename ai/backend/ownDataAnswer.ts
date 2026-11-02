@@ -87,7 +87,7 @@ export function buildOwnDataAnswer(text: string, ctx: OwnDataContext): OwnDataRe
   if (/\bwhen\s+is\s+my\s+next\s+period\b|\bmy\s+next\s+period\b/i.test(text) && s.lastStart) {
     const earliest = ctx.cycleStats?.nextPeriodEarliest || addDaysKey(s.lastStart, s.minDays!);
     const latest = ctx.cycleStats?.nextPeriodLatest || addDaysKey(s.lastStart, s.maxDays!);
-    return { kind: "own_data_answer", message: "Your next period is estimated between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
+    return { kind: "own_data_answer", message: "Your next period estimated window is between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
   }
   if (/\bis\s+\d+\s*days?\s+normal\s+for\s+me\b|\bis\s+my\s+cycle\s+regular\b/i.test(text)) {
     return { kind: "own_data_answer", message: stats + " " + VERDICT_TAIL, usedLiveModel: false };

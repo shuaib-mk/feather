@@ -281,6 +281,8 @@ export function VoiceFlowPage() {
             avgCycleLength: stats.avgCycleLength,
             avgPeriodLength: stats.avgPeriodLength,
             lastPeriodStart: stats.lastPeriodStart,
+            nextPeriodEarliest: stats.earliestNextDate ?? null,
+            nextPeriodLatest: stats.latestNextDate ?? null,
           },
           periods: data.periods,
           logs: data.logs,

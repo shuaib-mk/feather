@@ -688,6 +688,11 @@ export async function runLavenderAgent(
     });
   }
 
+  // Q6.5: reminders are not supported; never quote a new window.
+  if (/\bremind(?:er)?\b/i.test(userPrompt) && /\bperiod\b/i.test(userPrompt) && (/\bbefore\b/i.test(userPrompt) || /\bnext\b/i.test(userPrompt))) {
+    return { message: "I can't set reminders yet; you can export the calendar (.ics) from Settings.", needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Offline parser — reminders are not supported" };
+  }
+  
   if (!severeCheck.isSevere) {
     const ownLive = buildOwnDataAnswer(userPrompt, context);
     if (ownLive) {
@@ -731,6 +736,7 @@ export async function runLavenderAgent(
   }
 
   // Phase 2: date comparison is deterministic in BOTH paths; nothing is saved.
+
   if ((fallbackResult as any).comparison) {
     return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (date comparison answered directly; nothing saved)" };
   }
@@ -1389,6 +1395,12 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
   }
+  // Q6.5: reminders are not supported; point at the calendar export instead.
+  // Never quote a new window here.
+  if (/\bremind(?:er)?\b/i.test(text) && /\bperiod\b/i.test(text) && (/\bbefore\b/i.test(text) || /\bnext\b/i.test(text))) {
+    return { message: "I can" + String.fromCharCode(39) + "t set reminders yet; you can export the calendar (.ics) from Settings.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+  
   const ownData = buildOwnDataAnswer(text, context);
   if (ownData) {
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });

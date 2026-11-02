@@ -141,7 +141,7 @@ export function DashboardPage() {
             >
               <div className="flex items-center justify-between gap-1 flex-wrap">
                 <span className="font-sans text-xs font-medium text-stone-500 shrink-0">
-                  Next Estimate
+                  Most likely
                 </span>
                 {!isMasked("nextEstimate") && stats.predictionStatus === "overdue" && (
                   <span className="liquid-glass-pill px-2 py-0.5 rounded-full text-[10px] font-sans font-medium text-amber-900 border border-amber-200/80 shrink-0">
@@ -166,7 +166,7 @@ export function DashboardPage() {
                   </div>
                   <span className="font-sans text-[11px] text-violet-700 font-medium block truncate" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}` : undefined}>
                     {stats.earliestNextDate && stats.latestNextDate
-                      ? `Core window: ${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}`
+                      ? `Estimated window: ${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}`
                       : daysUntilNext != null
                       ? daysUntilNext > 0
                         ? `In ~${daysUntilNext} days`
