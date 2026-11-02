@@ -64,7 +64,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <LiquidGlassFilter />
 
       {/* Main Content Layout */}
-      <div className="min-h-screen min-h-[100dvh] w-full text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))]">
+      <div className="min-h-screen min-h-[100dvh] w-full text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(2rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))]">
         {/* Main Spacious Canvas (Accessible Main Landmark) */}
         <main
           id="main-content"

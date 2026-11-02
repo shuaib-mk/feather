@@ -258,38 +258,6 @@ export function Sidebar() {
       </aside>
 
       {/* ========================================================
-          MOBILE BRAND CAPSULE (Discreet Floating Liquid Glass Pill)
-          ======================================================== */}
-      <div
-        className="fixed left-3.5 z-40 md:hidden pointer-events-auto"
-        style={{
-          top: "max(0.65rem, env(safe-area-inset-top, 0.65rem))",
-        }}
-      >
-        <Link
-          to="/"
-          className="flex items-center gap-2 rounded-full liquid-glass-topbar px-3.5 py-1.5 shadow-xs cursor-pointer text-stone-900 active:scale-95 transition-transform"
-          aria-label="Feather Home"
-        >
-          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-stone-900 shrink-0">
-            <line x1="3" y1="17" x2="3" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="3" y1="7" x2="3" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="10" y1="17" x2="10" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="10" y1="5" x2="10" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="17" y1="17" x2="17" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <line x1="17" y1="9" x2="17" y2="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="3" cy="9" r="2" fill="currentColor" />
-            <circle cx="10" cy="7" r="2" fill="currentColor" />
-            <circle cx="17" cy="11" r="2" fill="currentColor" />
-          </svg>
-          <span className="font-serif text-sm font-semibold tracking-tight text-stone-900">
-            Feather
-          </span>
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-        </Link>
-      </div>
-
-      {/* ========================================================
           MOBILE BOTTOM FLOATING DOCK (Safe-Area Aware)
           ======================================================== */}
       <nav

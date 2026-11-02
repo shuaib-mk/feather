@@ -17,5 +17,10 @@ function check(name: string, cond: boolean, extra?: unknown) {
   check("Q7.8: span day without log says No daily log", cal.indexOf("sel.bleeding ? \"No daily log for this day.\"") !== -1, "day copy");
   check("Q7.4: Build row renders inside Diagnostics", headAt !== -1 && buildAt > headAt && d.slice(headAt, buildAt).indexOf("return") === -1, "build row");
 }
+  const sb = fs.readFileSync("client/src/components/Sidebar.tsx", "utf8");
+  check("Q7.9: mobile pill removed", sb.indexOf("MOBILE BRAND CAPSULE") === -1 && sb.indexOf("md:hidden pointer-events-auto") === -1, "pill gone");
+  check("Q7.9: desktop brand kept, dock reaches Home", sb.indexOf("Feather") !== -1 && sb.indexOf("NAV_ITEMS.slice(0, 5)") !== -1, "brand+dock");
+  const lay = fs.readFileSync("client/src/components/AppLayout.tsx", "utf8");
+  check("Q7.9: mobile top offset keeps safe-area", lay.indexOf("pt-[calc(2rem+env(safe-area-inset-top,0px))]") !== -1 && lay.indexOf("pt-[calc(3.5rem") === -1, "offset");
 console.log("Q7 UI Results: " + passed + " passed, " + failed + " failed.");
 if (failed > 0) process.exit(1);
