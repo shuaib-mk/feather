@@ -1,0 +1,15 @@
+/** Q7 UI pins: scanner count button, diagnostics build row, day-panel copy. */
+import fs from "node:fs";
+let passed = 0, failed = 0;
+function check(name: string, cond: boolean, extra?: unknown) {
+  if (cond) { console.log("[PASS] " + name); passed++; }
+  else { console.error("[FAIL] " + name, extra ?? ""); failed++; }
+}
+{
+  const s = fs.readFileSync("client/src/pages/DiaryScannerPage.tsx", "utf8");
+  check("Q7.2: button shows checked count", s.indexOf("Import {checkedCount}") !== -1, "label");
+  check("Q7.2: button disabled at zero with hint", s.indexOf("disabled={checkedCount === 0}") !== -1 && s.indexOf("Select at least one row") !== -1, "disabled+hint");
+  check("Q7.2: checked means not explicitly unchecked", s.indexOf("selectedRows[i] !== false") !== -1, "predicate");
+}
+console.log("Q7 UI Results: " + passed + " passed, " + failed + " failed.");
+if (failed > 0) process.exit(1);

@@ -20,6 +20,7 @@ export function DiaryScannerPage() {
   const [successCount, setSuccessCount] = useState<number | null>(null);
   const [skippedRows, setSkippedRows] = useState<BulkSkippedRow[]>([]);
   const [selectedRows, setSelectedRows] = useState<boolean[]>([]);
+  const checkedCount = extractedPeriods.filter((_, i) => selectedRows[i] !== false).length;
   // Q6.2: rows that would create a short gap (<21 days) start unchecked and labelled.
   const shortGapIdx = (rows: { startDate: string }[]): Set<number> => {
     const hits = findShortGapStarts(rows.map((r) => r.startDate).filter(Boolean), data.periods);
@@ -317,10 +318,14 @@ export function DiaryScannerPage() {
             <button
               type="button"
               onClick={handleConfirmImport}
-              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center"
+              disabled={checkedCount === 0}
+              className="liquid-glass-button rounded-full px-6 py-2.5 font-sans text-xs font-semibold cursor-pointer shadow-sm text-center justify-center flex items-center disabled:opacity-50"
             >
-              Import {extractedPeriods.length} Periods to Vault
+              Import {checkedCount} period{checkedCount === 1 ? "" : "s"} to Vault
             </button>
+            {checkedCount === 0 && (
+              <p className="text-xs text-stone-500 font-sans text-right">Select at least one row</p>
+            )}
           </div>
         </div>
       )}
