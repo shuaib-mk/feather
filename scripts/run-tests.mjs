@@ -32,6 +32,15 @@ const suites = [
   ["q4", ["npx", "tsx", "ai/test/q4.test.ts"]],
   ["q5_gate", ["npx", "tsx", "ai/test/q5_gate.test.ts"]],
   ["integration", ["npx", "tsx", "ai/test/integration.test.ts"]],
+  ["q6_lock", ["npx", "tsx", "ai/test/q6_lock.test.ts"]],
+  ["q6_shortgap", ["npx", "tsx", "ai/test/q6_shortgap.test.ts"]],
+  ["q6_honest", ["npx", "tsx", "ai/test/q6_honest.test.ts"]],
+  ["q6_voice_date", ["npx", "tsx", "ai/test/q6_voice_date.test.ts"]],
+  ["q6_window", ["npx", "tsx", "ai/test/q6_window.test.ts"]],
+  ["q6_negation", ["npx", "tsx", "ai/test/q6_negation.test.ts"]],
+  ["q6_ranges", ["npx", "tsx", "ai/test/q6_ranges.test.ts"]],
+  ["q6_build", ["npx", "tsx", "ai/test/q6_build.test.ts"]],
+  ["q6_polish", ["npx", "tsx", "ai/test/q6_polish.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 
