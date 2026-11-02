@@ -311,8 +311,7 @@ function DiagnosticsPanel() {
       setTest("No network — check your connection and try again");
     }
   };
-<p className="text-[11px] text-stone-500">Build: {buildId ?? "local"}</p>
-  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}<p className="text-[11px] text-stone-500">API calls made this session: {sessionCalls} / {MAX_TEST_CALLS} (one call per click, no retries)</p></div>;
+  return <div className="liquid-glass-card rounded-[24px] p-6 space-y-3 shadow-sm"><h3 className="font-serif text-lg font-semibold">Diagnostics</h3><p className="text-[11px] text-stone-500">Build: {buildId ?? "local"}</p><button type="button" onClick={load} className="liquid-glass-button rounded-full px-4 min-h-[44px] text-xs">Check /api/health</button>{health && <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(health, null, 2)}</pre>}<button type="button" onClick={testMeta} className="liquid-glass-pill rounded-full px-4 min-h-[44px] text-xs">Test Meta connection</button>{test && <p role="status" className="text-xs">{test}</p>}<p className="text-[11px] text-stone-500">API calls made this session: {sessionCalls} / {MAX_TEST_CALLS} (one call per click, no retries)</p></div>;
 }
 function DemoModePanel() {
   const { isDemoActive, loadDemo, clearDemo } = useCycle();
