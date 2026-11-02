@@ -41,5 +41,7 @@ export function getLockState(): "open" | "locked" | "error" {
 export function eraseLockAndStartFresh(): void {
   try { localStorage.removeItem("feather_app_lock_enabled"); } catch {}
   try { localStorage.removeItem(ENCRYPTED_VAULT_KEY); } catch {}
+  try { localStorage.removeItem("feather_last_export_ts"); } catch {}
+  try { localStorage.removeItem("feather_entries_since_export"); } catch {}
   sessionPassphrase = null; locked = false;
 }

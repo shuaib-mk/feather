@@ -846,6 +846,25 @@ export function recordExportTimestamp(): void {
   resetEntriesSinceExport();
 }
 
+export function clearExportTracking(): void {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(LAST_EXPORT_KEY);
+      window.localStorage.removeItem(ENTRIES_SINCE_EXPORT_KEY);
+    }
+  } catch {}
+  try {
+    if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) {
+      (globalThis as any).localStorage.removeItem(LAST_EXPORT_KEY);
+      (globalThis as any).localStorage.removeItem(ENTRIES_SINCE_EXPORT_KEY);
+    }
+  } catch {}
+  try {
+    inMemoryVault.delete(LAST_EXPORT_KEY);
+    inMemoryVault.delete(ENTRIES_SINCE_EXPORT_KEY);
+  } catch {}
+}
+
 export function getEntriesSinceExport(): number {
   const val = safeGetItem(ENTRIES_SINCE_EXPORT_KEY);
   return val ? parseInt(val, 10) : 0;
@@ -1129,7 +1148,7 @@ export function importCycleDataJSON(jsonStr: string): ImportResult {
   } catch {
     return { success: false, count: 0, added: { periods: 0, logs: 0, events: 0 }, skipped, error: "Could not save imported events." };
   }
-  recordExportTimestamp();
+  clearExportTracking();
   return { success: true, count, added, skipped };
 }
 
