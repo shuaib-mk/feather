@@ -13,7 +13,7 @@
     "test:engine": "npx tsx ai/test/periodEngine.test.ts",
     "test:ai": "node scripts/run-tests.mjs",
     "eval": "npx tsx ai/eval/runner.ts",
-    "test:localdate": "node scripts/with-tz.mjs Asia/Kolkata npx tsx ai/test/localDate.test.ts && node scripts/with-tz.mjs America/Los_Angeles npx tsx ai/test/localDate.test.ts"
+    "test:localdate": "node scripts/with-tz.mjs Asia/Kolkata npx tsx ai/test/localDate.test.ts && node scripts/with-tz.mjs America/Los_Angeles npx tsx ai/test/localDate.test.ts && node scripts/with-tz.mjs Asia/Kolkata npx tsx ai/test/q7_greeting.test.ts && node scripts/with-tz.mjs UTC npx tsx ai/test/q7_greeting.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",

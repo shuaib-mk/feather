@@ -68,6 +68,18 @@ export function toLocalKey(date: Date): DateKey {
   return formatDateKey(date.getFullYear(), date.getMonth() + 1, date.getDate());
 }
 
+/** Local-hour greeting. Uses the device timezone via getHours (never UTC hours). */
+export function getDayGreetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 22) return "Good evening";
+  return "Good night";
+}
+
+export function getDayGreeting(now: Date = new Date()): string {
+  return getDayGreetingForHour(now.getHours());
+}
+
 /** Today as a local calendar date (YYYY-MM-DD). */
 export function todayLocal(now: Date = new Date()): DateKey {
   return toLocalKey(now);

@@ -6,6 +6,7 @@ import { PlanAroundIt } from "../components/PlanAroundIt";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { diffDays, prettyDate, todayStr, effectivePeriodEndDate } from "../cycleStorage";
+import { getDayGreeting } from "../lib/localDate";
 import { useDiscreetMode } from "../lib/discreetMode";
 import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
 
@@ -43,7 +44,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Cycle Overview"
-        subtitle="Your private, voice-first companion for cycle logging and calendar landmark recall."
+        subtitle={getDayGreeting() + " \u00b7 Your private, voice-first companion for cycle logging and calendar landmark recall."}
         badge={hasHistory ? "Active Vault" : "New Setup"}
         actions={
           <div className="flex items-center gap-2">
