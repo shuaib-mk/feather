@@ -46,6 +46,7 @@ const suites = [
   ["q7_voice", ["npx", "tsx", "ai/test/q7_voice.test.ts"]],
   ["q7_greeting", ["npx", "tsx", "ai/test/q7_greeting.test.ts"]],
   ["q7_ui", ["npx", "tsx", "ai/test/q7_ui.test.ts"]],
+  ["p12_retry", ["npx", "tsx", "ai/test/p12_retry.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

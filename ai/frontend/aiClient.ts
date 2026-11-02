@@ -43,18 +43,34 @@ export function recordSessionApiCall(): number {
 }
 
 /**
- * Robust fetch wrapper with 10-second timeout via AbortController and 1 automatic retry
- * on transient network failures.
+ * Robust fetch wrapper with timeout via AbortController and automatic retries
+ * on transient failures. Defaults preserve the legacy behaviour (10s timeout,
+ * 1 retry on 502/503/504 only, no retry on timeout); callers opt into more.
+ *
+ * Prompt 12: the live agent call is persistent before any offline fallback -
+ * up to 3 attempts for network errors, timeouts and 5xx (about 1s then 2s
+ * between attempts). 4xx is never retried. The timeout is generous (30s)
+ * because successful multi-step generations can take 20s+.
  */
+export const AGENT_ATTEMPTS = 3;
+export const AGENT_TIMEOUT_MS = 30000;
+export const AGENT_RETRY_DELAYS_MS = [1000, 2000];
 async function fetchWithTimeoutAndRetry(
   url: string,
   options: RequestInit = {},
   timeoutMs = 10000,
   retries = 1,
+  retryOptions: {
+    retryOnTimeout?: boolean;
+    retryOnServerError?: boolean;
+    backoffMs?: number[];
+    onRetry?: (nextAttempt: number, totalAttempts: number) => void;
+  } = {},
 ): Promise<Response> {
   if (typeof url === "string" && (url.startsWith("/api/agent") || url.startsWith("/api/transcribe") || url.startsWith("/api/vision"))) {
     recordSessionApiCall();
   }
+  const totalAttempts = retries + 1;
   let attempt = 0;
   while (true) {
     const controller = new AbortController();
@@ -67,19 +83,25 @@ async function fetchWithTimeoutAndRetry(
       });
       clearTimeout(timer);
 
-      // Retry once on 502/503/504 server gateway errors
-      if (!response.ok && [502, 503, 504].includes(response.status) && attempt < retries) {
+      // Retryable 5xx: legacy 502/503/504 list, or every 5xx when opted in.
+      const serverRetryable = retryOptions.retryOnServerError
+        ? response.status >= 500 && response.status < 600
+        : [502, 503, 504].includes(response.status);
+      if (!response.ok && serverRetryable && attempt < retries) {
         attempt++;
-        await new Promise((r) => setTimeout(r, 600));
+        try { retryOptions.onRetry?.(attempt + 1, totalAttempts); } catch {}
+        await new Promise((r) => setTimeout(r, retryOptions.backoffMs?.[attempt - 1] ?? 600));
         continue;
       }
 
       return response;
     } catch (err: any) {
       clearTimeout(timer);
-      if (attempt < retries && err.name !== "AbortError") {
+      const timeoutRetryable = retryOptions.retryOnTimeout || err.name !== "AbortError";
+      if (attempt < retries && timeoutRetryable) {
         attempt++;
-        await new Promise((r) => setTimeout(r, 600));
+        try { retryOptions.onRetry?.(attempt + 1, totalAttempts); } catch {}
+        await new Promise((r) => setTimeout(r, retryOptions.backoffMs?.[attempt - 1] ?? 600));
         continue;
       }
       throw err;
@@ -154,6 +176,8 @@ export async function sendAgentMessage(
   message: string,
   context: any = {},
   conversationHistory: any[] = [],
+  onRetry?: (attempt: number, totalAttempts: number) => void,
+  attemptTimeoutMs: number = AGENT_TIMEOUT_MS,
 ): Promise<ClientAgentResult> {
   // C3: over-limit input is flagged visibly and never sent as-is.
   if (message.length > MAX_PROMPT_CHARS) {
@@ -175,7 +199,7 @@ export async function sendAgentMessage(
         conversationHistory,
         provider,
       }),
-    }, 10000, 0);
+    }, attemptTimeoutMs, AGENT_ATTEMPTS - 1, { retryOnTimeout: true, retryOnServerError: true, backoffMs: AGENT_RETRY_DELAYS_MS, onRetry });
 
     if (res.ok) {
       const data: AgentResult = await res.json();
@@ -197,7 +221,7 @@ export async function sendAgentMessage(
       };
     }
   } catch (err: any) {
-    console.warn("Backend /api/agent unavailable or timed out, running on-device deterministic rules engine.");
+    console.warn("Backend /api/agent unavailable after " + AGENT_ATTEMPTS + " attempts, running on-device deterministic rules engine.");
   }
 
   // Pure on-device deterministic rules fallback
