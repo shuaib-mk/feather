@@ -191,6 +191,59 @@ const SEVERE_SYMPTOM_PATTERNS = [
   /\b(?:thalakarakkam|thalakarakam|mayakkam|nenjuvedana|nenjuv\s+vedana)\b/i,
 ];
 
+// Hotfix: fall / heavy-bleed tier. A fall or collapse on its own, or heavy
+// bleeding words together with pain or distress, route to a care message that
+// still allows logging. The classic red-flag tier below is unchanged; when both
+// tiers match, the classic message wins. Checked BEFORE the refusal rules and
+// wins over the pure-question rule. Romanized Hindi/Hinglish is limited to two
+// high-confidence forms: gir gaya/gayi/gaye (standalone) and bahut
+// khoon/blood/bleeding (only with pain or distress).
+export const SEVERE_FALL_CARE_MESSAGE =
+  "I'm sorry that happened. If you fell, feel faint, or the bleeding is very heavy, please get help now from a trusted adult or a doctor, or call your local emergency number (112 in India). I can't give medical advice, but I can log this for you.";
+
+const FALL_STANDALONE_PATTERNS = [
+  /\bfell\s+down\b/i,
+  /\bcollapsed\b/i,
+  /\bblacked\s*out\b/i,
+  /\bgir\s+ga(?:ya|yi|ye)\b/i,
+];
+
+const FALL_OR_BLEED_PATTERNS = [
+  /\bfell\s+down\b/i,
+  /\bfell\s+on\s+the\s+(?:ground|floor)\b/i,
+  /\bfell\s+and\b/i,
+  /\bcollapsed\b/i,
+  /\bblacked\s*out\b/i,
+  /\bcan(?:'?t|\s+not)\s+stand\b/i,
+  /\ba\s+lot\s+of\s+blood\b/i,
+  /\bso\s+much\s+blood\b/i,
+  /\bbleeding\s+a\s+lot\b/i,
+  /\bbahut\s+(?:khoon|blood|bleeding)\b/i,
+  /\bgir\s+ga(?:ya|yi|ye)\b/i,
+];
+
+const FALL_PAIN_OR_DISTRESS_PATTERNS = [
+  /\bpain(?:ful)?\b/i,
+  /\bhurt(?:s|ing)?\b/i,
+  /\bcramps?\b/i,
+  /\bso\s+painful\b/i,
+  /\bi\s+(?:do\s+not|don'?t)\s+know\s+what\s+to\s+do\b/i,
+  /\bscared\b/i,
+  /\bafraid\b/i,
+  /\bplease\s+help\b/i,
+  /\bfaint\b/i,
+  /\bdizzy\b/i,
+];
+
+/** Fall / heavy-bleed tier: standalone fall/collapse, or fall-or-bleed words with pain/distress. */
+export function checkFallSevereInput(input: string): boolean {
+  const t = input.trim();
+  if (!t) return false;
+  if (FALL_STANDALONE_PATTERNS.some((p) => p.test(t))) return true;
+  if (!FALL_OR_BLEED_PATTERNS.some((p) => p.test(t))) return false;
+  return FALL_PAIN_OR_DISTRESS_PATTERNS.some((p) => p.test(t));
+}
+
 /**
  * Deterministic check for clinical red-flag severe symptoms (fainting/passed out,
  * chest pain, soaking through pads, severe pain, fever with symptoms, suicidal thoughts).
