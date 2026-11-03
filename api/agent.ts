@@ -2898,10 +2898,97 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
       }
     }
+    const runCorrectiveLogCall = async () => {
+      const severeHead = severeLive.isSevere ? severeLive.message : null;
+      const head = severeHead || "I can log this for you";
+      const failRedirect = severeHead ? severeHead : bannedOut.blocked ? REDIRECT_MESSAGES.verdict : MEDICAL_REFUSAL_MESSAGE;
+      const failResult = (why) => ({
+        message: failRedirect + " Please try again.",
+        entry: null,
+        needsClarification: false,
+        activityTrail,
+        toolCalls: toolCallsRecorded,
+        mode: "offline",
+        modeReason: "Output guard tripped (" + why + "); corrective log call failed"
+      });
+      const correctRemaining = modelDeadline - Date.now();
+      if (correctRemaining <= 5e3) return failResult("no time left in budget");
+      const cc = new AbortController();
+      const ct = setTimeout(() => cc.abort(), Math.min(4e4, correctRemaining));
+      const callStart = Date.now();
+      try {
+        const cres = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          signal: cc.signal,
+          body: JSON.stringify({
+            model,
+            messages: [...messages, { role: "user", content: "Call log_entry now with the facts in the user's message. No commentary." }],
+            tools: TOOLS,
+            tool_choice: { type: "function", function: { name: "log_entry" } },
+            temperature: 0.2,
+            max_tokens: 600
+          })
+        });
+        clearTimeout(ct);
+        if (!cres.ok) return failResult("corrective call failed");
+        const cdata = await cres.json();
+        const cmsg = cdata.choices && cdata.choices[0] && cdata.choices[0].message || {};
+        const tcalls = cmsg.tool_calls || [];
+        let centry = null;
+        for (const call of tcalls) {
+          let cargs = {};
+          try {
+            cargs = JSON.parse(call.function.arguments);
+          } catch {
+            cargs = {};
+          }
+          if (!call.function || call.function.name !== "log_entry") continue;
+          const verr = validateEntryArgs(cargs, today);
+          if (verr) {
+            toolCallsRecorded.push({ id: call.id || "call_corrective", toolName: "log_entry", args: cargs, result: { error: verr }, latencyMs: Date.now() - callStart, model, executedBy: "meta-model" });
+            continue;
+          }
+          centry = {
+            date: cargs.date || today,
+            endDate: cargs.endDate || null,
+            flow: cargs.flow || null,
+            symptoms: (cargs.symptoms || []).filter((st) => VALID_SYMPTOMS.includes(st)),
+            mood: cargs.mood || null,
+            energy: cargs.energy ?? null,
+            sleep: cargs.sleep ?? null,
+            notes: cargs.notes || null,
+            isApproximate: cargs.isApproximate || false,
+            landmarkName: cargs.landmarkName || null,
+            kind: cargs.kind || "daily_log"
+          };
+          toolCallsRecorded.push({ id: call.id || "call_corrective", toolName: "log_entry", args: cargs, result: { success: true, entry: centry }, latencyMs: Date.now() - callStart, model, executedBy: "meta-model" });
+        }
+        if (!centry) return failResult("no valid entry returned");
+        activityTrail.push({ step: "Corrective Log Call", detail: "Blocked model reply replaced by a forced log_entry call", status: "done" });
+        const tail = "I've prepared your log for " + centry.date + ". Please review and confirm below.";
+        return ensureFactCoverageDisclosure({
+          message: head + " " + tail,
+          entry: centry,
+          needsClarification: false,
+          clarificationQuestion: null,
+          activityTrail,
+          toolCalls: toolCallsRecorded,
+          mode: "live",
+          modeReason: "Corrective log_entry after blocked model reply"
+        }, userPrompt, today);
+      } catch (e) {
+        clearTimeout(ct);
+        return failResult("corrective call timed out");
+      }
+    };
     const bannedOut = checkModelOutputGuard(finalMessage);
     if (bannedOut.blocked) {
       const hasResults = !!structuredEntry || structuredEntries.length > 0 || livePlannedEvents.length > 0 || planOverlaps !== void 0 && planOverlaps.length > 0;
       if (!hasResults) {
+        if (hasClearLogStatement(userPrompt) || severeLive.isSevere) {
+          return await runCorrectiveLogCall();
+        }
         activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
         return { message: REDIRECT_MESSAGES.verdict, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "live", modeReason: "Output guard replaced the model reply" };
       }
@@ -2914,6 +3001,9 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
     }
     const outputGuard = checkMedicalAdviceGuardrail(finalMessage);
     if (outputGuard.isRefusal) {
+      if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && (hasClearLogStatement(userPrompt) || severeLive.isSevere)) {
+        return await runCorrectiveLogCall();
+      }
       return {
         message: MEDICAL_REFUSAL_MESSAGE,
         needsClarification: false,
