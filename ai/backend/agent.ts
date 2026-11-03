@@ -337,7 +337,9 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
    - Next-weekday ambiguity: if she says "next <weekday>" (for example "next Tuesday"), do NOT call log_entry yet. Ask which one she means: the coming <weekday> (<month> <day>) or the one a week later (<month> <day>), computing both dates from today, and wait for her answer.
 
 Tone: Warm, respectful, concise, neutral, non-medical.
-Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.`;
+Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.
+
+If the user states that a period started (including 'first period'), ALWAYS call log_entry, even if they sound upset. Keep any text to one or two short sentences. Never say whether something is normal, abnormal, healthy or safe. If the message describes fainting, falling, or heavy bleeding with severe pain, the app shows a care message; do not give advice yourself.`;
 
 
 function recordsFromContext(context: AgentContext): PeriodRecord[] {
