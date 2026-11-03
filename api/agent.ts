@@ -2533,6 +2533,9 @@ function ensureFactCoverageDisclosure(result, userPrompt, today) {
   }
   return message === result.message ? result : { ...result, message };
 }
+function isPeriodStartStatement(text) {
+  return extractWithLexicon(text).periodStart;
+}
 function severeTier(text) {
   const classic = checkSevereSymptomEscalation(text);
   if (classic.isSevere) return { isSevere: true, message: classic.escalationMessage };
@@ -2986,7 +2989,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
     if (bannedOut.blocked) {
       const hasResults = !!structuredEntry || structuredEntries.length > 0 || livePlannedEvents.length > 0 || planOverlaps !== void 0 && planOverlaps.length > 0;
       if (!hasResults) {
-        if (hasClearLogStatement(userPrompt) || severeLive.isSevere) {
+        if (isPeriodStartStatement(userPrompt) || severeLive.isSevere) {
           return await runCorrectiveLogCall();
         }
         activityTrail.push({ step: "Output Guard", detail: "Model reply replaced by fixed redirect (banned wording)", status: "done" });
@@ -3001,7 +3004,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
     }
     const outputGuard = checkMedicalAdviceGuardrail(finalMessage);
     if (outputGuard.isRefusal) {
-      if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && (hasClearLogStatement(userPrompt) || severeLive.isSevere)) {
+      if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && (isPeriodStartStatement(userPrompt) || severeLive.isSevere)) {
         return await runCorrectiveLogCall();
       }
       return {
@@ -3769,18 +3772,23 @@ function parseLocally(text, today, context) {
       ...offline
     }, text, today);
   }
-  if (intent === "other" || !hasLogContent && intent !== "plan_event") {
+  if (!hasLogContent && intent !== "plan_event") {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
       if (unplacedEvents.length > 0) {
-        const q2 = `I couldn't place a date for: ${unplacedEvents.join(", ")}`;
-        return { message: q2, entry: null, needsClarification: true, clarificationQuestion: q2, activityTrail, toolCalls, planOverlaps, ...offline };
+        const q = `I couldn't place a date for: ${unplacedEvents.join(", ")}`;
+        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
       const late = /\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b|\bam\s+i\s+late\b/i.test(lower);
+      const isQuestionLike = /\?\s*$/.test(text.trim()) || /^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)\b/i.test(text.trim());
+      const visitLog = !late && !isQuestionLike && /\bdoctor|clinic|appointment|check-?up|nurse|hospital\b/i.test(text) ? resolveDateExpression(text, today, context.landmarkPacks) : null;
+      const isDatedVisitNote = !!visitLog && !visitLog.needsClarification && !!visitLog.date && visitLog.date <= today;
       const startedFromEntries = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : [], ...context.pendingEntry && context.pendingEntry.kind === "period_started" ? [context.pendingEntry] : []].filter((e) => e && e.kind === "period_started" && e.date).map((e) => e.date);
       const startedFromLogs = (context.logs || []).filter((g) => g && g.kind === "period_started" && g.logDate).map((g) => g.logDate);
       const lastStart = [...(context.periods || []).map((x) => x.startDate).filter(Boolean), ...context.cycleStats?.lastPeriodStart ? [context.cycleStats.lastPeriodStart] : [], ...startedFromEntries, ...startedFromLogs].filter(Boolean).sort().pop() || null;
-      const q = late ? lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
-      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+      if (!isDatedVisitNote) {
+        const q = late ? lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
+        return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
+      }
     }
   }
   const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0 ? `Did you mean ${passedPlanCandidates[0].thisYear} (already passed) or ${passedPlanCandidates[0].nextYear}?` : null;
