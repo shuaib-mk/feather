@@ -611,7 +611,7 @@ const conversationHistory = thread.conversationHistory;
       : "Live: Meta Muse Spark";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8">
       <PageHeader
         title="Voice Capture"
         subtitle="Speak or type naturally in any language. Natural calendar landmarks are resolved instantly."

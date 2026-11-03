@@ -67,7 +67,7 @@ export function computeOwnDataStats(ctx: OwnDataContext): { completedCycles: num
 export function buildOwnDataAnswer(text: string, ctx: OwnDataContext): OwnDataResult | null {
   if (!isOwnDataQuestion(text)) return null;
   const s = computeOwnDataStats(ctx);
-  if (/\bwhen\s+did\s+my\s+last\s+period\s+start\b|\bwhen\s+was\s+my\s+last\s+period\b|\blast\s+period\s+start\b/i.test(text)) {
+  if (/\bwhen\s+did\s+my\s+last\s+period\s+start\b|\bwhen\s+was\s+my\s+last\s+period\b|\bwhen\s+my\s+last\s+period\s+(?:was|started)\b|\blast\s+period\s+start\b/i.test(text)) {
     if (!s.lastStart) return { kind: "own_data_answer", message: "You have not logged any periods yet. Log your first period to get started.", usedLiveModel: false };
     return { kind: "own_data_answer", message: "Your last logged period started " + label(s.lastStart) + ".", usedLiveModel: false };
   }

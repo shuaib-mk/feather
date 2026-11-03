@@ -7,7 +7,7 @@ import React from "react";
 export function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] sm:max-w-[75%] rounded-[20px] rounded-br-md bg-violet-100/60 border border-violet-200/60 px-4 py-2.5 shadow-xs">
+      <div className="max-w-[85%] sm:max-w-[75%] liquid-glass-user rounded-[20px] rounded-br-md px-4 py-2.5 shadow-xs">
         <p className="font-sans text-sm text-stone-900 leading-relaxed break-words">{text}</p>
       </div>
     </div>

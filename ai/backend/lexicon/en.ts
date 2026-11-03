@@ -41,7 +41,7 @@ export const en: LanguageLexicon = {
     Calm: ["calm"],
     Emotional: ["emotional"],
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"],
 };

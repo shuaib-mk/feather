@@ -617,6 +617,7 @@ var OWN_DATA_PATTERNS = [
   /\bhow\s+many\s+(?:cycles|periods)\s+have\s+i\s+logged\b/i,
   /\bwhen\s+did\s+my\s+last\s+period\s+start\b/i,
   /\bwhen\s+was\s+my\s+last\s+period\b/i,
+  /\bwhen\s+my\s+last\s+period\s+(?:was|started)\b/i,
   /\blast\s+period\s+start\b/i,
   /\bdid\s+i\s+log\s+anything\s+in\s+[a-z]+\b/i,
   /\bis\s+\d+\s*days?\s+normal\s+for\s+me\b/i,
@@ -760,7 +761,7 @@ function computeOwnDataStats(ctx) {
 function buildOwnDataAnswer(text, ctx) {
   if (!isOwnDataQuestion(text)) return null;
   const s = computeOwnDataStats(ctx);
-  if (/\bwhen\s+did\s+my\s+last\s+period\s+start\b|\bwhen\s+was\s+my\s+last\s+period\b|\blast\s+period\s+start\b/i.test(text)) {
+  if (/\bwhen\s+did\s+my\s+last\s+period\s+start\b|\bwhen\s+was\s+my\s+last\s+period\b|\bwhen\s+my\s+last\s+period\s+(?:was|started)\b|\blast\s+period\s+start\b/i.test(text)) {
     if (!s.lastStart) return { kind: "own_data_answer", message: "You have not logged any periods yet. Log your first period to get started.", usedLiveModel: false };
     return { kind: "own_data_answer", message: "Your last logged period started " + label(s.lastStart) + ".", usedLiveModel: false };
   }
@@ -1936,7 +1937,7 @@ var en = {
     Calm: ["calm"],
     Emotional: ["emotional"]
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"]
 };
@@ -2281,7 +2282,9 @@ Reply in the user's language (context locale) when known. When a pending entry e
 
 If the user states that a period started (including 'first period'), ALWAYS call log_entry, even if they sound upset. Keep any text to one or two short sentences. Never say whether something is normal, abnormal, healthy or safe. If the message describes fainting, falling, or heavy bleeding with severe pain, the app shows a care message; do not give advice yourself.
 
-Dynamic understanding: every message is different \u2014 never rely on fixed phrases. If the user is simply chatting (greetings, thanks, questions about what you can do), reply naturally and call no tools. Only call log_entry, update_entry or check_overlap when the user's actual intention is to record, correct or plan something; a mere mention of a period, symptom, wedding or date is not an instruction to create a record. Never invent a date: if no date can be determined, ask. If one message asks for several things, do each part (multiple tool calls in one turn are fine).`;
+Dynamic understanding: every message is different \u2014 never rely on fixed phrases. If the user is simply chatting (greetings, thanks, questions about what you can do), reply naturally and call no tools. Only call log_entry, update_entry or check_overlap when the user's actual intention is to record, correct or plan something; a mere mention of a period, symptom, wedding or date is not an instruction to create a record. Never invent a date: if no date can be determined, ask. If one message asks for several things, do each part (multiple tool calls in one turn are fine).
+
+Tool-call discipline: if the user asks to log something with a date but gives no flow or symptoms, still call log_entry with just the date and kind (period_started for a period log) \u2014 never invent flow or symptoms, and never silently substitute today. Never return an empty message: if you cannot act on a message, ask one specific clarifying question instead.`;
 function recordsFromContext(context) {
   const periods = context.periods && context.periods.length > 0 ? context.periods : context.cycleStats?.lastPeriodStart ? [{ startDate: context.cycleStats.lastPeriodStart, endDate: null }] : [];
   return periods.map((per, i) => ({
@@ -3125,7 +3128,7 @@ function extractWithLexicon(text) {
     if (lex.periodStart.some((ph) => phraseIndex(lower, ph) >= 0)) periodStart = true;
     if (lex.periodEnd.some((ph) => phraseIndex(lower, ph) >= 0)) periodEnd = true;
   }
-  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b|\bhad\s+(?:my\s+)?(?:first\s+)?period\b|\b(?:my\s+)?first\s+period\b|\bgot\s+my\s+first\s+period\b/i.test(lower)) periodStart = true;
+  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b|\bhad\s+(?:my\s+)?(?:first\s+)?period\b|\b(?:my\s+)?first\s+period\b|\bgot\s+my\s+first\s+period\b|\b(?:my\s+)?cycle\s+(?:started|began|came)\b/i.test(lower)) periodStart = true;
   if (/\bperiod\s+(ended|stopped|finished)\b|\bflow stopped\b/i.test(lower)) periodEnd = true;
   return { symptoms, flow, mood, periodStart, periodEnd };
 }
@@ -3352,6 +3355,7 @@ function hasClearLogStatement(text) {
   if (/\b(?:my\s+period|period)\s+(?:started|began|came|ended|stopped|finished)\b/i.test(t)) return true;
   if (/\b(?:started|got)\s+my\s+period\b/i.test(t)) return true;
   if (/\bhad\s+(?:my\s+)?(?:first\s+)?period\b/i.test(t)) return true;
+  if (/\b(?:my\s+)?cycle\s+(?:started|began|came)\b/i.test(t)) return true;
   if (/\b(?:my\s+)?first\s+period\b/i.test(t)) return true;
   if (/\bgot\s+my\s+first\s+period\b/i.test(t)) return true;
   if (/\b(?:heavy|medium|light|spotting|none)\s+flow\b/i.test(t)) return true;
@@ -3392,6 +3396,7 @@ function detectNegationOnly(text, today, context) {
 var CONVERSATION_PATTERNS = [
   /\bhow are (you|u)\b/i,
   /\bhow('s| is) it going\b/i,
+  /\bwhat'?s (good|up|new|happening)\b/i,
   /\bwhat can you do\b/i,
   /\bwhat do you do\b/i,
   /^\s*help\s*[?!.,]*\s*$/i,
@@ -3568,16 +3573,17 @@ function parseLocally(text, today, context) {
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
   const namesExplicitDay = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(text) || /\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text);
   const isDateCorrection = namesExplicitDay && /\b(change|move|correct|fix|update|edit|meant|later|wait)\b/i.test(text);
-  if (!targetSlip && (isCorrectionAttempt || isDateCorrection) && !/\bperiod\s+(?:started|ended)\b/i.test(text)) {
+  const namesEventForEdit = /\b(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|shaadi|sangeet)\b/i.test(text);
+  if (!targetSlip && (isCorrectionAttempt || isDateCorrection) && !/\bperiod\s+(?:started|ended)\b/i.test(text) && !namesEventForEdit) {
     const noEntryMsg = namesExplicitDay ? "There's no entry to change." : "I couldn't find a recent entry to correct.";
-    return {
+    return withIntent({
       message: noEntryMsg,
       entry: null,
       needsClarification: false,
       activityTrail: [{ step: "Correction Lookup", detail: "No recent entry found to correct", status: "done" }],
       toolCalls: [],
       ...offline
-    };
+    }, text);
   }
   if (isCompareIntent(text)) {
     const comparison = buildDateComparison(text, today, context);
@@ -3861,6 +3867,7 @@ function parseLocally(text, today, context) {
       ...offline
     }, text, today);
   }
+  let logDatePeriodStart = false;
   if (!hasLogContent && intent !== "plan_event") {
     if (eventMatches.length === 0 && !matchedEvent && !earlyLandmark.found) {
       if (unplacedEvents.length > 0) {
@@ -3871,10 +3878,13 @@ function parseLocally(text, today, context) {
       const isQuestionLike = /\?\s*$/.test(text.trim()) || /^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)\b/i.test(text.trim());
       const visitLog = !late && !isQuestionLike && /\bdoctor|clinic|appointment|check-?up|nurse|hospital\b/i.test(text) ? resolveDateExpression(text, today, context.landmarkPacks) : null;
       const isDatedVisitNote = !!visitLog && !visitLog.needsClarification && !!visitLog.date && visitLog.date <= today;
+      const logDateResolved = !late && !isQuestionLike && /\b(log|record|note|save|add)\b/i.test(text) && !/(pill|tablet|medicine|medication|drug|dose|dosage|remind|delete|cancel|undo|discard)\b/i.test(text) ? resolveDateExpression(text, today, context.landmarkPacks) : null;
+      const isLogDateRequest = !!logDateResolved && !logDateResolved.needsClarification && !!logDateResolved.date && logDateResolved.date <= today;
+      if (isLogDateRequest) logDatePeriodStart = true;
       const startedFromEntries = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : [], ...context.pendingEntry && context.pendingEntry.kind === "period_started" ? [context.pendingEntry] : []].filter((e) => e && e.kind === "period_started" && e.date).map((e) => e.date);
       const startedFromLogs = (context.logs || []).filter((g) => g && g.kind === "period_started" && g.logDate).map((g) => g.logDate);
       const lastStart = [...(context.periods || []).map((x) => x.startDate).filter(Boolean), ...context.cycleStats?.lastPeriodStart ? [context.cycleStats.lastPeriodStart] : [], ...startedFromEntries, ...startedFromLogs].filter(Boolean).sort().pop() || null;
-      if (!isDatedVisitNote) {
+      if (!isDatedVisitNote && !isLogDateRequest) {
         const q = late ? lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
         return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
@@ -4052,7 +4062,7 @@ function parseLocally(text, today, context) {
       }
     }
   }
-  const kind = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart ? "period_started" : "daily_log";
+  const kind = intent === "period_end" || extraction.periodEnd ? "period_ended" : intent === "period_start" || extraction.periodStart || logDatePeriodStart ? "period_started" : "daily_log";
   const entry = {
     date: entryDate,
     flow: extraction.flow,

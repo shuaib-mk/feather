@@ -37,7 +37,7 @@ const OWN_DATA_PATTERNS = [
   /\bwhen\s+is\s+my\s+next\s+period\b/i, /\bmy\s+next\s+period\b/i,
   /\b(?:longest|shortest)\s+(?:cycle|period)\b/i,
   /\bhow\s+many\s+(?:cycles|periods)\s+have\s+i\s+logged\b/i,
-  /\bwhen\s+did\s+my\s+last\s+period\s+start\b/i, /\bwhen\s+was\s+my\s+last\s+period\b/i, /\blast\s+period\s+start\b/i,
+  /\bwhen\s+did\s+my\s+last\s+period\s+start\b/i, /\bwhen\s+was\s+my\s+last\s+period\b/i, /\bwhen\s+my\s+last\s+period\s+(?:was|started)\b/i, /\blast\s+period\s+start\b/i,
   /\bdid\s+i\s+log\s+anything\s+in\s+[a-z]+\b/i,
   /\bis\s+\d+\s*days?\s+normal\s+for\s+me\b/i,
   /\bis\s+my\s+cycle\s+regular\b/i, /\bshow\s+(?:me\s+)?my\s+(?:logged\s+)?cycles\b/i,

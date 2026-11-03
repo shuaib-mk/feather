@@ -135,6 +135,46 @@ async function main() {
     check("event offline: planned event returned", !!(r.plannedEvents && r.plannedEvents.length === 1 && r.plannedEvents[0].date === "2026-11-20") && r.entry == null, JSON.stringify(r.plannedEvents));
     check("event offline: typed event/plan", r.responseType === "event" || r.responseType === "plan", r.responseType);
   }
+  // --- NLU repair: unseen phrasings, no hardcoded allowlist ---
+  {
+    const r: any = parseLocally("Log my period for August 31.", TODAY, {});
+    check("nlu: log-for-date slip", !!r.entry && r.entry.date === "2026-08-31" && r.entry.kind === "period_started", r.entry);
+    check("nlu: no invention, no today-substitution", r.message.indexOf("2026-08-31") !== -1, r.message.slice(0, 80));
+  }
+  {
+    const r: any = parseLocally("Log for August 31", TODAY, {});
+    check("nlu: bare log-for-date asks specifically (never blank, never invents)", r.entry == null && r.needsClarification === true && /2026-08-31|2027-08-31/.test(r.message), r.message);
+  }
+  {
+    const r: any = parseLocally("My cycle started two days before Onam.", TODAY, {});
+    check("nlu: cycle-started landmark slip", !!r.entry && r.entry.kind === "period_started" && r.entry.date === "2026-08-24", r.entry);
+  }
+  {
+    const r: any = parseLocally("I think my period started last night.", TODAY, {});
+    check("nlu: hedged start still logs", !!r.entry && r.entry.kind === "period_started" && (r.entry.date === TODAY || r.entry.date === "2026-11-02"), r.entry);
+  }
+  {
+    const ctx: any = { currentDate: TODAY, periods: [{ startDate: "2026-08-14" }, { startDate: "2026-09-09" }, { startDate: "2026-10-02" }] };
+    const r: any = parseLocally("Can you check when my last period was?", TODAY, ctx);
+    check("nlu: history question answered from data", r.entry == null && /Oct/.test(r.message), r.message.slice(0, 120));
+  }
+  {
+    const r: any = parseLocally("Move my wedding event to December.", TODAY, {});
+    check("nlu: event move asks, no slip, no invented record", r.entry == null && r.needsClarification === true, r.message);
+  }
+  for (const t of ["What's good?", "What's up?"]) {
+    const r: any = parseLocally(t, TODAY, {});
+    check("nlu convo: " + t, r.entry == null && r.responseType === "conversation" && r.message.length > 0, r.message.slice(0, 60));
+  }
+  await withLive([toolMsg([logCall("ld1", { date: TODAY, kind: "period_started" })]), textMsg("Noted.")], async () => {
+    const r: any = await runLavenderAgent("I got my period today", { currentDate: TODAY });
+    check("nlu live: stated date kept, slip matches", !!r.entry && r.entry.date === TODAY && r.entry.kind === "period_started", r.entry);
+  });
+  await withLive([toolMsg([logCall("ld2", { date: "2026-08-31", kind: "period_started" })]), textMsg("Noted.")], async () => {
+    const r: any = await runLavenderAgent("Log my period for August 31.", { currentDate: TODAY });
+    check("nlu live: historical date kept, never today", !!r.entry && r.entry.date === "2026-08-31", r.entry);
+  });
+
   // --- 8. safety + logging together ---
   {
     const r: any = parseLocally("I had my first period today. It was painful and I fell down.", TODAY, {});
