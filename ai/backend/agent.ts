@@ -822,6 +822,21 @@ export async function runLavenderAgent(
   let clarificationQuestion: string | null = null;
   let finalMessage = "";
 
+  // Hotfix (speed): per-call and overall model budgets. The normal path makes
+  // the same number of calls with identical results; only a hung model is cut
+  // off with a clear message instead of a silent hang.
+  const MODEL_CALL_TIMEOUT_MS = 40000;
+  const OVERALL_MODEL_BUDGET_MS = 50000;
+  const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
+  const modelTimedOut = (): AgentResult => ({
+    message: "The AI took too long, please try again",
+    entry: null,
+    needsClarification: false,
+    activityTrail,
+    toolCalls: toolCallsRecorded,
+    mode: "offline",
+    modeReason: "Meta model call timed out (overall 50s budget)",
+  });
   const MAX_STEPS = 5;
   let stepCount = 0;
 
@@ -829,20 +844,35 @@ export async function runLavenderAgent(
     while (stepCount < MAX_STEPS) {
       stepCount++;
 
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          tools: TOOLS,
-          tool_choice: "auto",
-          temperature: 0.2,
-        }),
-      });
+      // Overall budget: stop starting new model calls once 50s are spent.
+      const remainingMs = modelDeadline - Date.now();
+      if (remainingMs <= 0) return modelTimedOut();
+      const callController = new AbortController();
+      const callTimer = setTimeout(() => callController.abort(), Math.min(MODEL_CALL_TIMEOUT_MS, remainingMs));
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          signal: callController.signal,
+          body: JSON.stringify({
+            model,
+            messages,
+            tools: TOOLS,
+            tool_choice: "auto",
+            temperature: 0.2,
+            max_tokens: 600,
+          }),
+        });
+      } catch (callErr: any) {
+        clearTimeout(callTimer);
+        if (callErr && callErr.name === "AbortError") return modelTimedOut();
+        throw callErr;
+      }
+      clearTimeout(callTimer);
 
       if (!res.ok) {
         const errorText = await res.text();

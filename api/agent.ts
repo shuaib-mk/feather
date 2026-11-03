@@ -2627,25 +2627,51 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
   let needsClarification = false;
   let clarificationQuestion = null;
   let finalMessage = "";
+  const MODEL_CALL_TIMEOUT_MS = 4e4;
+  const OVERALL_MODEL_BUDGET_MS = 5e4;
+  const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
+  const modelTimedOut = () => ({
+    message: "The AI took too long, please try again",
+    entry: null,
+    needsClarification: false,
+    activityTrail,
+    toolCalls: toolCallsRecorded,
+    mode: "offline",
+    modeReason: "Meta model call timed out (overall 50s budget)"
+  });
   const MAX_STEPS = 5;
   let stepCount = 0;
   try {
     while (stepCount < MAX_STEPS) {
       stepCount++;
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          tools: TOOLS,
-          tool_choice: "auto",
-          temperature: 0.2
-        })
-      });
+      const remainingMs = modelDeadline - Date.now();
+      if (remainingMs <= 0) return modelTimedOut();
+      const callController = new AbortController();
+      const callTimer = setTimeout(() => callController.abort(), Math.min(MODEL_CALL_TIMEOUT_MS, remainingMs));
+      let res;
+      try {
+        res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`
+          },
+          signal: callController.signal,
+          body: JSON.stringify({
+            model,
+            messages,
+            tools: TOOLS,
+            tool_choice: "auto",
+            temperature: 0.2,
+            max_tokens: 600
+          })
+        });
+      } catch (callErr) {
+        clearTimeout(callTimer);
+        if (callErr && callErr.name === "AbortError") return modelTimedOut();
+        throw callErr;
+      }
+      clearTimeout(callTimer);
       if (!res.ok) {
         const errorText = await res.text();
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
