@@ -1452,7 +1452,7 @@ function applySlipCorrections(current, correctionText) {
   }
   const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
   const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
-  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s*(none|spotting|light|medium|heavy)\b/i);
   if (flowContrastMatch) {
     updated.flow = flowContrastMatch[1].toLowerCase();
     changes.push(`Flow updated to ${updated.flow}`);
@@ -1500,7 +1500,7 @@ function applySlipCorrections(current, correctionText) {
   }
   const moodWords = ["Great", "Good", "Okay", "Low", "Irritable", "Anxious", "Emotional", "Calm"];
   for (const m of moodWords) {
-    if (lower.includes(m.toLowerCase())) {
+    if (new RegExp(`\\b${m.toLowerCase()}\\b`, "i").test(lower)) {
       updated.mood = m;
       changes.push(`Mood updated to ${m}`);
       break;
@@ -2279,7 +2279,9 @@ CRITICAL NON-NEGOTIABLE SAFETY RULES:
 Tone: Warm, respectful, concise, neutral, non-medical.
 Reply in the user's language (context locale) when known. When a pending entry exists, call update_entry with a patch; do not ask the user to re-log.
 
-If the user states that a period started (including 'first period'), ALWAYS call log_entry, even if they sound upset. Keep any text to one or two short sentences. Never say whether something is normal, abnormal, healthy or safe. If the message describes fainting, falling, or heavy bleeding with severe pain, the app shows a care message; do not give advice yourself.`;
+If the user states that a period started (including 'first period'), ALWAYS call log_entry, even if they sound upset. Keep any text to one or two short sentences. Never say whether something is normal, abnormal, healthy or safe. If the message describes fainting, falling, or heavy bleeding with severe pain, the app shows a care message; do not give advice yourself.
+
+Dynamic understanding: every message is different \u2014 never rely on fixed phrases. If the user is simply chatting (greetings, thanks, questions about what you can do), reply naturally and call no tools. Only call log_entry, update_entry or check_overlap when the user's actual intention is to record, correct or plan something; a mere mention of a period, symptom, wedding or date is not an instruction to create a record. Never invent a date: if no date can be determined, ask. If one message asks for several things, do each part (multiple tool calls in one turn are fine).`;
 function recordsFromContext(context) {
   const periods = context.periods && context.periods.length > 0 ? context.periods : context.cycleStats?.lastPeriodStart ? [{ startDate: context.cycleStats.lastPeriodStart, endDate: null }] : [];
   return periods.map((per, i) => ({
@@ -2490,10 +2492,10 @@ function factIsPlaced(fact, entries, events) {
   return entries.some((e) => (e.date === fact.date || e.endDate != null && e.endDate === fact.date) && (!fact.flow || e.flow === fact.flow) && (!fact.symptoms?.length || fact.symptoms.every((sym) => (e.symptoms || []).includes(sym))));
 }
 function ensureFactCoverageDisclosure(result, userPrompt, today) {
-  if (!result || typeof result.message !== "string") return result;
-  if (!result.entry && !(result.plannedEvents && result.plannedEvents.length > 0)) return result;
+  if (!result || typeof result.message !== "string") return withIntent(result, userPrompt);
+  if (!result.entry && !(result.plannedEvents && result.plannedEvents.length > 0)) return withIntent(result, userPrompt);
   const facts = findStatedDatedFacts(userPrompt, today);
-  if (facts.length === 0) return result;
+  if (facts.length === 0) return withIntent(result, userPrompt);
   const entries = structuredEntriesOf(result);
   const events = result.plannedEvents || [];
   let message = result.message;
@@ -2531,7 +2533,7 @@ function ensureFactCoverageDisclosure(result, userPrompt, today) {
       }
     }
   }
-  return message === result.message ? result : { ...result, message };
+  return withIntent(message === result.message ? result : { ...result, message }, userPrompt);
 }
 function isPeriodStartStatement(text) {
   return extractWithLexicon(text).periodStart;
@@ -2559,12 +2561,12 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
       const fb = parseLocally(userPrompt, context.currentDate || todayLocal(), context);
       return { ...fb, mode: "offline", modeReason: "Offline parser - medical part refused; log handled by offline rules" };
     }
-    return {
+    return withIntent({
       message: getGuardrailResponseMessage(userPrompt),
       needsClarification: false,
       activityTrail,
       toolCalls: toolCallsRecorded
-    };
+    }, userPrompt);
   }
   const today = context.currentDate || todayLocal();
   const severeCheck = severeLive;
@@ -3387,6 +3389,89 @@ function detectNegationOnly(text, today, context) {
   }
   return { kind: "noted" };
 }
+var CONVERSATION_PATTERNS = [
+  /\bhow are (you|u)\b/i,
+  /\bhow('s| is) it going\b/i,
+  /\bwhat can you do\b/i,
+  /\bwhat do you do\b/i,
+  /^\s*help\s*[?!.,]*\s*$/i,
+  /\bhelp me\b/i,
+  /\bhelp me understand\b/i,
+  /\bthank(s| you| you so much| you very much)\b/i,
+  /^(bye+|goodbye|good ?night|see you|take care)\b/i,
+  /^(good ?morning|good ?afternoon|good ?evening)\b[?!.,]*$/i,
+  /\bwho are you\b|\byour name\b|\bwhat are you\b/i,
+  /\bwhat (is|are) feather\b/i,
+  /\bexplain\b.*\bfeather\b/i,
+  /\bhow\b[^.?!]*\bworks?\b/i,
+  /\babout feather\b/i,
+  /\bwhat (is|are) (this|this app)\b/i
+];
+var CONVERSATION_BLOCK_NOUNS = /\b(exam|wedding|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|dentist|doctor|hospital|clinic|period|flow|bleed|blood|cramps?|pain|pill|tablet|medicine|pregnan|ovulat|fertil|normal|safe|should|would|could|can i|do i|what (if|about)|log|logged|logging|record|save|delete|cycle|symptom)\b/i;
+var CONVERSATION_DATE_RE = /\b\d\b|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i;
+function isConversationalMessage(text) {
+  const t = text.trim();
+  if (!t || t.length > 200) return false;
+  if (!CONVERSATION_PATTERNS.some((p) => p.test(t))) return false;
+  let rest = t;
+  for (const p of CONVERSATION_PATTERNS) rest = rest.replace(p, " ");
+  rest = rest.replace(/[?!.,\u2014-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!rest) return true;
+  const ext = extractWithLexicon(rest);
+  if (ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || ext.periodStart || ext.periodEnd) return false;
+  if (CONVERSATION_BLOCK_NOUNS.test(rest)) return false;
+  if (CONVERSATION_DATE_RE.test(rest)) return false;
+  if (checkMedicalAdviceGuardrail(rest).isRefusal) return false;
+  if (checkFallSevereInput(rest)) return false;
+  return true;
+}
+function conversationalReply() {
+  return "Hi! I'm Feather, your private cycle companion. I can track your periods and symptoms, answer questions from your own past entries, and help you plan around events \u2014 all on this device. Try 'my period started yesterday', or ask me anything.";
+}
+function withIntent(result, userPrompt) {
+  const r = result;
+  if (!r.responseType) {
+    const entry = r.entry;
+    const entries = r.entries || [];
+    const toolCalls = r.toolCalls || [];
+    const validated = toolCalls.filter((c) => c && c.result && (c.result.success || c.result.entry || c.result.overlaps || c.result.events));
+    const tools = validated.map((c) => c.toolName);
+    const hasSevere = typeof r.message === "string" && (r.message.indexOf("please get help now from a trusted adult") !== -1 || r.message.indexOf("Important safety notice") !== -1);
+    const isRefusalMsg = typeof r.message === "string" && (r.message === MEDICAL_REFUSAL_MESSAGE || Object.values(REDIRECT_MESSAGES).includes(r.message));
+    if (r.replacesExisting && entry) {
+      r.responseType = "correction";
+    } else if (entries.length > 1) {
+      r.responseType = "backfill";
+    } else if (entry && (r.planOverlaps && r.planOverlaps.length > 0 || r.plannedEvents && r.plannedEvents.length > 0)) {
+      r.responseType = "log";
+    } else if (entry) {
+      r.responseType = "log";
+    } else if (r.planOverlaps && r.planOverlaps.length > 0 || r.plannedEvents && r.plannedEvents.length > 0) {
+      r.responseType = tools.includes("check_overlap") ? "plan" : "event";
+    } else if (r.needsClarification) {
+      r.responseType = "clarification";
+    } else if (isRefusalMsg) {
+      r.responseType = "refusal";
+    } else if (isConversationalMessage(userPrompt)) {
+      r.responseType = "conversation";
+    } else {
+      r.responseType = "question";
+    }
+    const intentions = [];
+    for (const c of validated) {
+      if (c.toolName === "log_entry" && c.result.entry) intentions.push("log_entry:" + (c.result.entry.kind || "daily_log") + ":" + c.result.entry.date);
+      else if (c.toolName === "update_entry") intentions.push("update_entry");
+      else if (c.toolName === "check_overlap") intentions.push("check_overlap");
+      else intentions.push(c.toolName);
+    }
+    if (hasSevere) intentions.push("severe-care-shown");
+    if (isRefusalMsg) intentions.push("refusal");
+    if (r.responseType === "conversation") intentions.push("conversational-reply");
+    if (r.responseType === "clarification") intentions.push("clarify");
+    r.intentions = intentions;
+  }
+  return result;
+}
 function parseLocally(text, today, context) {
   const startTime = Date.now();
   const lower = text.toLowerCase();
@@ -3401,7 +3486,7 @@ function parseLocally(text, today, context) {
   let medicalTail = null;
   if (!severeWinsLocal && checkMedicalAdviceGuardrail(text).isRefusal) {
     if (!hasClearLogStatement(text)) {
-      return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
+      return withIntent({ message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline }, text);
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
@@ -3423,6 +3508,10 @@ function parseLocally(text, today, context) {
   }
   if (negationOnly?.kind === "noted") {
     return { message: "Noted, nothing to log.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+  }
+  if (isConversationalMessage(text)) {
+    activityTrail.push({ step: "Conversation", detail: "Greeting/help answered directly, no log created", status: "done" });
+    return withIntent({ message: conversationalReply(), entry: null, needsClarification: false, activityTrail, toolCalls, ...offline }, text);
   }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
@@ -3473,7 +3562,7 @@ function parseLocally(text, today, context) {
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
-      return { message: "I've updated your Accession Slip with your corrections. Please review below." + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline };
+      return withIntent({ message: "I've updated your Accession Slip with your corrections. Please review below." + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline }, text);
     }
   }
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
@@ -3726,7 +3815,7 @@ function parseLocally(text, today, context) {
       planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
       activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-      return { message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+      return withIntent({ message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
     }
   }
   const backfill = extractBackfillDates(text, today);
@@ -3797,7 +3886,7 @@ function parseLocally(text, today, context) {
   }
   if ((intent === "plan_event" || eventMatches.length > 0) && !hasLogContent) {
     const isBareLandmark = eventMatches.length === 0;
-    if (!isBareLandmark) {
+    if (!isBareLandmark && !hasLogContent) {
       const isOverlapQuestion2 = /\bperiod\b/i.test(text) && /\b(during|clash(?:es|ed|ing)?|overlap(?:s|ped|ping)?|coincid(?:e|es|ing)|safe)\b/i.test(text);
       const describeEvent = (e) => {
         const base = e.endDate && e.endDate !== e.date ? `${e.name} on ${e.date} to ${e.endDate}` : `${e.name} on ${e.date}`;
@@ -3806,7 +3895,7 @@ function parseLocally(text, today, context) {
         return hit && hit.overlapNote ? `${base}: ${hit.overlapNote}` : base;
       };
       const msg = unplacedEvents.length > 0 ? `I couldn't place a date for: ${unplacedEvents.join(", ")}` : eventMatches.map(describeEvent).join("; ");
-      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date, ...e.endDate && e.endDate !== e.date ? { endDate: e.endDate } : {} })), usedPersonalAnchor, ...offline };
+      return withIntent({ message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date, ...e.endDate && e.endDate !== e.date ? { endDate: e.endDate } : {} })), usedPersonalAnchor, ...offline }, text);
     }
   }
   let logDateText = text;
@@ -3988,7 +4077,7 @@ function parseLocally(text, today, context) {
     message = `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
   if (medicalTail) message += medicalTail;
-  return { message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };
+  return withIntent({ message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
 }
 
 // ai/backend/protection.ts

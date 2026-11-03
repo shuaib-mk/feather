@@ -288,7 +288,7 @@ export function applySlipCorrections(
   // 2. Flow correction
   const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
   const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
-  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s*(none|spotting|light|medium|heavy)\b/i);
 
   if (flowContrastMatch) {
     updated.flow = flowContrastMatch[1].toLowerCase() as any;
@@ -341,10 +341,10 @@ export function applySlipCorrections(
     }
   }
 
-  // 5. Mood correction
+  // 5. Mood correction (word boundaries: "flow" must not match "low").
   const moodWords = ["Great", "Good", "Okay", "Low", "Irritable", "Anxious", "Emotional", "Calm"];
   for (const m of moodWords) {
-    if (lower.includes(m.toLowerCase())) {
+    if (new RegExp(`\\b${m.toLowerCase()}\\b`, "i").test(lower)) {
       updated.mood = m;
       changes.push(`Mood updated to ${m}`);
       break;

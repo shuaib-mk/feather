@@ -5,6 +5,7 @@ import { useCycle } from "../context/CycleContext";
 import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
 import { AgentMessageCard } from "../components/AgentMessageCard";
+import { UserBubble, FeatherTurn, SystemBubble } from "../components/ConversationThread";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
@@ -385,7 +386,7 @@ const conversationHistory = thread.conversationHistory;
         setBackfillRows(null);
       if (res.entry) {
         if (res.entry.date <= todayStr()) setConfirmEntry(res.entry);
-        else setConfirmEntry(null);
+        else { setConfirmEntry(null); setAgentMessage("That date is in the future, so there is nothing to confirm yet. Pick a past or today's date."); }
       } else {
         setConfirmEntry(null);
       }
@@ -609,19 +610,6 @@ const conversationHistory = thread.conversationHistory;
         </div>
       )}
 
-      {/* Success Notification */}
-      {savedSuccessMessage && (
-        <div className="rounded-[18px] liquid-glass-card border border-emerald-200/80 bg-emerald-50/40 p-3.5 text-xs text-emerald-950 font-sans flex items-center justify-between shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-emerald-500" />
-            <span className="font-semibold">{savedSuccessMessage}</span>
-          </div>
-          <Link to={savedLink.to} className="liquid-glass-pill rounded-full px-3 py-1 font-mono text-[10px] uppercase font-bold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
-            {savedLink.label} →
-          </Link>
-        </div>
-      )}
-
       {/* Recording & Input Console */}
       <div className="liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative">
         {/* Universal Language Selection Row */}
@@ -767,14 +755,21 @@ const conversationHistory = thread.conversationHistory;
         </div>
       </div>
 
-      {/* Transcript & Refusal / Agent Output */}
-      {transcript && (
-        <div className="liquid-glass-card rounded-[20px] p-4 text-xs space-y-1.5 border border-white/80">
-          <span className="font-sans text-xs font-medium text-stone-500 block">Your message</span>
-          <p className="font-sans text-stone-800 text-sm font-medium">"{transcript}"</p>
-        </div>
-      )}
+      {/* Unified conversation: history + current turn in one chat interface */}
+      <div role="log" aria-label="Conversation with Feather" className="space-y-3">
+        {conversationHistory.map((m, i) => (
+          m.role === "user" ? (
+            <UserBubble key={"hist-" + i} text={m.content} />
+          ) : (
+            <FeatherTurn key={"hist-" + i}>
+              <p className="font-sans text-sm text-stone-800 leading-relaxed break-words">{m.content}</p>
+            </FeatherTurn>
+          )
+        ))}
+        {transcript && <UserBubble text={transcript} />}
 
+        {(agentMessage || isProcessing || (planOverlaps && planOverlaps.length > 0) || plannedEventsState.length > 0 || backfillRows || confirmEntry) && (
+          <FeatherTurn>
       {/* Medical Guardrail Refusal Alert */}
       {agentMessage && agentMessage.includes("talk to a doctor") && (
         <div className="rounded-[22px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 p-5 space-y-2 shadow-xs">
@@ -1182,6 +1177,23 @@ const conversationHistory = thread.conversationHistory;
           </div>
         </div>
       )}
+
+          </FeatherTurn>
+        )}
+        {savedSuccessMessage && (
+          <SystemBubble>
+            <div className="rounded-[18px] liquid-glass-card border border-emerald-200/80 bg-emerald-50/40 p-3.5 text-xs text-emerald-950 font-sans flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-emerald-500" />
+                <span className="font-semibold">{savedSuccessMessage}</span>
+              </div>
+              <Link to={savedLink.to} className="liquid-glass-pill rounded-full px-3 py-1 font-mono text-[10px] uppercase font-bold text-emerald-900 border border-emerald-200/80 hover:bg-emerald-100/40">
+                {savedLink.label} &rarr;
+              </Link>
+            </div>
+          </SystemBubble>
+        )}
+      </div>
 
       {/* Under The Hood Trace Disclosure */}
       <div className="liquid-glass-card rounded-[22px] p-4 text-xs space-y-2">
