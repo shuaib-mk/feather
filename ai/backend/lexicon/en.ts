@@ -9,7 +9,7 @@
 
 export const en: LanguageLexicon = {
   symptoms: {
-    cramps: ["cramps", "cramp", "cramping"],
+    cramps: ["cramps", "cramp", "cramping", "painful", "in pain", "period pain", "a lot of pain", "so painful", "really painful", "bad pain", "paining"],
     headache: ["headache", "head ache"],
     backache: ["backache", "back ache", "back pain", "lower back pain"],
     bloating: ["bloating", "bloated"],
@@ -25,7 +25,7 @@ export const en: LanguageLexicon = {
     appetite_change: ["appetite change", "increased appetite", "no appetite"],
   },
   flow: {
-    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot"],
+    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot", "bleeding heavily"],
     medium: ["medium flow", "moderate flow", "normal flow", "medium"],
     light: ["light flow", "light bleeding", "light"],
     spotting: ["spotting"],
@@ -41,7 +41,7 @@ export const en: LanguageLexicon = {
     Calm: ["calm"],
     Emotional: ["emotional"],
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began", "started bleeding", "bleeding started", "bleeding since"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"],
 };

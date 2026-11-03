@@ -53,6 +53,7 @@ const suites = [
   ["e2e_exact", ["npx", "tsx", "ai/test/e2e_exact.test.ts"]],
   ["arch_primary", ["npx", "tsx", "ai/test/arch_primary.test.ts"]],
   ["arch_refine", ["npx", "tsx", "ai/test/arch_refine.test.ts"]],
+  ["arch_natural", ["npx", "tsx", "ai/test/arch_natural.test.ts"]],
   ["conversation", ["npx", "tsx", "ai/test/conversation.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
@@ -70,6 +71,7 @@ if (failed.length) {
   process.exit(1);
 }
 console.log("TEST CHAIN PASSED: all " + suites.length + " suites green.");
+
 
 
 

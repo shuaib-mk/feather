@@ -1905,7 +1905,7 @@ function resolveDateExpression(text, today, packs) {
 // ai/backend/lexicon/en.ts
 var en = {
   symptoms: {
-    cramps: ["cramps", "cramp", "cramping"],
+    cramps: ["cramps", "cramp", "cramping", "painful", "in pain", "period pain", "a lot of pain", "so painful", "really painful", "bad pain", "paining"],
     headache: ["headache", "head ache"],
     backache: ["backache", "back ache", "back pain", "lower back pain"],
     bloating: ["bloating", "bloated"],
@@ -1921,7 +1921,7 @@ var en = {
     appetite_change: ["appetite change", "increased appetite", "no appetite"]
   },
   flow: {
-    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot"],
+    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot", "bleeding heavily"],
     medium: ["medium flow", "moderate flow", "normal flow", "medium"],
     light: ["light flow", "light bleeding", "light"],
     spotting: ["spotting"],
@@ -1937,7 +1937,7 @@ var en = {
     Calm: ["calm"],
     Emotional: ["emotional"]
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period", "cycle started", "my cycle started", "cycle began", "started bleeding", "bleeding started", "bleeding since"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"]
 };
@@ -1961,14 +1961,14 @@ var hi = {
     appetite_change: ["\u092D\u0942\u0916 \u092C\u0926\u0932\u0928\u093E"]
   },
   flow: {
-    heavy: ["\u091C\u094D\u092F\u093E\u0926\u093E \u0916\u0942\u0928", "\u092D\u093E\u0930\u0940"],
+    heavy: ["\u091C\u094D\u092F\u093E\u0926\u093E \u0916\u0942\u0928", "\u092D\u093E\u0930\u0940", "\u092C\u0939\u0941\u0924 \u0916\u0942\u0928"],
     medium: ["\u092E\u0927\u094D\u092F\u092E"],
     light: ["\u0915\u092E \u0916\u0942\u0928", "\u0939\u0932\u094D\u0915\u093E"],
     spotting: ["\u0938\u094D\u092A\u0949\u091F\u093F\u0902\u0917"],
     none: ["\u0915\u094B\u0908 \u0916\u0942\u0928 \u0928\u0939\u0940\u0902", "\u092B\u094D\u0932\u094B \u0928\u0939\u0940\u0902"]
   },
   mood: { Low: ["\u0909\u0926\u093E\u0938"], Calm: ["\u0936\u093E\u0902\u0924"], Good: ["\u0905\u091A\u094D\u091B\u093E"], Okay: ["\u0920\u0940\u0915"] },
-  periodStart: ["\u092A\u0940\u0930\u093F\u092F\u0921 \u0936\u0941\u0930\u0942 \u0939\u0941\u0906", "\u092A\u0940\u0930\u093F\u092F\u0921 \u0906\u092F\u093E"],
+  periodStart: ["\u092A\u0940\u0930\u093F\u092F\u0921 \u0936\u0941\u0930\u0942 \u0939\u0941\u0906", "\u092A\u0940\u0930\u093F\u092F\u0921 \u0906\u092F\u093E", "\u092C\u094D\u0932\u0940\u0921\u093F\u0902\u0917 \u0936\u0941\u0930\u0942", "\u0916\u0942\u0928 \u0906\u0928\u093E \u0936\u0941\u0930\u0942"],
   periodEnd: ["\u092A\u0940\u0930\u093F\u092F\u0921 \u0916\u0924\u094D\u092E \u0939\u0941\u0906", "\u092A\u0940\u0930\u093F\u092F\u0921 \u092C\u0902\u0926 \u0939\u0941\u0906"],
   negations: ["\u0928\u0939\u0940\u0902", "\u092C\u093F\u0928\u093E", "\u0915\u094B\u0908 \u0928\u0939\u0940\u0902"]
 };
