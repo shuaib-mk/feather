@@ -112,7 +112,6 @@ const plannedEventsState = thread.plannedEventsState;
 const agentMode = thread.agentMode;
   const setAgentMode = (v: any | ((p: any) => any)) =>
     setThread((prev) => ({ agentMode: typeof v === "function" ? (v as (p: any) => any)(prev.agentMode) : v }));
-  const [usedAnchor, setUsedAnchor] = useState(false);
 
   // Voice recording hook
   const {
@@ -177,6 +176,7 @@ const isOfflineFallback = thread.isOfflineFallback;
   const pipelineActiveRef = useRef(false);
   const processedAudioRef = useRef<Blob | null>(null);
   const archivedPairRef = useRef<{ t: string; m: string } | null>(null);
+  const convoScrollRef = useRef<HTMLDivElement | null>(null);
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
@@ -216,6 +216,12 @@ const conversationHistory = thread.conversationHistory;
     } catch {}
   }, []);
 
+  const hasConversation = Boolean(transcript || agentMessage || conversationHistory.length > 0 || confirmEntry || backfillRows || plannedEventsState.length > 0 || (planOverlaps && planOverlaps.length > 0) || isProcessing || savedSuccessMessage);
+  useEffect(() => {
+    const el = convoScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [transcript, agentMessage, conversationHistory.length, isProcessing, confirmEntry, backfillRows, plannedEventsState.length, planOverlaps]);
+
   // Auto-process captured audio blob exactly once per recording (StrictMode-safe).
   useEffect(() => {
     if (!audioBlob) {
@@ -247,11 +253,13 @@ const conversationHistory = thread.conversationHistory;
         setActivityTrail([{ step: "Voice Recognition", detail: `Transcribed (${res.language || "multilingual"}): "${res.text}"`, status: "done" }]);
         await runAgentPipeline(res.text);
       } else {
+        setTranscript("");
         setAgentMessage(res.error || "Couldn't hear that — try again or type it");
         setActivityTrail([{ step: "Voice Recognition", detail: res.error || "Acoustic detection ended without text", status: "done" }]);
       }
     } catch (err: any) {
       console.error("Transcription error:", err);
+        setTranscript("");
       setAgentMessage("Couldn't hear that — try again or type it");
       setActivityTrail([{ step: "Voice Recognition", detail: "Audio stream error", status: "clarify" }]);
     } finally {
@@ -261,6 +269,7 @@ const conversationHistory = thread.conversationHistory;
 
   const runAgentPipeline = async (promptText: string, activePendingEntry?: StructuredEntry | null, source: "voice" | "text" = "voice") => {
     if (promptText.length > 1000) {
+      setTranscript(promptText);
       setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries");
       return;
     }
@@ -280,6 +289,7 @@ const conversationHistory = thread.conversationHistory;
     setProcessingSource(source);
     setIsProcessing(true);
     setTranscript(promptText);
+    setAgentMessage("");
     setRetryNotice(null);
     setPipelineStage("thinking");
     markVoiceTiming("send");
@@ -384,7 +394,6 @@ const conversationHistory = thread.conversationHistory;
       }
       setIsOfflineFallback(Boolean(res.isOfflineFallback));
       setAgentMode(res);
-      setUsedAnchor(Boolean((res as any).usedPersonalAnchor));
       const extractedEvents = (res as any).plannedEvents?.length
         ? (res as any).plannedEvents
         : res.planOverlaps?.length
@@ -449,6 +458,7 @@ const conversationHistory = thread.conversationHistory;
     e.preventDefault();
     if (!manualText.trim() || isProcessing) return;
     if (manualText.trim().length > 1000) {
+      setTranscript(manualText.trim());
       setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries");
       return;
     }
@@ -632,9 +642,9 @@ const conversationHistory = thread.conversationHistory;
       )}
 
       {/* Recording & Input Console */}
-      <div className="liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative">
+      <div className={"liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative" + (hasConversation ? " flex flex-col overflow-hidden max-h-[calc(100dvh-11rem)] sm:max-h-[calc(100dvh-8rem)]" : "")}>
         {/* Universal Language Selection Row */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full shrink-0">
           <span className="text-stone-500 font-sans text-xs font-medium shrink-0">Language:</span>
           <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
             <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
@@ -670,12 +680,12 @@ const conversationHistory = thread.conversationHistory;
             </div>
           </div>
         </div>
-        <p className="text-[11px] text-stone-500 font-sans">
+        <p className="text-[11px] text-stone-500 font-sans shrink-0">
           Voice transcription supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu. Malayalam voice is not supported by Meta — Malayalam works when typed (offline parser). Recordings are capped at 60 seconds.
         </p>
 
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
-        <div className="flex flex-col items-center justify-center space-y-3 py-2">
+        <div className="flex flex-col items-center justify-center space-y-3 py-2 shrink-0">
           <button
             type="button"
             onClick={isRecording ? stopRecording : startRecording}
@@ -747,37 +757,10 @@ const conversationHistory = thread.conversationHistory;
           </div>
         </div>
 
-        {/* Alternative Natural Text Input */}
-        <div className="max-w-xl mx-auto pt-2 w-full">
-          <form onSubmit={handleManualSubmit} className="relative flex items-center w-full">
-            <input
-              ref={textInputRef}
-              type="text"
-              value={manualText}
-              onChange={(e) => setManualText(e.target.value)}
-              placeholder="Or type naturally (e.g. 'Period started 2 days before New Year\'s')..."
-              disabled={isProcessing || isRecording}
-              className="w-full liquid-glass-input rounded-full py-2.5 sm:py-3 pl-4 sm:pl-5 pr-22 sm:pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={isProcessing || !manualText.trim()}
-              className="absolute right-1 sm:right-1.5 liquid-glass-button rounded-full px-3.5 sm:px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs whitespace-nowrap"
-            >
-              Log it →
-            </button>
-          </form>
-          {manualText.length >= 800 && (
-            <p className={`text-[11px] mt-1.5 ${manualText.length > 1000 ? "text-rose-600 font-semibold" : "text-stone-500"}`}>
-              {manualText.length.toLocaleString()}/1,000 characters
-              {manualText.length > 1000 ? " — please shorten it before logging" : ""}
-            </p>
-          )}
-        </div>
-      </div>
-
+        {hasConversation && (
+        <div ref={convoScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[20px]">
       {/* Unified conversation: history + current turn in one chat interface */}
-      <div role="log" aria-label="Conversation with Feather" className="space-y-3">
+      <div role="log" aria-label="Conversation with Feather" className="space-y-3 text-left px-1 py-1">
         {conversationHistory.map((m, i) => (
           m.role === "user" ? (
             <UserBubble key={m.id || ("hist-" + i)} text={m.content} />
@@ -871,17 +854,7 @@ const conversationHistory = thread.conversationHistory;
           Logging for {presetDate} (chosen on the calendar). Mention the date, or confirm the date below after parsing.
         </p>
       )}
-      {(agentMode || isOfflineFallback) && (
-        <p role="status" className="text-xs liquid-glass-pill rounded-full inline-block px-3 py-1.5">
-          {isOfflineFallback || agentMode?.mode === "offline"
-            ? "Processed on this device (offline rules)"
-            : "Processed with Live AI (Meta Muse Spark)"}
-          {usedAnchor ? " · Personal calendar anchor used" : ""}
-        </p>
-      )}
-      <p className="text-xs liquid-glass-pill rounded-full inline-block px-3 py-1.5">
-        {allowMatchedCalendar ? "Calendar: matching titles shared with the model" : "Calendar: stays on this device"}
-      </p>
+
       {plannedEventsState.length > 0 && (
         <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/95 shadow-md">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">
@@ -1212,6 +1185,38 @@ const conversationHistory = thread.conversationHistory;
             </div>
           </SystemBubble>
         )}
+      </div>
+
+        </div>
+      )}
+
+      {/* Alternative Natural Text Input */}
+        <div className="max-w-xl mx-auto pt-2 w-full shrink-0">
+          <form onSubmit={handleManualSubmit} className="relative flex items-center w-full">
+            <input
+              ref={textInputRef}
+              type="text"
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+              placeholder="Or type naturally (e.g. 'Period started 2 days before New Year\'s')..."
+              disabled={isProcessing || isRecording}
+              className="w-full liquid-glass-input rounded-full py-2.5 sm:py-3 pl-4 sm:pl-5 pr-22 sm:pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={isProcessing || !manualText.trim()}
+              className="absolute right-1 sm:right-1.5 liquid-glass-button rounded-full px-3.5 sm:px-4 py-1.5 font-sans text-xs font-semibold disabled:opacity-40 cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              Log it →
+            </button>
+          </form>
+          {manualText.length >= 800 && (
+            <p className={`text-[11px] mt-1.5 ${manualText.length > 1000 ? "text-rose-600 font-semibold" : "text-stone-500"}`}>
+              {manualText.length.toLocaleString()}/1,000 characters
+              {manualText.length > 1000 ? " — please shorten it before logging" : ""}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Under The Hood Trace Disclosure */}
