@@ -47,14 +47,14 @@ export function recordSessionApiCall(): number {
  * on transient failures. Defaults preserve the legacy behaviour (10s timeout,
  * 1 retry on 502/503/504 only, no retry on timeout); callers opt into more.
  *
- * Prompt 12: the live agent call is persistent before any offline fallback -
- * up to 3 attempts for network errors, timeouts and 5xx (about 1s then 2s
- * between attempts). 4xx is never retried. The timeout is generous (30s)
- * because successful multi-step generations can take 20s+.
+ * Hotfix (speed): the live agent call waits longer per attempt (45s) but
+ * retries at most ONCE, after 1s, and only on a network failure or a
+ * 502/503. Timeouts, aborts and 504s never retry: a retry cannot fix them
+ * and could double a save. Worst case is ~46s, not ~90s.
  */
-export const AGENT_ATTEMPTS = 3;
-export const AGENT_TIMEOUT_MS = 30000;
-export const AGENT_RETRY_DELAYS_MS = [1000, 2000];
+export const AGENT_ATTEMPTS = 2;
+export const AGENT_TIMEOUT_MS = 45000;
+export const AGENT_RETRY_DELAYS_MS = [1000];
 async function fetchWithTimeoutAndRetry(
   url: string,
   options: RequestInit = {},
@@ -63,6 +63,7 @@ async function fetchWithTimeoutAndRetry(
   retryOptions: {
     retryOnTimeout?: boolean;
     retryOnServerError?: boolean;
+    retryStatuses?: number[];
     backoffMs?: number[];
     onRetry?: (nextAttempt: number, totalAttempts: number) => void;
   } = {},
@@ -83,10 +84,13 @@ async function fetchWithTimeoutAndRetry(
       });
       clearTimeout(timer);
 
-      // Retryable 5xx: legacy 502/503/504 list, or every 5xx when opted in.
-      const serverRetryable = retryOptions.retryOnServerError
-        ? response.status >= 500 && response.status < 600
-        : [502, 503, 504].includes(response.status);
+      // Retryable statuses: an explicit list wins; every 5xx when opted in;
+      // otherwise the legacy 502/503/504 list.
+      const serverRetryable = retryOptions.retryStatuses
+        ? retryOptions.retryStatuses.includes(response.status)
+        : retryOptions.retryOnServerError
+          ? response.status >= 500 && response.status < 600
+          : [502, 503, 504].includes(response.status);
       if (!response.ok && serverRetryable && attempt < retries) {
         attempt++;
         try { retryOptions.onRetry?.(attempt + 1, totalAttempts); } catch {}
@@ -199,7 +203,7 @@ export async function sendAgentMessage(
         conversationHistory,
         provider,
       }),
-    }, attemptTimeoutMs, AGENT_ATTEMPTS - 1, { retryOnTimeout: true, retryOnServerError: true, backoffMs: AGENT_RETRY_DELAYS_MS, onRetry });
+    }, attemptTimeoutMs, AGENT_ATTEMPTS - 1, { retryOnTimeout: false, retryStatuses: [502, 503], backoffMs: AGENT_RETRY_DELAYS_MS, onRetry });
 
     if (res.ok) {
       const data: AgentResult = await res.json();
@@ -227,6 +231,10 @@ export async function sendAgentMessage(
   // Pure on-device deterministic rules fallback
   const today = context?.currentDate || todayLocal();
   const localResult = parseLocally(message, today, { ...context, provider });
+  localResult.activityTrail = [
+    ...(localResult.activityTrail || []),
+    { step: "Retry", detail: "Live AI unreachable after " + AGENT_ATTEMPTS + " attempts; using on-device rules", status: "done" },
+  ];
   return {
     ...localResult,
     isOfflineFallback: true,

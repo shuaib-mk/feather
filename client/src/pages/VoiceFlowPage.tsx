@@ -132,6 +132,14 @@ const agentMode = thread.agentMode;
   });
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  const [processingSecs, setProcessingSecs] = useState(0);
+  useEffect(() => {
+    if (!isProcessing) return;
+    setProcessingSecs(0);
+    const t0 = Date.now();
+    const id = setInterval(() => setProcessingSecs(Math.floor((Date.now() - t0) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [isProcessing]);
   const [pipelineStage, setPipelineStage] = useState<"transcribing" | "thinking" | "preparing">("thinking");
   const [processingSource, setProcessingSource] = useState<"voice" | "text">("voice");
 const transcript = thread.transcript;
@@ -781,7 +789,7 @@ const conversationHistory = thread.conversationHistory;
 
       {/* Agent message outcome (clarifying questions, "didn't understand", unplaced-fact disclosures) */}
       {isProcessing && (
-        <p role="status" className="font-sans text-xs text-stone-500">{retryNotice || (pipelineStage === "transcribing" ? "Transcribing…" : pipelineStage === "preparing" ? "Preparing your log…" : "Thinking...")}</p>
+        <p role="status" className="font-sans text-xs text-stone-500">{((retryNotice || "") + (processingSecs >= 1 ? " (Still working\u2026 " + processingSecs + " s)" : "") || (pipelineStage === "transcribing" ? "Transcribing…" : pipelineStage === "preparing" ? "Preparing your log…" : "Thinking..."))}</p>
       )}
       <AgentMessageCard message={agentMessage} />
 
