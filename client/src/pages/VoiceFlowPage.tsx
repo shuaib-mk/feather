@@ -8,6 +8,7 @@ import { AgentMessageCard } from "../components/AgentMessageCard";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
+import { SEVERE_SYMPTOM_ESCALATION_MESSAGE, SEVERE_FALL_CARE_MESSAGE } from "../../../ai/backend/guardrail";
 import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts } from "../cycleStorage";
 import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
@@ -781,7 +782,23 @@ const conversationHistory = thread.conversationHistory;
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-800 shrink-0">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
-            <span>Safety Guardrail Intercept</span>
+            <span>A note on safety</span>
+          </div>
+          <p className="font-sans text-xs text-amber-950 leading-relaxed">{agentMessage}</p>
+          <span className="font-sans text-[11px] text-amber-800/80 block pt-1">
+            Feather is strictly for cycle date logging and event milestone planning. It does not provide medical advice.
+          </span>
+        </div>
+      )}
+
+      {/* Severe care message (classic red-flag or fall/heavy-bleed tier) */}
+      {agentMessage && (agentMessage.includes(SEVERE_SYMPTOM_ESCALATION_MESSAGE) || agentMessage.includes(SEVERE_FALL_CARE_MESSAGE)) && (
+        <div className="rounded-[22px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 p-5 space-y-2 shadow-xs">
+          <div className="flex items-center gap-2 text-amber-950 font-bold text-sm">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-800 shrink-0">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Please take care</span>
           </div>
           <p className="font-sans text-xs text-amber-950 leading-relaxed">{agentMessage}</p>
           <span className="font-sans text-[11px] text-amber-800/80 block pt-1">
@@ -794,7 +811,9 @@ const conversationHistory = thread.conversationHistory;
       {isProcessing && (
         <p role="status" className="font-sans text-xs text-stone-500">{((retryNotice || "") + (processingSecs >= 1 ? " (Still working\u2026 " + processingSecs + " s)" : "") || (pipelineStage === "transcribing" ? "Transcribing…" : pipelineStage === "preparing" ? "Preparing your log…" : "Thinking..."))}</p>
       )}
-      <AgentMessageCard message={agentMessage} />
+      {!(agentMessage && (agentMessage.includes(SEVERE_SYMPTOM_ESCALATION_MESSAGE) || agentMessage.includes(SEVERE_FALL_CARE_MESSAGE))) && (
+        <AgentMessageCard message={agentMessage} />
+      )}
 
       {/* Plan Overlap Alerts */}
       {planOverlaps && planOverlaps.length > 0 && (
