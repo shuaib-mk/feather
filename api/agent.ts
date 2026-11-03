@@ -2630,15 +2630,19 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
   const MODEL_CALL_TIMEOUT_MS = 4e4;
   const OVERALL_MODEL_BUDGET_MS = 5e4;
   const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
-  const modelTimedOut = () => ({
-    message: "The AI took too long, please try again",
-    entry: null,
-    needsClarification: false,
-    activityTrail,
-    toolCalls: toolCallsRecorded,
-    mode: "offline",
-    modeReason: "Meta model call timed out (overall 50s budget)"
-  });
+  let modelCallMsTotal = 0;
+  const modelTimedOut = () => {
+    activityTrail.push({ step: "Total Model Time", detail: modelCallMsTotal + " ms", status: "done" });
+    return {
+      message: "The AI took too long, please try again",
+      entry: null,
+      needsClarification: false,
+      activityTrail,
+      toolCalls: toolCallsRecorded,
+      mode: "offline",
+      modeReason: "Meta model call timed out (overall 50s budget)"
+    };
+  };
   const MAX_STEPS = 5;
   let stepCount = 0;
   try {
@@ -2646,6 +2650,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       stepCount++;
       const remainingMs = modelDeadline - Date.now();
       if (remainingMs <= 0) return modelTimedOut();
+      const modelCallStart = Date.now();
       const callController = new AbortController();
       const callTimer = setTimeout(() => callController.abort(), Math.min(MODEL_CALL_TIMEOUT_MS, remainingMs));
       let res;
@@ -2672,6 +2677,12 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         throw callErr;
       }
       clearTimeout(callTimer);
+      modelCallMsTotal += Date.now() - modelCallStart;
+      activityTrail.push({
+        step: "Model Call " + stepCount,
+        detail: Date.now() - modelCallStart + " ms",
+        status: "done"
+      });
       if (!res.ok) {
         const errorText = await res.text();
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
@@ -2817,6 +2828,11 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         });
       }
     }
+    activityTrail.push({
+      step: "Total Model Time",
+      detail: modelCallMsTotal + " ms",
+      status: "done"
+    });
     let firstToolError = null;
     for (const c of toolCallsRecorded) {
       const e = c.result?.error;

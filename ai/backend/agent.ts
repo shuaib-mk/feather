@@ -828,15 +828,19 @@ export async function runLavenderAgent(
   const MODEL_CALL_TIMEOUT_MS = 40000;
   const OVERALL_MODEL_BUDGET_MS = 50000;
   const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
-  const modelTimedOut = (): AgentResult => ({
-    message: "The AI took too long, please try again",
-    entry: null,
-    needsClarification: false,
-    activityTrail,
-    toolCalls: toolCallsRecorded,
-    mode: "offline",
-    modeReason: "Meta model call timed out (overall 50s budget)",
-  });
+  let modelCallMsTotal = 0;
+  const modelTimedOut = (): AgentResult => {
+    activityTrail.push({ step: "Total Model Time", detail: modelCallMsTotal + " ms", status: "done" });
+    return {
+      message: "The AI took too long, please try again",
+      entry: null,
+      needsClarification: false,
+      activityTrail,
+      toolCalls: toolCallsRecorded,
+      mode: "offline",
+      modeReason: "Meta model call timed out (overall 50s budget)",
+    };
+  };
   const MAX_STEPS = 5;
   let stepCount = 0;
 
@@ -847,6 +851,7 @@ export async function runLavenderAgent(
       // Overall budget: stop starting new model calls once 50s are spent.
       const remainingMs = modelDeadline - Date.now();
       if (remainingMs <= 0) return modelTimedOut();
+      const modelCallStart = Date.now();
       const callController = new AbortController();
       const callTimer = setTimeout(() => callController.abort(), Math.min(MODEL_CALL_TIMEOUT_MS, remainingMs));
       let res: Response;
@@ -873,6 +878,12 @@ export async function runLavenderAgent(
         throw callErr;
       }
       clearTimeout(callTimer);
+      modelCallMsTotal += Date.now() - modelCallStart;
+      activityTrail.push({
+        step: "Model Call " + stepCount,
+        detail: (Date.now() - modelCallStart) + " ms",
+        status: "done",
+      });
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -1016,6 +1027,12 @@ export async function runLavenderAgent(
         });
       }
     }
+
+    activityTrail.push({
+      step: "Total Model Time",
+      detail: modelCallMsTotal + " ms",
+      status: "done",
+    });
 
     // Success claims must come from tool results. If a tool call errored and
     // no valid entry or event exists, replace the model prose instead of
