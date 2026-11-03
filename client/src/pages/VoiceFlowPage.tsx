@@ -200,10 +200,13 @@ const conversationHistory = thread.conversationHistory;
 
   // Prompt 12 (Group B): pre-warm the API path when Voice opens so the first
   // real call does not pay setup cost. OPTIONS is cheap and never counted.
+  // Hotfix (speed): one tiny GET to /api/health warms the serverless pool for
+  // the first real request. Fire and forget: never blocks the UI, never errors.
   useEffect(() => {
     try {
       fetch("/api/agent", { method: "OPTIONS" }).catch(() => {});
       fetch("/api/transcribe", { method: "OPTIONS" }).catch(() => {});
+      fetch("/api/health").catch(() => {});
     } catch {}
   }, []);
 
