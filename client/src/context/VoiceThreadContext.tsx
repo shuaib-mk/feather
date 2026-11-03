@@ -13,7 +13,7 @@ export interface VoiceThreadState {
   planOverlaps: any[] | null;
   agentMode: any;
   isOfflineFallback: boolean;
-  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string; id?: string }>;
 }
 
 export const EMPTY_VOICE_THREAD: VoiceThreadState = {

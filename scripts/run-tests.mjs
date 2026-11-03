@@ -49,6 +49,7 @@ const suites = [
   ["p12_retry", ["npx", "tsx", "ai/test/p12_retry.test.ts"]],
   ["hotfix_speed_blocks", ["npx", "tsx", "ai/test/hotfix_speed_blocks.test.ts"]],
   ["dynamic_intent", ["npx", "tsx", "ai/test/dynamic_intent.test.ts"]],
+  ["e2e_lifecycle", ["npx", "tsx", "ai/test/e2e_lifecycle.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

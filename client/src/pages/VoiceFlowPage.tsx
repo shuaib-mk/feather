@@ -6,6 +6,7 @@ import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
 import { AgentMessageCard } from "../components/AgentMessageCard";
 import { UserBubble, FeatherTurn, SystemBubble } from "../components/ConversationThread";
+import { appendTurn, makeTurnId, resolveShownMessage } from "../lib/conversation";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
@@ -173,6 +174,8 @@ const isOfflineFallback = thread.isOfflineFallback;
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
   const correctionSaveRef = useRef(false);
+  const pipelineActiveRef = useRef(false);
+  const processedAudioRef = useRef<Blob | null>(null);
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
@@ -212,9 +215,14 @@ const conversationHistory = thread.conversationHistory;
     } catch {}
   }, []);
 
-  // Auto-process captured audio blob
+  // Auto-process captured audio blob exactly once per recording (StrictMode-safe).
   useEffect(() => {
-    if (audioBlob && !isRecording) {
+    if (!audioBlob) {
+      processedAudioRef.current = null;
+      return;
+    }
+    if (!isRecording && processedAudioRef.current !== audioBlob) {
+      processedAudioRef.current = audioBlob;
       handleAudioCaptured(audioBlob);
     }
   }, [audioBlob, isRecording]);
@@ -255,6 +263,9 @@ const conversationHistory = thread.conversationHistory;
       setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries");
       return;
     }
+    // In-flight guard: rapid double-submits share one lifecycle, never two.
+    if (pipelineActiveRef.current) return;
+    pipelineActiveRef.current = true;
     setProcessingSource(source);
     setIsProcessing(true);
     setTranscript(promptText);
@@ -352,7 +363,9 @@ const conversationHistory = thread.conversationHistory;
         (attempt, total) => setRetryNotice("Reaching the AI… trying again (attempt " + attempt + " of " + total + ")"),
       );
 
-      setAgentMessage(res.message);
+      const hasSlip = !!res.entry || !!((res as any).entries && (res as any).entries.length > 0) || !!((res as any).plannedEvents && (res as any).plannedEvents.length > 0) || !!(res.planOverlaps && res.planOverlaps.length > 0);
+      const shownMessage = resolveShownMessage(res.message, hasSlip, !!res.needsClarification);
+      setAgentMessage(shownMessage);
       markVoiceTiming("agentDone");
       setActivityTrail(res.activityTrail || []);
       if (res.toolCalls && res.toolCalls.length > 0) {
@@ -409,12 +422,9 @@ const conversationHistory = thread.conversationHistory;
         setPlanOverlaps(null);
       }
 
-      if (!res.message.includes("talk to a doctor")) {
-        setConversationHistory((prev) => [
-          ...prev,
-          { role: "user", content: promptText },
-          { role: "assistant", content: res.message },
-        ]);
+      if (!shownMessage.includes("talk to a doctor")) {
+        const turnId = makeTurnId();
+        setConversationHistory((prev) => appendTurn(prev, { role: "user", content: promptText, id: turnId + "-u" }, { role: "assistant", content: shownMessage, id: turnId + "-a" }));
       }
     } catch (err: any) {
       console.error("Agent error:", err);
@@ -422,12 +432,13 @@ const conversationHistory = thread.conversationHistory;
     } finally {
       setIsProcessing(false);
       setRetryNotice(null);
+      pipelineActiveRef.current = false;
     }
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualText.trim()) return;
+    if (!manualText.trim() || isProcessing) return;
     if (manualText.trim().length > 1000) {
       setAgentMessage("Please keep it under 1,000 characters — try splitting it into two entries");
       return;
@@ -759,9 +770,9 @@ const conversationHistory = thread.conversationHistory;
       <div role="log" aria-label="Conversation with Feather" className="space-y-3">
         {conversationHistory.map((m, i) => (
           m.role === "user" ? (
-            <UserBubble key={"hist-" + i} text={m.content} />
+            <UserBubble key={m.id || ("hist-" + i)} text={m.content} />
           ) : (
-            <FeatherTurn key={"hist-" + i}>
+            <FeatherTurn key={m.id || ("hist-" + i)}>
               <p className="font-sans text-sm text-stone-800 leading-relaxed break-words">{m.content}</p>
             </FeatherTurn>
           )
