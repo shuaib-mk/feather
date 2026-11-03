@@ -143,7 +143,7 @@ async function main() {
   }
   {
     const r: any = parseLocally("Log for August 31", TODAY, {});
-    check("nlu: bare log-for-date asks specifically (never blank, never invents)", r.entry == null && r.needsClarification === true && /2026-08-31|2027-08-31/.test(r.message), r.message);
+    check("nlu: bare log-for-date prepares most-recent-past slip", !!r.entry && r.entry.date === "2026-08-31" && r.entry.kind === "period_started" && r.needsClarification === false && /2026-08-31/.test(r.message), r.message);
   }
   {
     const r: any = parseLocally("My cycle started two days before Onam.", TODAY, {});
@@ -229,3 +229,4 @@ async function main() {
   if (failed > 0) process.exit(1);
 }
 main();
+

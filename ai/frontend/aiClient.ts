@@ -207,6 +207,10 @@ export async function sendAgentMessage(
 
     if (res.ok) {
       const data: AgentResult = await res.json();
+      const hasSlip = !!((data as any).entry) || !!((data as any).entries && (data as any).entries.length) || !!((data as any).plannedEvents && (data as any).plannedEvents.length) || !!((data as any).planOverlaps && (data as any).planOverlaps.length)
+      const blankLive = !(data.message || '').trim() && !hasSlip && !(data as any).needsClarification
+      if (blankLive) { const today = context && context.currentDate ? context.currentDate : todayLocal(); const fb = parseLocally(message, today, { ...context, provider }); fb.activityTrail = [...(fb.activityTrail || []), { step: 'Empty Live Reply', detail: 'Live API returned no usable reply, offline parser used', status: 'done' }]; return { ...fb, isOfflineFallback: true } }
+
       return { ...data, isOfflineFallback: false };
     }
 

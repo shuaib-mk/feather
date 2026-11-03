@@ -874,6 +874,7 @@ export async function runLavenderAgent(
   };
   const MAX_STEPS = 5;
   let stepCount = 0;
+  activityTrail.push({ step: 'Model Invoke', detail: 'model ' + model + ', history ' + conversationHistory.length + ' turns', status: 'done' });
 
   try {
     while (stepCount < MAX_STEPS) {
@@ -1226,6 +1227,14 @@ export async function runLavenderAgent(
         : `${severeMsg} ${cleanTail}`;
     }
 
+    // Production repair (log-for-date blank reply): an empty live reply with nothing validated
+    // must not return blank (frontend shows a generic fallback). Reuse the already-computed
+    // offline fallback so the user gets a specific question or slip, never empty text.
+    if (!finalMessage.trim() && !structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && !needsClarification) {
+      activityTrail.push({ step: 'Empty Live Reply', detail: 'Meta model returned no usable reply, offline parser used', status: 'done' })
+      return { ...fallbackResult, mode: 'offline', modeReason: 'Meta model returned no usable reply, offline parser used' }
+    }
+
     return ensureFactCoverageDisclosure({
       message: finalMessage,
       entry: collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
@@ -1454,6 +1463,7 @@ function resolveBackfillDate(seg: string, today: string): { date?: string; futur
 // A segment naming a month with no day ("in September") cannot be saved;
 // it becomes a clarifying question instead.
 function backfillBareMonth(seg: string): string | null {
+  if (/\d/.test(seg)) return null;
   let c = " " + seg.toLowerCase() + " ";
   c = c.replace(/\b(i|we|my|our|the|last|this|had|have|has|got|periods|period|started|starts|began|came|were|was|on|in|for|and|then|also)\b/g, " ");
   c = c.replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
@@ -1614,6 +1624,7 @@ const CONVERSATION_PATTERNS = [
   /\bwhat can you do\b/i,
   /\bwhat do you do\b/i,
   /^\s*help\s*[?!.,]*\s*$/i,
+  /^\s*(hi+|hello+|hey+|hiya+)\b[?!.,]*\s*$/i,
   /\bhelp me\b/i,
   /\bhelp me understand\b/i,
   /\bthank(s| you| you so much| you very much)\b/i,
@@ -2140,7 +2151,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       // else: dated visit note falls through to daily-note logging below.
     }
   }
-  const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0
+  const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0 && !logDatePeriodStart
     ? `Did you mean ${passedPlanCandidates[0].thisYear} (already passed) or ${passedPlanCandidates[0].nextYear}?`
     : null;
   if (planPassedQuestion && !hasLogContent) {
@@ -2173,7 +2184,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   // log: strip them so e.g. "dinner on Nov 3 and I have cramps" logs cramps for
   // today instead of asking a stale-date question about the dinner date.
   let logDateText = text;
-  if (planDateSpans.length > 0) {
+  if (planDateSpans.length > 0 && !logDatePeriodStart) {
     for (const span of [...planDateSpans].sort((a, b) => b.index - a.index)) {
       logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
     }
@@ -2369,3 +2380,5 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (medicalTail) message += medicalTail;
   return withIntent({ message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
 }
+
+

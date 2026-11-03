@@ -50,6 +50,9 @@ const suites = [
   ["hotfix_speed_blocks", ["npx", "tsx", "ai/test/hotfix_speed_blocks.test.ts"]],
   ["dynamic_intent", ["npx", "tsx", "ai/test/dynamic_intent.test.ts"]],
   ["e2e_lifecycle", ["npx", "tsx", "ai/test/e2e_lifecycle.test.ts"]],
+  ["e2e_exact", ["npx", "tsx", "ai/test/e2e_exact.test.ts"]],
+  ["arch_primary", ["npx", "tsx", "ai/test/arch_primary.test.ts"]],
+  ["arch_refine", ["npx", "tsx", "ai/test/arch_refine.test.ts"]],
   ["conversation", ["npx", "tsx", "ai/test/conversation.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
@@ -67,3 +70,6 @@ if (failed.length) {
   process.exit(1);
 }
 console.log("TEST CHAIN PASSED: all " + suites.length + " suites green.");
+
+
+

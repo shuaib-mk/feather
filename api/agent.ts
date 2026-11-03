@@ -2702,6 +2702,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
   };
   const MAX_STEPS = 5;
   let stepCount = 0;
+  activityTrail.push({ step: "Model Invoke", detail: "model " + model + ", history " + conversationHistory.length + " turns", status: "done" });
   try {
     while (stepCount < MAX_STEPS) {
       stepCount++;
@@ -3032,6 +3033,10 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       const cleanTail = !finalMessage.trim() || finalMessage.includes("talk to a doctor") ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.` : finalMessage.trim();
       finalMessage = cleanTail.startsWith(severeMsg) ? cleanTail : `${severeMsg} ${cleanTail}`;
     }
+    if (!finalMessage.trim() && !structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && !needsClarification) {
+      activityTrail.push({ step: "Empty Live Reply", detail: "Meta model returned no usable reply, offline parser used", status: "done" });
+      return { ...fallbackResult, mode: "offline", modeReason: "Meta model returned no usable reply, offline parser used" };
+    }
     return ensureFactCoverageDisclosure({
       message: finalMessage,
       entry: collectBackfillEntries && structuredEntries.length > 0 ? structuredEntries[0] : structuredEntry,
@@ -3275,6 +3280,7 @@ function resolveBackfillDate(seg, today) {
   return { none: true };
 }
 function backfillBareMonth(seg) {
+  if (/\d/.test(seg)) return null;
   let c = " " + seg.toLowerCase() + " ";
   c = c.replace(/\b(i|we|my|our|the|last|this|had|have|has|got|periods|period|started|starts|began|came|were|was|on|in|for|and|then|also)\b/g, " ");
   c = c.replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
@@ -3400,6 +3406,7 @@ var CONVERSATION_PATTERNS = [
   /\bwhat can you do\b/i,
   /\bwhat do you do\b/i,
   /^\s*help\s*[?!.,]*\s*$/i,
+  /^\s*(hi+|hello+|hey+|hiya+)\b[?!.,]*\s*$/i,
   /\bhelp me\b/i,
   /\bhelp me understand\b/i,
   /\bthank(s| you| you so much| you very much)\b/i,
@@ -3890,7 +3897,7 @@ function parseLocally(text, today, context) {
       }
     }
   }
-  const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0 ? `Did you mean ${passedPlanCandidates[0].thisYear} (already passed) or ${passedPlanCandidates[0].nextYear}?` : null;
+  const planPassedQuestion = passedPlanCandidates.length > 0 && eventMatches.length === 0 && !logDatePeriodStart ? `Did you mean ${passedPlanCandidates[0].thisYear} (already passed) or ${passedPlanCandidates[0].nextYear}?` : null;
   if (planPassedQuestion && !hasLogContent) {
     return { message: planPassedQuestion, entry: null, needsClarification: true, clarificationQuestion: planPassedQuestion, activityTrail, toolCalls, planOverlaps, ...offline };
   }
@@ -3909,7 +3916,7 @@ function parseLocally(text, today, context) {
     }
   }
   let logDateText = text;
-  if (planDateSpans.length > 0) {
+  if (planDateSpans.length > 0 && !logDatePeriodStart) {
     for (const span of [...planDateSpans].sort((a, b) => b.index - a.index)) {
       logDateText = logDateText.slice(0, span.index) + " " + logDateText.slice(span.index + span.length);
     }
