@@ -56,3 +56,16 @@ export function resolveShownMessage(
   if (hasSlip || needsClarification) return message as string;
   return "I didn't get a clear answer \u2014 please try again or type it.";
 }
+
+/** Archive decision: history holds past turns only; the live turn renders from
+ *  state. Archive when a complete previous exchange exists and was not archived.
+ *  Pure so the no-duplicate lifecycle is unit-testable. */
+export function shouldArchiveTurn(
+  transcript: string,
+  agentMessage: string,
+  archived: { t: string; m: string } | null,
+): boolean {
+  if (!transcript.trim() || !agentMessage.trim()) return false;
+  if (!archived) return true;
+  return archived.t !== transcript || archived.m !== agentMessage;
+}

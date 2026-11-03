@@ -5,8 +5,8 @@ import { useCycle } from "../context/CycleContext";
 import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
 import { AgentMessageCard } from "../components/AgentMessageCard";
-import { UserBubble, FeatherTurn, SystemBubble } from "../components/ConversationThread";
-import { appendTurn, makeTurnId, resolveShownMessage } from "../lib/conversation";
+import { UserBubble, FeatherTurn, FeatherBubble, SystemBubble } from "../components/ConversationThread";
+import { appendTurn, makeTurnId, resolveShownMessage, shouldArchiveTurn } from "../lib/conversation";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
@@ -176,6 +176,7 @@ const isOfflineFallback = thread.isOfflineFallback;
   const correctionSaveRef = useRef(false);
   const pipelineActiveRef = useRef(false);
   const processedAudioRef = useRef<Blob | null>(null);
+  const archivedPairRef = useRef<{ t: string; m: string } | null>(null);
   const [longPeriodWarning, setLongPeriodWarning] = useState<string | null>(null);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
   const [savedLink, setSavedLink] = useState<{ to: string; label: string }>({ to: "/chronicle", label: "View in Chronicle" });
@@ -266,6 +267,16 @@ const conversationHistory = thread.conversationHistory;
     // In-flight guard: rapid double-submits share one lifecycle, never two.
     if (pipelineActiveRef.current) return;
     pipelineActiveRef.current = true;
+    // Archive the previous exchange first: history holds past turns only, the
+    // live turn renders from state, so no message ever renders twice. Refusal
+    // cards stay out of history, exactly as before.
+    if (shouldArchiveTurn(transcript, agentMessage, archivedPairRef.current) && !agentMessage.includes("talk to a doctor")) {
+      const archiveId = makeTurnId();
+      const prevTranscript = transcript;
+      const prevMessage = agentMessage;
+      setConversationHistory((prevHist) => appendTurn(prevHist, { role: "user", content: prevTranscript, id: archiveId + "-u" }, { role: "assistant", content: prevMessage, id: archiveId + "-a" }));
+      archivedPairRef.current = { t: prevTranscript, m: prevMessage };
+    }
     setProcessingSource(source);
     setIsProcessing(true);
     setTranscript(promptText);
@@ -422,10 +433,8 @@ const conversationHistory = thread.conversationHistory;
         setPlanOverlaps(null);
       }
 
-      if (!shownMessage.includes("talk to a doctor")) {
-        const turnId = makeTurnId();
-        setConversationHistory((prev) => appendTurn(prev, { role: "user", content: promptText, id: turnId + "-u" }, { role: "assistant", content: shownMessage, id: turnId + "-a" }));
-      }
+      // (History archiving moved to pipeline start so the live turn is the
+      // single source of truth; see the archive block above.)
     } catch (err: any) {
       console.error("Agent error:", err);
       setAgentMessage(err.message || "Could not process request.");
@@ -549,6 +558,7 @@ const conversationHistory = thread.conversationHistory;
   };
 
   const handleDiscard = () => {
+    archivedPairRef.current = null;
     clearThread();
     setLongPeriodWarning(null);
     setConfirmEntry(null);
@@ -772,9 +782,7 @@ const conversationHistory = thread.conversationHistory;
           m.role === "user" ? (
             <UserBubble key={m.id || ("hist-" + i)} text={m.content} />
           ) : (
-            <FeatherTurn key={m.id || ("hist-" + i)}>
-              <p className="font-sans text-sm text-stone-800 leading-relaxed break-words">{m.content}</p>
-            </FeatherTurn>
+            <FeatherBubble key={m.id || ("hist-" + i)} text={m.content} />
           )
         ))}
         {transcript && <UserBubble text={transcript} />}
