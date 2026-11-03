@@ -201,6 +201,45 @@ var SEVERE_SYMPTOM_PATTERNS = [
   // Malayalam: thalakarakkam (dizzy), mayakkam (faint), nenjuvedana (chest pain).
   /\b(?:thalakarakkam|thalakarakam|mayakkam|nenjuvedana|nenjuv\s+vedana)\b/i
 ];
+var SEVERE_FALL_CARE_MESSAGE = "I'm sorry that happened. If you fell, feel faint, or the bleeding is very heavy, please get help now from a trusted adult or a doctor, or call your local emergency number (112 in India). I can't give medical advice, but I can log this for you.";
+var FALL_STANDALONE_PATTERNS = [
+  /\bfell\s+down\b/i,
+  /\bcollapsed\b/i,
+  /\bblacked\s*out\b/i,
+  /\bgir\s+ga(?:ya|yi|ye)\b/i
+];
+var FALL_OR_BLEED_PATTERNS = [
+  /\bfell\s+down\b/i,
+  /\bfell\s+on\s+the\s+(?:ground|floor)\b/i,
+  /\bfell\s+and\b/i,
+  /\bcollapsed\b/i,
+  /\bblacked\s*out\b/i,
+  /\bcan(?:'?t|\s+not)\s+stand\b/i,
+  /\ba\s+lot\s+of\s+blood\b/i,
+  /\bso\s+much\s+blood\b/i,
+  /\bbleeding\s+a\s+lot\b/i,
+  /\bbahut\s+(?:khoon|blood|bleeding)\b/i,
+  /\bgir\s+ga(?:ya|yi|ye)\b/i
+];
+var FALL_PAIN_OR_DISTRESS_PATTERNS = [
+  /\bpain(?:ful)?\b/i,
+  /\bhurt(?:s|ing)?\b/i,
+  /\bcramps?\b/i,
+  /\bso\s+painful\b/i,
+  /\bi\s+(?:do\s+not|don'?t)\s+know\s+what\s+to\s+do\b/i,
+  /\bscared\b/i,
+  /\bafraid\b/i,
+  /\bplease\s+help\b/i,
+  /\bfaint\b/i,
+  /\bdizzy\b/i
+];
+function checkFallSevereInput(input) {
+  const t = input.trim();
+  if (!t) return false;
+  if (FALL_STANDALONE_PATTERNS.some((p) => p.test(t))) return true;
+  if (!FALL_OR_BLEED_PATTERNS.some((p) => p.test(t))) return false;
+  return FALL_PAIN_OR_DISTRESS_PATTERNS.some((p) => p.test(t));
+}
 function checkSevereSymptomEscalation(input) {
   const normalized = input.trim();
   if (!normalized) {
@@ -1881,7 +1920,7 @@ var en = {
     appetite_change: ["appetite change", "increased appetite", "no appetite"]
   },
   flow: {
-    heavy: ["heavy flow", "heavy bleeding", "heavy"],
+    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot"],
     medium: ["medium flow", "moderate flow", "normal flow", "medium"],
     light: ["light flow", "light bleeding", "light"],
     spotting: ["spotting"],
@@ -1897,7 +1936,7 @@ var en = {
     Calm: ["calm"],
     Emotional: ["emotional"]
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"]
 };
@@ -2492,11 +2531,19 @@ function ensureFactCoverageDisclosure(result, userPrompt, today) {
   }
   return message === result.message ? result : { ...result, message };
 }
+function severeTier(text) {
+  const classic = checkSevereSymptomEscalation(text);
+  if (classic.isSevere) return { isSevere: true, message: classic.escalationMessage };
+  if (checkFallSevereInput(text)) return { isSevere: true, message: SEVERE_FALL_CARE_MESSAGE };
+  return { isSevere: false, message: null };
+}
 async function runLavenderAgent(userPrompt, context = {}, conversationHistory = []) {
   const startTime = Date.now();
   const activityTrail = [];
   const toolCallsRecorded = [];
-  const guardrailCheck = checkMedicalAdviceGuardrail(userPrompt);
+  const severeLive = severeTier(userPrompt);
+  const severeWinsLive = severeLive.isSevere && hasClearLogStatement(userPrompt);
+  const guardrailCheck = severeWinsLive ? { isRefusal: false, refusalMessage: null } : checkMedicalAdviceGuardrail(userPrompt);
   if (guardrailCheck.isRefusal) {
     activityTrail.push({
       step: "Safety Guardrail",
@@ -2515,7 +2562,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     };
   }
   const today = context.currentDate || todayLocal();
-  const severeCheck = checkSevereSymptomEscalation(userPrompt);
+  const severeCheck = severeLive;
   if (severeCheck.isSevere) {
     activityTrail.push({
       step: "Safety Escalation",
@@ -2881,8 +2928,9 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         structuredEntry = fallbackResult.entry;
         if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
       }
+      const severeMsg = severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE;
       const cleanTail = !finalMessage.trim() || finalMessage.includes("talk to a doctor") ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.` : finalMessage.trim();
-      finalMessage = cleanTail.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE) ? cleanTail : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
+      finalMessage = cleanTail.startsWith(severeMsg) ? cleanTail : `${severeMsg} ${cleanTail}`;
     }
     return ensureFactCoverageDisclosure({
       message: finalMessage,
@@ -2980,7 +3028,7 @@ function extractWithLexicon(text) {
     if (lex.periodStart.some((ph) => phraseIndex(lower, ph) >= 0)) periodStart = true;
     if (lex.periodEnd.some((ph) => phraseIndex(lower, ph) >= 0)) periodEnd = true;
   }
-  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b/i.test(lower)) periodStart = true;
+  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b|\bhad\s+(?:my\s+)?(?:first\s+)?period\b|\b(?:my\s+)?first\s+period\b|\bgot\s+my\s+first\s+period\b/i.test(lower)) periodStart = true;
   if (/\bperiod\s+(ended|stopped|finished)\b|\bflow stopped\b/i.test(lower)) periodEnd = true;
   return { symptoms, flow, mood, periodStart, periodEnd };
 }
@@ -3206,6 +3254,9 @@ function hasClearLogStatement(text) {
   if (/^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)\b/i.test(t)) return false;
   if (/\b(?:my\s+period|period)\s+(?:started|began|came|ended|stopped|finished)\b/i.test(t)) return true;
   if (/\b(?:started|got)\s+my\s+period\b/i.test(t)) return true;
+  if (/\bhad\s+(?:my\s+)?(?:first\s+)?period\b/i.test(t)) return true;
+  if (/\b(?:my\s+)?first\s+period\b/i.test(t)) return true;
+  if (/\bgot\s+my\s+first\s+period\b/i.test(t)) return true;
   if (/\b(?:heavy|medium|light|spotting|none)\s+flow\b/i.test(t)) return true;
   if (/\bflow\s+(?:was|is)\s+(?:very|really|so|quite|pretty\s+)?(?:heavy|medium|light|spotting|none)\b/i.test(t)) return true;
   if (/\bhad\s+spotting\b/i.test(t)) return true;
@@ -3250,14 +3301,16 @@ function parseLocally(text, today, context) {
   ];
   const toolCalls = [];
   const offline = { mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (offline rule engine)" };
+  const severeLocal = severeTier(text);
+  const severeWinsLocal = severeLocal.isSevere && hasClearLogStatement(text);
   let medicalTail = null;
-  if (checkMedicalAdviceGuardrail(text).isRefusal) {
+  if (!severeWinsLocal && checkMedicalAdviceGuardrail(text).isRefusal) {
     if (!hasClearLogStatement(text)) {
       return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
-  const severeCheck = checkSevereSymptomEscalation(text);
+  const severeCheck = severeLocal;
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected \u2014 care-seeking signpost prepended", status: "done" });
   }
@@ -3676,7 +3729,7 @@ function parseLocally(text, today, context) {
   const resolved = resolveDateExpression(logDateText, today, context.landmarkPacks);
   if (resolved.needsClarification) {
     const dateQ = resolved.clarificationQuestion || "Which date?";
-    const dateQMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
+    const dateQMsg = severeCheck.isSevere ? `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
     return { message: dateQMsg, entry: null, needsClarification: true, clarificationQuestion: dateQ, activityTrail, toolCalls, planOverlaps, ...offline };
   }
   let entryDate = resolved.date;
@@ -3706,7 +3759,7 @@ function parseLocally(text, today, context) {
     else if (hasLogContent && !pastMarkers) entryDate = today;
     else {
       const q = "Which date?";
-      const qMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${q}` : q;
+      const qMsg = severeCheck.isSevere ? `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${q}` : q;
       return { message: qMsg, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
@@ -3831,8 +3884,8 @@ function parseLocally(text, today, context) {
   if (unplacedEvents.length > 0) {
     message += ` I couldn't place a date for: ${unplacedEvents.join(", ")}.`;
   }
-  if (severeCheck.isSevere && !message.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
-    message = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
+  if (severeCheck.isSevere && !message.startsWith(severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
+    message = `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
   if (medicalTail) message += medicalTail;
   return { message, entry, needsClarification: isApproximate && !!landmarkName || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };

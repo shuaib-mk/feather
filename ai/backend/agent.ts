@@ -6,7 +6,7 @@
 // 5. Tool Call Inspection & Observability
 
 import { getConfig } from "./config";
-import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE, getGuardrailResponseMessage, checkModelOutputGuard, REDIRECT_MESSAGES } from "./guardrail";
+import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE, getGuardrailResponseMessage, checkModelOutputGuard, REDIRECT_MESSAGES, checkFallSevereInput, SEVERE_FALL_CARE_MESSAGE } from "./guardrail";
 import { buildOwnDataAnswer } from "./ownDataAnswer";
 import { buildOwnEventsAnswer } from "./eventAnswers";
 
@@ -651,6 +651,14 @@ export function ensureFactCoverageDisclosure<T extends AgentResult>(result: T, u
   return message === result.message ? result : { ...result, message };
 }
 
+/** Hotfix: classic red-flag tier wins; otherwise the fall/heavy-bleed tier. */
+function severeTier(text: string): { isSevere: boolean; message: string | null } {
+  const classic = checkSevereSymptomEscalation(text);
+  if (classic.isSevere) return { isSevere: true, message: classic.escalationMessage };
+  if (checkFallSevereInput(text)) return { isSevere: true, message: SEVERE_FALL_CARE_MESSAGE };
+  return { isSevere: false, message: null };
+}
+
 export async function runLavenderAgent(
   userPrompt: string,
   context: AgentContext = {},
@@ -660,8 +668,16 @@ export async function runLavenderAgent(
   const activityTrail: ActivityStep[] = [];
   const toolCallsRecorded: ToolCallRecord[] = [];
 
+  // Hotfix: severe input is evaluated BEFORE the refusal rules. It wins when the
+  // message also states something loggable (period started/ended, flow or
+  // symptoms as fact); a pure medical question with no log statement keeps the
+  // frozen refusal (Q5/Q3), even if it names a severe symptom.
+  const severeLive = severeTier(userPrompt);
+  const severeWinsLive = severeLive.isSevere && hasClearLogStatement(userPrompt);
   // Step 1: Pre-execution Server-Side Medical Guardrail Check
-  const guardrailCheck = checkMedicalAdviceGuardrail(userPrompt);
+  const guardrailCheck = severeWinsLive
+    ? { isRefusal: false as const, refusalMessage: null as string | null }
+    : checkMedicalAdviceGuardrail(userPrompt);
   if (guardrailCheck.isRefusal) {
     activityTrail.push({
       step: "Safety Guardrail",
@@ -681,7 +697,7 @@ export async function runLavenderAgent(
   }
 
   const today = context.currentDate || todayLocal();
-  const severeCheck = checkSevereSymptomEscalation(userPrompt);
+  const severeCheck = severeLive;
   if (severeCheck.isSevere) {
     activityTrail.push({
       step: "Safety Escalation",
@@ -1097,13 +1113,14 @@ export async function runLavenderAgent(
         structuredEntry = fallbackResult.entry;
         if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
       }
+      const severeMsg = severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE;
       const cleanTail =
         !finalMessage.trim() || finalMessage.includes("talk to a doctor")
           ? `I've prepared your log for ${structuredEntry?.date || today}. Please review and confirm below.`
           : finalMessage.trim();
-      finalMessage = cleanTail.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)
+      finalMessage = cleanTail.startsWith(severeMsg)
         ? cleanTail
-        : `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${cleanTail}`;
+        : `${severeMsg} ${cleanTail}`;
     }
 
     return ensureFactCoverageDisclosure({
@@ -1189,7 +1206,7 @@ export function extractWithLexicon(text: string): LexiconExtraction {
     if (lex.periodStart.some((ph)=>phraseIndex(lower,ph)>=0)) periodStart=true;
     if (lex.periodEnd.some((ph)=>phraseIndex(lower,ph)>=0)) periodEnd=true;
   }
-  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b/i.test(lower)) periodStart=true;
+  if (/\bperiod\s+(started|began|came)\b|\bstarted my period\b|\bgot my period\b|\bhad\s+(?:my\s+)?(?:first\s+)?period\b|\b(?:my\s+)?first\s+period\b|\bgot\s+my\s+first\s+period\b/i.test(lower)) periodStart=true;
   if (/\bperiod\s+(ended|stopped|finished)\b|\bflow stopped\b/i.test(lower)) periodEnd=true;
   return { symptoms, flow, mood, periodStart, periodEnd };
 }
@@ -1431,6 +1448,9 @@ function hasClearLogStatement(text: string): boolean {
   // Declarative period start/end ("my period started yesterday").
   if (/\b(?:my\s+period|period)\s+(?:started|began|came|ended|stopped|finished)\b/i.test(t)) return true;
   if (/\b(?:started|got)\s+my\s+period\b/i.test(t)) return true;
+  if (/\bhad\s+(?:my\s+)?(?:first\s+)?period\b/i.test(t)) return true;
+  if (/\b(?:my\s+)?first\s+period\b/i.test(t)) return true;
+  if (/\bgot\s+my\s+first\s+period\b/i.test(t)) return true;
   // Flow with a stated level, as fact ("heavy flow", "flow was heavy").
   if (/\b(?:heavy|medium|light|spotting|none)\s+flow\b/i.test(t)) return true;
   if (/\bflow\s+(?:was|is)\s+(?:very|really|so|quite|pretty\s+)?(?:heavy|medium|light|spotting|none)\b/i.test(t)) return true;
@@ -1487,14 +1507,16 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const toolCalls: ToolCallRecord[] = [];
   const offline = { mode: "offline" as const, modeReason: "Offline parser — Meta model not used (offline rule engine)" };
 
+  const severeLocal = severeTier(text);
+  const severeWinsLocal = severeLocal.isSevere && hasClearLogStatement(text);
   let medicalTail: string | null = null;
-  if (checkMedicalAdviceGuardrail(text).isRefusal) {
+  if (!severeWinsLocal && checkMedicalAdviceGuardrail(text).isRefusal) {
     if (!hasClearLogStatement(text)) {
           return { message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline };
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
-  const severeCheck = checkSevereSymptomEscalation(text);
+  const severeCheck = severeLocal;
   if (severeCheck.isSevere) {
     activityTrail.push({ step: "Safety Escalation", detail: "Red-flag symptom detected — care-seeking signpost prepended", status: "done" });
   }
@@ -1949,7 +1971,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   const resolved = resolveDateExpression(logDateText, today, context.landmarkPacks);
   if (resolved.needsClarification) {
     const dateQ = resolved.clarificationQuestion || "Which date?";
-    const dateQMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
+    const dateQMsg = severeCheck.isSevere ? `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${dateQ}` : dateQ;
     return { message: dateQMsg, entry: null, needsClarification: true, clarificationQuestion: dateQ, activityTrail, toolCalls, planOverlaps, ...offline };
   }
   let entryDate: string | null = resolved.date;
@@ -1983,7 +2005,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     else if (hasLogContent && !pastMarkers) entryDate = today; // present-tense symptom/flow log
     else {
       const q = "Which date?";
-      const qMsg = severeCheck.isSevere ? `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${q}` : q;
+      const qMsg = severeCheck.isSevere ? `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${q}` : q;
       return { message: qMsg, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
     }
   }
@@ -2118,8 +2140,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   if (unplacedEvents.length > 0) {
     message += ` I couldn't place a date for: ${unplacedEvents.join(", ")}.`;
   }
-  if (severeCheck.isSevere && !message.startsWith(SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
-    message = `${SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
+  if (severeCheck.isSevere && !message.startsWith(severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE)) {
+    message = `${severeCheck.message || SEVERE_SYMPTOM_ESCALATION_MESSAGE} ${message}`;
   }
   if (medicalTail) message += medicalTail;
   return { message, entry, needsClarification: (isApproximate && !!landmarkName) || !!planPassedQuestion, clarificationQuestion: planPassedQuestion ?? (isApproximate && landmarkName ? `Did your period start before, on, or after ${landmarkName}?` : null), activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline };

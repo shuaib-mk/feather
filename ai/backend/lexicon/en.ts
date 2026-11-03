@@ -25,7 +25,7 @@ export const en: LanguageLexicon = {
     appetite_change: ["appetite change", "increased appetite", "no appetite"],
   },
   flow: {
-    heavy: ["heavy flow", "heavy bleeding", "heavy"],
+    heavy: ["heavy flow", "heavy bleeding", "heavy", "a lot of blood", "so much blood", "bleeding a lot"],
     medium: ["medium flow", "moderate flow", "normal flow", "medium"],
     light: ["light flow", "light bleeding", "light"],
     spotting: ["spotting"],
@@ -41,7 +41,7 @@ export const en: LanguageLexicon = {
     Calm: ["calm"],
     Emotional: ["emotional"],
   },
-  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began"],
+  periodStart: ["period started", "period start", "started my period", "my period came", "got my period", "period began", "had my period", "had my first period", "first period", "my first period", "got my first period"],
   periodEnd: ["period ended", "period stopped", "period finished", "flow stopped"],
   negations: ["no", "not", "without", "never"],
 };
