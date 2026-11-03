@@ -1,6 +1,11 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/agent.ts": { "maxDuration": 60 },
+    "api/transcribe.ts": { "maxDuration": 60 },
+    "api/vision.ts": { "maxDuration": 60 }
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",
