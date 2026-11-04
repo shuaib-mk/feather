@@ -55,7 +55,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/voice"
-              className="liquid-glass-button fe-primary rounded-full px-4 py-2 min-h-[40px] font-sans text-xs font-semibold hidden sm:flex items-center gap-2 cursor-pointer"
+              className="liquid-glass-button rounded-full px-4 py-2 min-h-[40px] font-sans text-xs font-semibold hidden sm:flex items-center gap-2 cursor-pointer"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
@@ -98,7 +98,7 @@ export function DashboardPage() {
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               to="/voice"
-              className="liquid-glass-button fe-primary rounded-full px-5 py-2.5 min-h-[44px] font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer"
+              className="liquid-glass-button rounded-full px-5 py-2.5 min-h-[44px] font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Try it by voice</span>
             </Link>

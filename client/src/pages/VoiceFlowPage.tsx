@@ -100,6 +100,14 @@ const COMMON_SYMPTOMS: Array<{ key: ValidSymptom; label: string }> = [
   { key: "breast_tenderness", label: "Tender Breasts" },
 ];
 
+/** After the user confirms, the "please review and confirm" line is out of date. */
+function afterSaveWording(message: string | null | undefined): string | null | undefined {
+  if (!message) return message;
+  return message
+    .replace(/I've prepared your log for ([^.]+)\. Please review and confirm below\./, "Your log for $1 is saved.")
+    .replace(/\s*Please review and confirm below\./, "");
+}
+
 export function VoiceFlowPage() {
   const { data, stats, savePeriod, saveLog, refreshData, isDemoActive } = useCycle();
   const navigate = useNavigate();
@@ -224,11 +232,22 @@ const conversationHistory = thread.conversationHistory;
     } catch {}
   }, []);
 
+  const consoleCardRef = useRef<HTMLDivElement>(null);
   const hasConversation = Boolean(transcript || agentMessage || conversationHistory.length > 0 || confirmEntry || backfillRows || plannedEventsState.length > 0 || (planOverlaps && planOverlaps.length > 0) || isProcessing || savedSuccessMessage);
   useEffect(() => {
     const el = convoScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [transcript, agentMessage, conversationHistory.length, isProcessing, confirmEntry, backfillRows, plannedEventsState.length, planOverlaps]);
+  }, [transcript, agentMessage, conversationHistory.length, isProcessing, confirmEntry, backfillRows, plannedEventsState.length, planOverlaps, savedSuccessMessage]);
+  // On phones the chat card fills the screen once a conversation starts, so the
+  // messages and the text box sit above the bottom navigation instead of under it.
+  useEffect(() => {
+    if (!hasConversation) return;
+    try {
+      if (!window.matchMedia("(max-width: 639px)").matches) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      consoleCardRef.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    } catch {}
+  }, [hasConversation, conversationHistory.length, agentMessage, confirmEntry, savedSuccessMessage]);
 
   // Auto-process captured audio blob exactly once per recording (StrictMode-safe).
   useEffect(() => {
@@ -678,24 +697,24 @@ const conversationHistory = thread.conversationHistory;
       )}
 
       {/* Recording & Input Console */}
-      <div className={"liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative" + (hasConversation ? " flex flex-col overflow-hidden max-h-[calc(100dvh-11rem)] sm:max-h-[calc(100dvh-8rem)]" : "")}>
+      <div ref={consoleCardRef} className={"liquid-glass-card rounded-[26px] text-center border border-white/90 shadow-sm relative" + (hasConversation ? " p-3.5 sm:p-8 space-y-3 sm:space-y-6 flex flex-col overflow-hidden scroll-mt-3 max-h-[calc(100dvh-7.5rem-env(safe-area-inset-bottom,0px))] sm:max-h-[calc(100dvh-8rem)]" : " p-6 sm:p-8 space-y-6")}>
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
-        <div className="flex flex-col items-center justify-center space-y-3 py-2 shrink-0">
+        <div className={"flex items-center justify-center shrink-0 " + (hasConversation ? "flex-row gap-3 sm:flex-col sm:gap-0 sm:space-y-3 sm:py-2" : "flex-col space-y-3 py-2")}>
           <button
             type="button"
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isProcessing}
             aria-label={isRecording ? "Stop recording voice note" : "Start recording voice note"}
-            className={`relative size-20 sm:size-24 rounded-full flex items-center justify-center transition-transform duration-200 cursor-pointer shadow-md ${
+            className={`relative ${hasConversation ? "size-12 sm:size-24" : "size-20 sm:size-24"} shrink-0 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-md ${
               isRecording
                 ? "bg-rose-500/85 text-white scale-105 shadow-rose-300 ring-8 ring-rose-200/60 backdrop-blur-md animate-pulse"
-                : "fe-primary bg-violet-700 text-white hover:scale-105 shadow-lg shadow-violet-300/50"
+                : "liquid-glass-orb hover:scale-105 text-stone-900"
             }`}
           >
             {isRecording ? (
               <div className="size-6 bg-white rounded-md animate-pulse" />
             ) : (
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="32" height="32" className={hasConversation ? "size-5 sm:size-8" : "size-8"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" y1="19" x2="12" y2="22" />
@@ -704,7 +723,7 @@ const conversationHistory = thread.conversationHistory;
           </button>
 
           {/* Recording Timer & Status */}
-          <div className="space-y-1">
+          <div className={"space-y-1" + (hasConversation ? " text-left sm:text-center" : "")}>
             <span className="font-sans text-xs font-semibold text-stone-800 block">
               {isRecording
                 ? `Recording ${durationSeconds}s / 60s`
@@ -753,7 +772,7 @@ const conversationHistory = thread.conversationHistory;
         </div>
         {/* Universal Language Selection Row */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full shrink-0">
-          <span className="text-stone-500 font-sans text-xs font-medium shrink-0">Language</span>
+          <span className={"text-stone-500 font-sans text-xs font-medium shrink-0" + (hasConversation ? " hidden sm:inline" : "")}>Language</span>
           <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
             <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
               {[
@@ -788,7 +807,7 @@ const conversationHistory = thread.conversationHistory;
             </div>
           </div>
         </div>
-        <details className="text-left shrink-0 max-w-xl mx-auto w-full">
+        <details className={"text-left shrink-0 max-w-xl mx-auto w-full" + (hasConversation ? " hidden sm:block" : "")}>
           <summary className="text-[11px] text-stone-500 font-sans cursor-pointer text-center select-none">Languages &amp; offline support</summary>
           <p className="text-[11px] text-stone-500 font-sans pt-2 text-left">
           Voice transcription (Live AI) supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported by Meta. Without the Live AI, typed period-start messages work in English, Hindi (Devanagari or romanized, e.g. "mera period aaj shuru hua"), romanized Bengali and Malayalam; anything more in those languages, and all other languages, needs the Live AI. Recordings are capped at 60 seconds.
@@ -854,7 +873,7 @@ const conversationHistory = thread.conversationHistory;
         <p role="status" className="font-sans text-xs text-stone-500">{((retryNotice || "") + (processingSecs >= 1 ? " (Still working\u2026 " + processingSecs + " s)" : "") || (pipelineStage === "transcribing" ? "Transcribing…" : pipelineStage === "preparing" ? "Preparing your log…" : "Thinking..."))}</p>
       )}
       {!(agentMessage && (agentMessage.includes(SEVERE_SYMPTOM_ESCALATION_MESSAGE) || agentMessage.includes(SEVERE_FALL_CARE_MESSAGE))) && (
-        <AgentMessageCard message={agentMessage} />
+        <AgentMessageCard message={savedSuccessMessage ? afterSaveWording(agentMessage) : agentMessage} />
       )}
 
       {/* Plan Overlap Alerts */}
@@ -1282,7 +1301,7 @@ const conversationHistory = thread.conversationHistory;
               type="text"
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
-              placeholder="Or type naturally (e.g. 'Period started 2 days before New Year\'s')..."
+              placeholder="Or type naturally (e.g. 'Period started 2 days before New Year’s')..."
               disabled={isProcessing || isRecording}
               className="w-full liquid-glass-input rounded-full py-2.5 sm:py-3 pl-4 sm:pl-5 pr-22 sm:pr-24 text-xs font-sans text-stone-900 placeholder:text-stone-400 focus:outline-none"
             />

@@ -1,5 +1,6 @@
 ﻿import React from "react";
 import { agentMessageKind } from "../lib/voiceMessage";
+import { humanizeDates } from "./ConversationThread";
 
 /**
  * The ONE message-outcome rendering path for the Voice page: any non-refusal
@@ -12,7 +13,7 @@ export function AgentMessageCard({ message }: { message?: string | null }) {
   return (
     <div role="status" data-testid="agent-message" className="liquid-glass-card rounded-[22px] p-5 space-y-2 shadow-xs">
       <span className="font-sans text-xs font-semibold text-stone-500 block">Feather</span>
-      <p className="font-sans text-sm text-stone-800 leading-relaxed">{message}</p>
+      <p className="font-sans text-sm text-stone-800 leading-relaxed">{humanizeDates(message)}</p>
     </div>
   );
 }
