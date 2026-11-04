@@ -15,7 +15,7 @@ import { DiaryScannerPage } from "./pages/DiaryScannerPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { unlockApp, lockNow, getLockState, eraseLockAndStartFresh } from "./lib/appLock";
 import { importCycleDataJSON } from "./cycleStorage";
-import { isDemoActive as isDemoModeActive, enterDemoMode } from "./lib/demoMode";
+import { isDemoActive as isDemoModeActive, enterDemoMode, applyDemoUrlParam } from "./lib/demoMode";
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const [lockState] = useState<"open" | "locked" | "error">(() => getLockState());
@@ -23,7 +23,7 @@ function LockGate({ children }: { children: React.ReactNode }) {
   const [confirmErase, setConfirmErase] = useState(false);
   const [restoreMsg, setRestoreMsg] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
-  useEffect(()=>{ if (typeof localStorage!=="undefined" && localStorage.getItem("feather_discreet")==="true") document.title = "Notes"; if (new URLSearchParams(window.location.search).get("demo")==="1" && !isDemoModeActive()) { enterDemoMode(); window.location.search=""; } },[]);
+  useEffect(()=>{ if (typeof localStorage!=="undefined" && localStorage.getItem("feather_discreet")==="true") document.title = "Notes"; if (new URLSearchParams(window.location.search).get("demo")==="1") { const wasActive = isDemoModeActive(); applyDemoUrlParam(window.location.search); if (!wasActive) window.location.search=""; } },[]);
   useEffect(()=>{ if (!localStorage.getItem("feather_app_lock_enabled")) return; let timer:any; const reset=()=>{ const mins=parseInt(localStorage.getItem("feather_autolock_minutes")||"5",10)||5; clearTimeout(timer); timer=setTimeout(()=>{ lockNow().catch(()=>{}); }, mins*60*1000); }; const onHide=()=>{ if(localStorage.getItem("feather_autolock_hidden")==="true") lockNow().catch(()=>{}); }; const onVis=()=>{ if(document.hidden) onHide(); }; window.addEventListener("pointerdown",reset); document.addEventListener("visibilitychange",onVis); window.addEventListener("pagehide",onHide); reset(); return ()=>{ clearTimeout(timer); window.removeEventListener("pointerdown",reset); document.removeEventListener("visibilitychange",onVis); window.removeEventListener("pagehide",onHide); }; },[]);
   const doErase = () => { eraseLockAndStartFresh(); window.location.reload(); };
   const doRestoreFile = async (file: File | undefined) => {

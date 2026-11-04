@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { LiquidGlassFilter } from "./LiquidGlassFilter";
 import { useCycle } from "../context/CycleContext";
-import { isDemoActive as isDemoModeActive } from "../lib/demoMode";
+import { isDemoActive as isDemoModeActive, resetDemoData, isStorageVolatile } from "../lib/demoMode";
 import { useDiscreetMode } from "../lib/discreetMode";
 
 interface AppLayoutProps {
@@ -19,8 +19,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     exportBackup,
     isDemoActive,
     clearDemo,
+    refreshData,
   } = useCycle();
   const { isDiscreet, isQuickHidden, toggleQuickHide } = useDiscreetMode();
+  // Group 14: computed once per mount; a probe write tells us if storage survives a refresh.
+  const [storageVolatile] = React.useState(() => isStorageVolatile());
 
   if (isQuickHidden) {
     return (
@@ -96,11 +99,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </div>
                 <div className="leading-tight">
                   <span className="font-semibold text-stone-900">Demo Mode Active:</span>{" "}
-                  <span className="text-stone-700">Fictional demonstration data. Your real vault is untouched.</span>
+                  <span className="text-stone-700">Fictional demonstration data. Your real vault is untouched. Changes you make here are kept when you refresh.</span>
+                  {storageVolatile && <span className="block text-amber-800 font-medium" data-testid="storage-volatile">This browser isn't keeping data between refreshes (private window or blocked storage), so demo changes will reset when you reload.</span>}
                 </div>
               </div>
 
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => { resetDemoData(); refreshData(); window.dispatchEvent(new CustomEvent("feather_events_changed")); }}
+                  className="liquid-glass-pill rounded-full px-3 py-1.5 font-sans text-xs cursor-pointer"
+                  data-testid="reset-demo"
+                >
+                  Reset demo
+                </button>
                 <button
                   type="button"
                   onClick={clearDemo}

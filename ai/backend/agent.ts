@@ -7,7 +7,7 @@
 
 import { getConfig } from "./config";
 import { checkMedicalAdviceGuardrail, MEDICAL_REFUSAL_MESSAGE, checkSevereSymptomEscalation, SEVERE_SYMPTOM_ESCALATION_MESSAGE, getGuardrailResponseMessage, checkModelOutputGuard, REDIRECT_MESSAGES, checkFallSevereInput, SEVERE_FALL_CARE_MESSAGE } from "./guardrail";
-import { buildOwnDataAnswer } from "./ownDataAnswer";
+import { buildOwnDataAnswer, OVERLAP_DISCLAIMER_TEXT } from "./ownDataAnswer";
 import { buildOwnEventsAnswer } from "./eventAnswers";
 
 import { todayLocal, parseMonthDay, isValidDateKey, addDaysToKey, diffDateKeys } from "../../client/src/lib/localDate";
@@ -18,9 +18,12 @@ import {
   applySlipCorrections,
   applyDayOffset,
   parseRelativeExpression,
+  resolveNextLandmarkOccurrence,
+  landmarkOccurrencesAround,
   type LandmarkPacks,
 } from "./dateArithmetic";
-import { classifyIntent } from "./intent";
+import { MILESTONES_DATA } from "./landmarks";
+import { classifyIntent, isOwnDataQuestion } from "./intent";
 import { en } from "./lexicon/en";
 import { hi } from "./lexicon/hi";
 import { ml } from "./lexicon/ml";
@@ -65,6 +68,10 @@ export interface StructuredEntry {
   dateWindow?: { start: string; end: string } | null;
   /** Stable identifier for this pending action, preserved across corrections. */
   slipId?: string | null;
+  /** Group 4: true only when this slip is an edit of an ALREADY SAVED day entry
+   * (loaded from the vault). Only then may confirming replace the stored day;
+   * every other save merges losslessly. Preserved across further corrections. */
+  editsSavedEntry?: boolean;
 }
 
 export interface ActivityStep {
@@ -107,7 +114,7 @@ export interface AgentContext {
   recentEntries?: StructuredEntry[];
   locale?: string;
   matchedEvents?: Array<{ title: string; date: string }>;
-  events?: Array<{ title: string; date: string; endDate?: string | null }>;
+  events?: Array<{ id?: string; title: string; date: string; endDate?: string | null }>;
   calendarVisible?: boolean;
   defaultDate?: string;
   landmarkPacks?: LandmarkPacks | null;
@@ -155,6 +162,19 @@ export interface AgentResult {
   replacesExisting?: boolean;
   /** True when this turn explicitly discarded a pending draft; the UI must clear it. */
   discardedSlip?: boolean;
+  /** True when a follow-up changed nothing; the UI must keep the pending slip as is. */
+  slipUnchanged?: boolean;
+  /** Group 6: exactly one stored event matched a cancel request; the UI deletes
+   * it ONLY after the user's confirming tap. */
+  eventDeletion?: { id: string; title: string; date: string } | null;
+  /** Group 13: the message contradicted itself; a question was asked, no slip. */
+  contradiction?: boolean;
+  /** Group 12.4: care-seeking signpost shown alongside an exact refusal. */
+  careSignpost?: string | null;
+  /** Group 7: the message held a log part and a question; both were handled. */
+  multiIntent?: boolean;
+  /** Group 6: several stored events matched; the user must pick one. */
+  eventDeletionCandidates?: Array<{ id: string; title: string; date: string }>;
   /** All backfilled entries, oldest first. entry is always entries[0] for old code. */
   entries?: StructuredEntry[];
   /** Backend-computed summary of what this message led to (observability, no behaviour change). */
@@ -715,6 +735,7 @@ export async function runLavenderAgent(
     }
     return withIntent({
       message: getGuardrailResponseMessage(userPrompt),
+      ...(severeLive.isSevere && severeLive.message ? { careSignpost: severeLive.message } : {}),
       needsClarification: false,
       activityTrail,
       toolCalls: toolCallsRecorded,
@@ -736,8 +757,14 @@ export async function runLavenderAgent(
     return { message: "I can't set reminders yet; you can export the calendar (.ics) from Settings.", needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline" as const, modeReason: "Offline parser — reminders are not supported" };
   }
   
+  // Group 7: multi-intent (log + own-data question) is resolved on device so
+  // neither half is dropped; the slip stays confirm-gated.
+  if (!severeCheck.isSevere && splitLogAndQuestion(userPrompt)) {
+    const multiRes = parseLocally(userPrompt, today, context);
+    if ((multiRes as any).multiIntent) return { ...multiRes, mode: "offline", modeReason: "Offline parser - log and question handled together on device" };
+  }
   if (!severeCheck.isSevere) {
-    const ownLive = buildOwnDataAnswer(userPrompt, context);
+    const ownLive = buildOwnDataAnswer(userPrompt, { ...context, currentDate: today } as any);
     if (ownLive) {
       activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
       activityTrail.forEach((a) => (a.status = "done"));
@@ -806,7 +833,15 @@ export async function runLavenderAgent(
 
   // Deterministic lifecycle intents bypass the model (as with late-period and
   // reminders): an explicit cancel or undo discards the pending slip, never logs.
-  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && /\b(?:undo\s+that|cancel\s+that|don\u0027t\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(userPrompt)) {
+  // Group 6: saved-entry edits and event cancellations are resolved on device;
+  // the model never deletes or rewrites stored records.
+  if ((fallbackResult as any).contradiction) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - contradictory flow statements; asked before preparing anything" };
+  }
+  if ((fallbackResult as any).eventDeletion || (fallbackResult as any).eventDeletionCandidates || (fallbackResult.entry && (fallbackResult.entry as any).editsSavedEntry)) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - Meta model not used (stored records are changed only on device, after your confirmation)" };
+  }
+  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && CANCEL_SLIP_RE.test(userPrompt)) {
     return { ...fallbackResult, mode: 'offline', modeReason: 'Offline parser - Meta model not used (explicit cancel discards the pending slip; nothing saved)' };
   }
   // Phase 2: date comparison is deterministic in BOTH paths; nothing is saved.
@@ -867,6 +902,7 @@ export async function runLavenderAgent(
   let needsClarification = false;
   let clarificationQuestion: string | null = null;
   let finalMessage = "";
+  let replyWasTruncated = false;
 
   // Hotfix (speed): per-call and overall model budgets. The normal path makes
   // the same number of calls with identical results; only a hung model is cut
@@ -924,7 +960,8 @@ export async function runLavenderAgent(
         if (callErr && callErr.name === "AbortError") return modelTimedOut();
         throw callErr;
       }
-      clearTimeout(callTimer);
+      // Group 11: the abort timer stays armed until the BODY has been read, so a
+      // hung upstream that sent headers but never finishes cannot hold the function.
       modelCallMsTotal += Date.now() - modelCallStart;
       activityTrail.push({
         step: "Model Call " + stepCount,
@@ -933,12 +970,21 @@ export async function runLavenderAgent(
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
+        const errorText = await res.text().catch(() => "");
+        clearTimeout(callTimer);
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
         return { ...fallbackResult, mode: "offline", modeReason: `Offline parser — Meta model not used (Meta API error ${res.status})` };
       }
 
-      const data = await res.json();
+      let data: any;
+      try {
+        data = await res.json();
+      } catch (bodyErr: any) {
+        clearTimeout(callTimer);
+        if (bodyErr && bodyErr.name === "AbortError") return modelTimedOut();
+        throw bodyErr;
+      }
+      clearTimeout(callTimer);
       const choice = data.choices?.[0];
       const message = choice?.message;
 
@@ -950,6 +996,12 @@ export async function runLavenderAgent(
       const toolCalls = message.tool_calls;
       if (!toolCalls || toolCalls.length === 0) {
         finalMessage = message.content || "";
+        // Group 10: a cut-off reply (token limit, or a short fragment with no
+        // sentence end) is never shown as-is.
+        if (choice?.finish_reason === "length" || looksTruncated(finalMessage)) {
+          replyWasTruncated = true;
+          finalMessage = "";
+        }
         break;
       }
 
@@ -980,15 +1032,21 @@ export async function runLavenderAgent(
             status: "done",
           });
 
-          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today, context.landmarkPacks);
+          const landmarkRes = resolveLandmarkExpression(yr ? `${fnArgs.name} ${yr}` : fnArgs.name, today, context.landmarkPacks);
           if (landmarkRes.found) {
+            const offsetN = Number(fnArgs.offsetDays) || 0;
             const baseDate = landmarkRes.resolvedDate;
-            const offsetDate = baseDate && fnArgs.offsetDays ? applyDayOffset(baseDate, Number(fnArgs.offsetDays) || 0) : baseDate;
+            const offsetDate = baseDate && offsetN ? applyDayOffset(baseDate, offsetN) : baseDate;
+            const around = landmarkOccurrencesAround(fnArgs.name, today, offsetN, context.landmarkPacks);
             toolResultObj = {
               milestone: landmarkRes.landmarkName,
               year: yr || landmarkRes.resolvedDate?.slice(0, 4),
               date: offsetDate,
               baseDate,
+              // Group 1: period LOGS use mostRecentPast; planned EVENTS use nextUpcoming.
+              mostRecentPast: around?.mostRecentPast ?? null,
+              nextUpcoming: around?.nextUpcoming ?? null,
+              usage: "For a period/symptom log use mostRecentPast (never a future date). For a planned event, exam, trip or other plan use nextUpcoming.",
               source: "landmarks data (verified dates in landmarks.json / milestones data)",
               found: true,
             };
@@ -1052,7 +1110,13 @@ export async function runLavenderAgent(
           } else {
             const patched = applyModelPatch(entryToPatch, fnArgs, today);
             if (patched.error) toolResultObj = { error: patched.error };
-            else { structuredEntry = patched.entry!; replacedViaCorrection = true; toolResultObj = { success: true, entry: structuredEntry }; }
+            else {
+              structuredEntry = patched.entry!;
+              replacedViaCorrection = true;
+              // Group 4: patching the pending (unsaved) slip is not an edit of a saved day.
+              if (entryToPatch !== context.pendingEntry) structuredEntry = { ...structuredEntry, editsSavedEntry: true };
+              toolResultObj = { success: true, entry: structuredEntry };
+            }
           }
           toolResponseContent = JSON.stringify(toolResultObj);
         }
@@ -1098,7 +1162,8 @@ export async function runLavenderAgent(
       } else if (firstToolError) {
         finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
       } else if (/logged|saved|done|all set|good to go|prepared/i.test(finalMessage)) {
-        finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
+        // Group 5: an unbacked success claim is never relayed; nothing was prepared or saved.
+        finalMessage = "I could not save that: no valid entry or event, so nothing was saved. Please tell me again what to log (for example 'period started today, heavy flow').";
       }
     }
     // Hotfix (B5): ONE corrective model call, allowed ONLY when an output guard
@@ -1217,6 +1282,15 @@ export async function runLavenderAgent(
       };
     }
 
+    // Group 12.5: overlap claims are the engine's to make. Any model sentence that
+    // asserts an overlap outcome ("looks safe from any overlap", "you're in the
+    // clear") is replaced by the engine's templated, neutral wording.
+    const alreadyNeutral = activityTrail.some((a) => a.step === "Output Guard");
+    if (planOverlaps && planOverlaps.length > 0 && !alreadyNeutral && OVERLAP_CLAIM_RE.test(finalMessage)) {
+      const lines = planOverlaps.map((o: any) => `${o.name || "Event"} on ${shortDateLabel(o.eventDate)}: ${o.overlapNote || "overlap checked"}`);
+      finalMessage = lines.join(" ") + " " + OVERLAP_DISCLAIMER_TEXT;
+      activityTrail.push({ step: "Output Guard", detail: "Model overlap claim replaced by the engine's wording", status: "done" });
+    }
     // Detect if agent is asking for clarification
     if (
       finalMessage.includes("?") ||
@@ -1246,8 +1320,32 @@ export async function runLavenderAgent(
     // must not return blank (frontend shows a generic fallback). Reuse the already-computed
     // offline fallback so the user gets a specific question or slip, never empty text.
     if (!finalMessage.trim() && !structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && !needsClarification) {
+      if (replyWasTruncated) {
+        activityTrail.push({ step: 'Truncated Live Reply', detail: 'Meta model reply was cut off; offline parser used', status: 'done' })
+        if (caughtNothing(fallbackResult)) {
+          return { message: "The live AI's reply was cut off, and I couldn't read your message on this device either. Please try again, or rephrase it in English.", entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: 'offline', modeReason: 'Meta model reply was cut off' };
+        }
+        return { ...fallbackResult, mode: 'offline', modeReason: 'Meta model reply was cut off, offline parser used' }
+      }
       activityTrail.push({ step: 'Empty Live Reply', detail: 'Meta model returned no usable reply, offline parser used', status: 'done' })
       return { ...fallbackResult, mode: 'offline', modeReason: 'Meta model returned no usable reply, offline parser used' }
+    }
+
+    // Group 5: neutral prose that reached this point unchanged ("It looks like
+    // your period started today...") with no log_entry call would show a reply
+    // with no slip. When the on-device parser produced a clean slip from the same
+    // message, show THAT slip (still confirm-gated) and say where it came from.
+    // Success claims, verdicts, questions and empty replies are handled above.
+    if (
+      !structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) &&
+      !needsClarification && finalMessage.trim() && finalMessage.indexOf("?") === -1 &&
+      !/^(I could not save that|There's no entry)/.test(finalMessage) &&
+      fallbackResult.entry && !fallbackResult.needsClarification && !(fallbackResult as any).discardedSlip
+    ) {
+      structuredEntry = fallbackResult.entry;
+      if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
+      finalMessage = "The live AI answered without preparing a slip, so I prepared this one on your device from what you said. Please review and confirm below — nothing is saved until you do.";
+      activityTrail.push({ step: "Slip Recovery", detail: "Model returned prose only; on-device slip prepared from the same message", status: "done" });
     }
 
     return ensureFactCoverageDisclosure({
@@ -1280,7 +1378,8 @@ function phraseIndex(lower: string, phrase: string): number {
   if (!p) return -1;
   if (/^[a-z0-9\s'-]+$/i.test(p)) {
     const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const m = new RegExp(`\\b${escaped}\\b`, "i").exec(lower);
+    // Group 7: tolerate plurals ("headaches", "backaches", "cramp" -> "cramps").
+    const m = new RegExp(`\\b${escaped}(?:e?s)?\\b`, "i").exec(lower);
     return m ? m.index : -1;
   }
   return lower.indexOf(p);
@@ -1497,7 +1596,7 @@ function backfillRangeSeed(text: string, today: string): BackfillSeed | null {
     if (!(r1.date < r2.date) || r2.date > today) return null;
     return { date: r1.date, endDate: r2.date };
   };
-  const started = lower.match(/\bstarted\s+(.+?)\s+and\s+ended\s+(.+)/);
+  const started = lower.match(/\b(?:started|began)\s+(?:on\s+)?(.+?)\s+and\s+(?:it\s+|then\s+|it\s+then\s+)?(?:ended|stopped|finished)\s+(?:on\s+)?(.+)/);
   if (started) return finish(started[1], started[2]);
   const fromTo = lower.match(/\bfrom\s+(.+?)\s+(?:to|till|until|through)\s+(.+)/);
   if (fromTo) return finish(fromTo[1], fromTo[2]);
@@ -1511,7 +1610,8 @@ function backfillRangeSeed(text: string, today: string): BackfillSeed | null {
 // Split one message into candidate period dates. Returns null when this is
 // not a backfill message (single date, dated detail, no period cue, ...).
 export function extractBackfillDates(text: string, today: string): BackfillParse | null {
-  if (!/\bperiods?\b/i.test(text)) return null;
+  // Group 12.3: a bleeding range ("I bled from Oct 2 to Oct 6") is a period too.
+  if (!/\bperiods?\b|\bbled\b|\bbleeding\b|\bmenstruat/i.test(text)) return null;
   const ext = extractWithLexicon(text);
   const lower = text.toLowerCase();
   const hasDetail = ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null
@@ -1528,6 +1628,9 @@ export function extractBackfillDates(text: string, today: string): BackfillParse
   const bareMonths: string[] = [];
   for (const seg of segments) {
     if (eventRe.test(seg)) continue;
+    // Group 12.1: clauses with a red-flag symptom ("I fainted yesterday") are
+    // never harvested as period dates; the escalation handles them.
+    if (severeTier(seg).isSevere) continue;
     const bare = backfillBareMonth(seg);
     if (bare) {
       if (!bareMonths.includes(bare)) bareMonths.push(bare);
@@ -1713,7 +1816,153 @@ function withIntent<T extends AgentResult>(result: T, userPrompt: string): T {
   return result;
 }
 
+/** Group 3: phrases that discard the pending slip. "remove the headache" is a
+ * correction, not a cancel, so bare remove/delete need "that/this/the slip". */
+export const CANCEL_SLIP_RE = /\b(?:undo\s+(?:that|this|it)|cancel\s+(?:that|this|it|the\s+(?:slip|entry|log))|scrap\s+(?:that|this|it)|(?:delete|discard|remove|drop)\s+(?:that|this|the)\s+(?:slip|entry|log|draft)|discard\s+(?:that|this|it)|don'?t\s+(?:log|save|record|keep)\s+(?:that|this|it)|do\s+not\s+(?:log|save|record|keep)\s+(?:that|this|it)|never\s*mind|forget\s+(?:it|that))\b|^\s*(?:discard|cancel|undo|scrap\s+it)\s*[.!]?\s*$/i;
+
+/** Readable event title from a landmark-relative plan sentence: drops the
+ * relative offset ("2 days before", "a week after", "the Monday before"), every
+ * alias of the landmark, and leading filler ("I have a", "my"). */
+function landmarkEventTitle(text: string, landmarkName: string | null): string {
+  let t = " " + text + " ";
+  t = t.replace(/\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+(?:days?|weeks?)\s+(?:before|after|prior to|ahead of|following)\b/gi, " ");
+  t = t.replace(/\b(?:the\s+)?(?:day|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:before|after)\b/gi, " ");
+  const fest = landmarkName ? MILESTONES_DATA.find((m) => m.name === landmarkName) : null;
+  const aliases = fest ? [fest.name, ...fest.aliases].filter(Boolean).sort((x, y) => y.length - x.length) : [];
+  for (const al of aliases) t = t.replace(new RegExp(al.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ");
+  t = t.replace(/\b(?:on|is|starts?|at|coming up|before|after|around)\b/gi, " ").replace(/[^a-zA-Z' ]+/g, " ").replace(/\s+/g, " ").trim();
+  t = t.replace(/(?:^|\s)'s\b/g, " ").replace(/\s+/g, " ").trim();
+  let prev = "";
+  while (prev !== t) {
+    prev = t;
+    t = t.replace(/^(?:i\s+have|i've\s+got|ive\s+got|i\s+got|there\s+is|there's|we\s+have|my|our|the|a|an)\s+/i, "").trim();
+  }
+  return t || "Event";
+}
+
+/** Group 7: split "log X and tell me Y" / "X. Have I had this before?" into a
+ * loggable part and an own-data question. Returns null for single-intent text. */
+export function splitLogAndQuestion(text: string): { logPart: string; questionPart: string } | null {
+  const pieces = text
+    .split(/(?<=[.?!])\s+|\s*;\s*|,?\s+(?:and\s+(?:also\s+)?|also\s+|then\s+)(?=(?:tell|let|show|what|when|how|is|are|do|did|have|has|can|could|will)\b)/i)
+    .map((x) => x.trim()).filter(Boolean);
+  if (pieces.length < 2) return null;
+  const q: string[] = [], l: string[] = [];
+  for (const p of pieces) {
+    const asks = isOwnDataQuestion(p) || /^(?:tell|let|show)\s+me\b/i.test(p) && isOwnDataQuestion(p.replace(/^(?:tell|let|show)\s+me\s+(?:know\s+)?/i, ""));
+    if (asks) q.push(p); else l.push(p);
+  }
+  if (!q.length || !l.length) return null;
+  const logPart = l.join(". ");
+  const ex = extractWithLexicon(logPart);
+  const loggable = ex.symptoms.length > 0 || ex.flow !== null || ex.periodStart || ex.periodEnd || ex.mood !== null || /\b(log|record|note)\b/i.test(logPart);
+  if (!loggable) return null;
+  return { logPart, questionPart: q.join(" ") };
+}
+
+/** Plain-words summary of slip corrections for the reply ("flow is now heavy, added cramps"). */
+export function describeSlipChanges(changes: string[]): string {
+  return changes.map((c) => c
+    .replace(/^Added symptom: /, "added ")
+    .replace(/^Removed symptom: /, "removed ")
+    .replace(/^(?:Flow updated to|Flow set to) /, "flow is now ")
+    .replace(/^Date updated to /, "date is now ")
+    .replace(/^Mood updated to /, "mood is now ")
+    .replace(/^Energy level set to /, "energy is now ")).join(", ");
+}
+
+/** Group 13: "heavy flow but no bleeding" style contradictions. A correction
+ * written as "light, not heavy" is NOT a contradiction (handled elsewhere). */
+export function detectFlowContradiction(text: string): { positive: string; negative: string; question: string } | null {
+  const pos = text.match(/\b((?:light|medium|moderate|heavy)\s+(?:flow|bleeding|period)|flow\s+(?:is|was)\s+(?:light|medium|heavy)|bleeding\s+(?:heavily|a\s+lot))\b/i);
+  const neg = text.match(/\b(no\s+(?:bleeding|flow|blood)|not\s+bleeding|(?:haven'?t|didn'?t|did\s+not|have\s+not)\s+(?:bled|been\s+bleeding))\b/i);
+  if (!pos || !neg) return null;
+  if (/\b(?:none|spotting|light|medium|heavy)\s*,?\s*not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text)) return null;
+  const p = pos[1].toLowerCase(), n = neg[1].toLowerCase();
+  return { positive: p, negative: n, question: `You mentioned ${p} and ${n} — which should I record? Say, for example, "${p}" or "no flow".` };
+}
+
+/** Group 12.5: model prose that asserts an overlap outcome. */
+export const OVERLAP_CLAIM_RE = /\b(?:overlap\w*|clash\w*|coincid\w*|in\s+the\s+clear|all\s+clear|safe|safely|risk[-\s]?free|period[-\s]?free|free\s+(?:of|from)\s+(?:your\s+)?period|won'?t\s+(?:have|get|be\s+on)\s+your\s+period|no\s+(?:period|bleeding)\s+(?:during|on|for))\b/i;
+
+/** Group 10: a model reply that stops mid-sentence. Short replies without a
+ * sentence end (Latin or Indic danda) and replies ending in a dangling word. */
+export function looksTruncated(msg: string): boolean {
+  const t = (msg || "").trim();
+  if (!t) return false;
+  if (/[.!?।॥…)"'”’:]$/.test(t)) return false;
+  // English: stops on a dangling function word ("..., so I will", "...with your").
+  if (/\b(?:and|or|the|a|an|to|of|with|your|for|so\s+i\s+will|i\s+will|because|but)$/i.test(t)) return true;
+  // Indic scripts: a short fragment whose last word is one or two characters.
+  if (/[\u0900-\u0DFF]/.test(t) && t.length < 80) {
+    const last = Array.from(t.split(/\s+/).pop() || "");
+    if (last.length <= 2) return true;
+  }
+  return false;
+}
+
+/** Group 10: offline floor for the advertised non-English golden phrases and
+ * common English typos. Used ONLY as a second pass when the first parse caught
+ * nothing, so text that already parses is never altered. */
+const OFFLINE_PHRASES: Array<[RegExp, string]> = [
+  // Hindi (Devanagari)
+  [/(?:मेरा|मेरी)\s*/g, " "], [/पीरियड्?स?|माहवारी|मासिक\s*धर्म/g, " period "],
+  [/शुरू\s*(?:हुआ|हुई|हो\s*गया|हो\s*गई|हो\s*गयी)/g, " started "], [/आज/g, " today "], [/परसों/g, " the day before yesterday "], [/कल/g, " yesterday "],
+  // Malayalam (script)
+  [/എന്റെ\s*/g, " "], [/പീരിയഡ്|ആർത്തവം/g, " period "], [/തുടങ്ങി|ആരംഭിച്ചു/g, " started "], [/ഇന്നലെ/g, " yesterday "], [/ഇന്ന്/g, " today "],
+  // Romanized Hindi / Bengali / Malayalam
+  [/\b(?:mera|meri|amar|aamar|ente)\b/gi, " "], [/\bperiods?\b|\bmahvari\b|\bmasik\b/gi, " period "],
+  [/\bshuru\s+(?:hua|hui|ho\s+gaya|ho\s+gayi|hoyeche|hoyechhe|hoyecche|holo|hoye\s+geche)\b|\bthudangi\b|\bstart\s+hua\b/gi, " started "],
+  [/\b(?:aaj|aj)\b|\binnu\b/gi, " today "], [/\b(?:gotokal|gatokal|kal|kaal|innale)\b/gi, " yesterday "], [/\bparson\b/gi, " the day before yesterday "],
+];
+const FUZZY_TARGETS = ["period", "started", "today", "yesterday", "heavy", "medium", "cramps", "headache", "bleeding", "spotting", "began"];
+function osaDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[a.length][b.length];
+}
+export function normalizeOfflineText(text: string): string {
+  let t = " " + text + " ";
+  for (const [re, rep] of OFFLINE_PHRASES) t = t.replace(re, rep);
+  t = t.replace(/[a-z]{4,}/gi, (w) => {
+    const lw = w.toLowerCase();
+    if (FUZZY_TARGETS.includes(lw)) return w;
+    let best: string | null = null, bestD = 99;
+    for (const target of FUZZY_TARGETS) {
+      const max = target.length >= 7 ? 2 : 1;
+      if (Math.abs(target.length - lw.length) > max) continue;
+      const dd = osaDistance(lw, target);
+      if (dd <= max && dd < bestD) { best = target; bestD = dd; }
+    }
+    return best ?? w;
+  });
+  t = t.replace(/\s+/g, " ").trim();
+  // Subject-object-verb order ("period yesterday started") -> English order.
+  const sov = t.match(/^(.*?)\bperiod\s+(today|yesterday|the day before yesterday)\s+started\b(.*)$/i);
+  if (sov) t = `${sov[1]}period started ${sov[2]}${sov[3]}`.replace(/\s+/g, " ").trim();
+  return t;
+}
+function caughtNothing(r: AgentResult): boolean {
+  return !r.entry && !(r.entries && r.entries.length) && !(r.plannedEvents && r.plannedEvents.length) && !(r.planOverlaps && r.planOverlaps.length) &&
+    typeof r.message === "string" && /^I didn't catch (?:anything I can log|a change)/.test(r.message);
+}
 export function parseLocally(text: string, today: string, context: AgentContext): AgentResult {
+  const first = parseLocallyCore(text, today, context);
+  if (!caughtNothing(first)) return first;
+  const normalized = normalizeOfflineText(text);
+  if (!normalized || normalized.toLowerCase() === text.trim().toLowerCase()) return first;
+  const second = parseLocallyCore(normalized, today, context);
+  if (caughtNothing(second)) return first;
+  second.activityTrail = [{ step: "Offline Normalisation", detail: `Read as: "${normalized}"`, status: "done" }, ...(second.activityTrail || [])];
+  if (second.entry && second.entry.notes === normalized) second.entry = { ...second.entry, notes: text };
+  return second;
+}
+
+function parseLocallyCore(text: string, today: string, context: AgentContext): AgentResult {
   const startTime = Date.now();
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
@@ -1728,7 +1977,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   let medicalTail: string | null = null;
   if (!severeWinsLocal && checkMedicalAdviceGuardrail(text).isRefusal) {
     if (!hasClearLogStatement(text)) {
-          return withIntent({ message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline }, text);
+          // Group 12.4: the refusal text stays exact; a red-flag symptom in the same
+          // message adds the care signpost as its own field (shown as its own card).
+          return withIntent({ message: getGuardrailResponseMessage(text), ...(severeLocal.isSevere && severeLocal.message ? { careSignpost: severeLocal.message } : {}), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }, ...(severeLocal.isSevere ? [{ step: "Safety Escalation", detail: "Red-flag symptom: care signpost shown with the refusal", status: "done" as const }] : [])], toolCalls: [], ...offline }, text);
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
@@ -1742,7 +1993,24 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: "I can" + String.fromCharCode(39) + "t set reminders yet; you can export the calendar (.ics) from Settings.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   
-  const ownData = buildOwnDataAnswer(text, context);
+  // Group 7: a loggable part AND an own-data question are both handled in one
+  // turn (slip + answer); a part that cannot be handled is disclosed.
+  const multi = splitLogAndQuestion(text);
+  if (multi) {
+    const logRes: AgentResult = parseLocally(multi.logPart, today, context);
+    const focus = Array.from(new Set([...(logRes.entry?.symptoms || []), ...extractWithLexicon(multi.logPart).symptoms]));
+    const qBody = multi.questionPart.replace(/^(?:tell|let|show)\s+me\s+(?:know\s+)?/i, "");
+    const ans = buildOwnDataAnswer(qBody, { ...context, currentDate: today, focusSymptoms: focus } as any);
+    const handledLog = !!(logRes.entry || (logRes.entries && logRes.entries.length) || (logRes.plannedEvents && logRes.plannedEvents.length));
+    activityTrail.push({ step: "Multi-intent", detail: `log part: ${handledLog ? "slip prepared" : "not handled"}; question part: ${ans ? "answered" : "not handled"}`, status: "done" });
+    const answerText = ans ? ans.message : "I couldn't answer the question part — ask me again on its own.";
+    if (handledLog) {
+      return { ...logRes, message: `${logRes.message} Also: ${answerText}`, activityTrail: [...activityTrail, ...(logRes.activityTrail || [])], multiIntent: true } as AgentResult;
+    }
+    const msg = `${answerText} I couldn't prepare the log part ("${multi.logPart}") — tell me it again on its own and I'll prepare a slip.`;
+    return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, multiIntent: true, ...offline } as AgentResult;
+  }
+  const ownData = buildOwnDataAnswer(text, { ...context, currentDate: today } as any);
   if (ownData) {
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
     return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
@@ -1781,9 +2049,83 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       return resumed;
     }
   }
-  if (!hasAnyLoggingOrPlanningCue(text)) {
+  const hasPendingSlip = !!context.pendingEntry || (context.pendingEntries || []).length > 0;
+  // Group 3: with a slip pending, a cue-less message ("actually, it started
+  // yesterday", "discard") is checked as a cancel or a correction first.
+  if (!hasPendingSlip && !hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+  }
+
+  // Group 13: directly contradictory flow statements in one message ("heavy flow
+  // but no bleeding") are never silently resolved: ask which to record, no slip.
+  const contra = detectFlowContradiction(text);
+  if (contra) {
+    activityTrail.push({ step: "Contradiction", detail: `Both "${contra.positive}" and "${contra.negative}" stated; asked which to record`, status: "clarify" });
+    return { message: contra.question, entry: null, needsClarification: true, clarificationQuestion: contra.question, contradiction: true, activityTrail, toolCalls, ...offline } as AgentResult;
+  }
+
+  // Group 6a: a correction addressed at a SAVED entry ("remove the headache from
+  // today's entry", "change yesterday's entry to heavy flow", "fix that entry")
+  // loads that entry into an editable slip with the change applied. Still
+  // confirm-gated; confirming replaces that day (editsSavedEntry).
+  const savedRef = text.match(/\b(today'?s|yesterday'?s|tonight'?s|(?:that|this|my\s+last|the\s+last|my\s+latest|the\s+latest)|(?:the\s+)?(?:entry|log|note)\s+(?:for|from|on)\s+(today|yesterday))\s*(?:entry|log|note)?\b/i);
+  const namesSavedEntry = !!savedRef && /\b(entry|log|note)\b/i.test(text) && /\b(remove|delete|drop|take|add|change|make|set|fix|correct|update|edit|actually|not|no)\b/i.test(text) && !/\bdelete\s+(?:my\s+)?last\s+entry\b/i.test(text);
+  if (namesSavedEntry) {
+    const which = (savedRef![2] || savedRef![1]).toLowerCase();
+    const pool = [...(context.recentEntries || []), ...(context.recentEntry ? [context.recentEntry] : [])];
+    const wantDate = /^yesterday/.test(which) ? addDaysToKey(today, -1) : /^(today|tonight)/.test(which) ? today : null;
+    const saved = wantDate ? pool.find((e) => e.date === wantDate) : [...pool].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!saved) {
+      const msg = wantDate ? `I couldn't find a saved entry for ${shortDateLabel(wantDate)}, so there's nothing to change.` : "I couldn't find a saved entry to change.";
+      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+    }
+    const scrubbed = text.replace(/\b(?:from|in|on|for)\s+(?:today'?s|yesterday'?s|that|this|my\s+last|the\s+last)\s+(?:entry|log|note)\b/gi, " ").replace(/\b(?:today'?s|yesterday'?s)\s+(?:entry|log|note)\b/gi, " ");
+    const edit = applySlipCorrections({ ...saved }, scrubbed, today);
+    if (edit.changes.length === 0) {
+      const named = extractWithLexicon(scrubbed).symptoms.filter((x) => !(saved.symptoms || []).includes(x as any));
+      if (/\b(remove|delete|drop|take|no)\b/i.test(scrubbed) && named.length > 0) {
+        const msg = `Your saved entry for ${shortDateLabel(saved.date)} doesn't have ${named.map((x) => String(x).replace("_", " ")).join(" or ")}, so there's nothing to remove.`;
+        return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+      }
+      const msg = `I found your saved entry for ${shortDateLabel(saved.date)}, but I couldn't tell what to change. Try "remove the headache from ${wantDate === today ? "today's" : "that"} entry" or "change it to heavy flow".`;
+      return { message: msg, entry: null, needsClarification: true, clarificationQuestion: msg, activityTrail, toolCalls, ...offline };
+    }
+    const updated: StructuredEntry = { ...edit.updated, date: saved.date, editsSavedEntry: true, slipId: "edit-" + saved.date };
+    activityTrail.push({ step: "Saved Entry Edit", detail: `Loaded ${saved.date}: ${edit.changes.join("; ")}`, status: "done" });
+    toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { savedDate: saved.date, correction: text }, result: { updated, changes: edit.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return withIntent({ message: `I loaded your saved entry for ${shortDateLabel(saved.date)} with that change (${describeSlipChanges(edit.changes)}). Confirm below to update it — nothing changes until you do.`, entry: updated, replacesExisting: true, needsClarification: false, activityTrail, toolCalls, ...offline }, text);
+  }
+
+  // Group 6b: cancelling a stored event by reference ("cancel the wedding").
+  // One match -> proposed deletion (the UI deletes only after a tap); several ->
+  // ask WHICH EVENT; none -> say so. Symptom removals never reach this branch.
+  const cancelEvent = text.match(/\b(?:cancel|delete|remove|drop|call\s+off|scrap|take\s+off)\s+(?:the\s+|my\s+|our\s+)?(.+?)(?:\s+(?:event|plan|from\s+(?:my\s+)?(?:calendar|plans)))?\s*[.!?]?\s*$/i);
+  const mentionsLogContent = extractWithLexicon(text).symptoms.length > 0 || /\b(flow|period|spotting|bleeding|slip|entry|log|note)\b/i.test(text);
+  if (cancelEvent && !mentionsLogContent && !CANCEL_SLIP_RE.test(text)) {
+    const phrase = cancelEvent[1].replace(/\b(event|plan|plans|on\s+.+)$/i, "").trim();
+    const stopW = new Set(["the", "my", "our", "a", "an", "event", "plan", "on", "for", "please"]);
+    const toks = phrase.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 1 && !stopW.has(w));
+    const pool = (context.events || []).filter((e) => e && e.title && e.date && (e as any).id);
+    const hits = toks.length === 0 ? [] : pool.filter((e) => {
+      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/);
+      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || w.startsWith(x)));
+    });
+    const looksLikeEvent = hits.length > 0 || /\b(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|shaadi|sangeet|holiday|event)\b/i.test(phrase);
+    if (looksLikeEvent) {
+      if (hits.length === 0) {
+        const msg = `I couldn't find a saved event matching "${phrase}" in your calendar, so nothing was removed.`;
+        return { message: msg, entry: null, needsClarification: false, eventDeletionCandidates: [], activityTrail, toolCalls, ...offline };
+      }
+      if (hits.length === 1) {
+        const h = hits[0];
+        activityTrail.push({ step: "Event Cancel", detail: `Matched "${h.title}" on ${h.date}; waiting for confirmation`, status: "done" });
+        return { message: `Remove "${h.title}" on ${shortDateLabel(h.date)} from your calendar? Tap Remove to confirm — nothing is deleted until you do.`, entry: null, needsClarification: false, eventDeletion: { id: String((h as any).id), title: h.title, date: h.date }, activityTrail, toolCalls, ...offline };
+      }
+      const list = hits.map((h) => `"${h.title}" on ${shortDateLabel(h.date)}`).join(", ");
+      const msg = `You have more than one matching event: ${list}. Which event should I cancel?`;
+      return { message: msg, entry: null, needsClarification: true, clarificationQuestion: msg, eventDeletionCandidates: hits.map((h) => ({ id: String((h as any).id), title: h.title, date: h.date })), activityTrail, toolCalls, ...offline };
+    }
   }
 
   // Q3.4: deleting is never done by chat.
@@ -1791,8 +2133,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return { message: "Open Chronicle or Calendar to delete entries.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   // Q3.4: undo/cancel discards the pending slip; nothing is saved.
-  if (/\b(?:undo\s+that|cancel\s+that|don't\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(text)) {
-    if (context.pendingEntry || (context.pendingEntries || []).length > 0) {
+  if (CANCEL_SLIP_RE.test(text)) {
+    if (hasPendingSlip) {
       activityTrail.push({ step: "Slip Discarded", detail: "Pending slip cancelled by user", status: "done" });
       return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, discardedSlip: true, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
@@ -1857,12 +2199,26 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     }
   }
   if (targetSlip && (context.pendingEntry || isExplicitCorrection || lastEntryMentioned || namedDateMatched)) {
-    const correctionRes = applySlipCorrections(targetSlip, text);
+    const correctionRes = applySlipCorrections(targetSlip, text, today);
+    // Group 4: only a correction aimed at a SAVED entry may replace the stored day.
+    if (correctionRes.changes.length > 0 && targetSlip !== context.pendingEntry) correctionRes.updated.editsSavedEntry = true;
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
-      return withIntent({ message: "I've updated your Accession Slip with your corrections. Please review below." + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline }, text);
+      const what = describeSlipChanges(correctionRes.changes);
+      return withIntent({ message: `I've updated your Accession Slip (${what}). Please review below.` + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline }, text);
     }
+    // Group 3: a pending slip is never replaced or cleared by a follow-up that
+    // changes nothing; say so truthfully and leave the slip as it is.
+    if (context.pendingEntry && targetSlip === context.pendingEntry && (isExplicitCorrection || !hasAnyLoggingOrPlanningCue(text))) {
+      const q = "Your pending slip is unchanged — it already has that, or I couldn't find a change in your message. Try 'make the flow heavy', 'it started yesterday', 'add cramps' or 'remove the headache'.";
+      activityTrail.push({ step: "Accession Slip Correction", detail: "No change found; pending slip kept as is", status: "done" });
+      return { message: q, entry: null, needsClarification: false, slipUnchanged: true, activityTrail, toolCalls, ...offline } as AgentResult;
+    }
+  }
+  if (hasPendingSlip && !hasAnyLoggingOrPlanningCue(text)) {
+    const q = "I didn't catch a change for your pending slip, so it's still there unchanged. You can say things like 'make the flow heavy' or 'it started yesterday', or tap Discard.";
+    return { message: q, entry: null, needsClarification: false, slipUnchanged: true, activityTrail, toolCalls, ...offline } as AgentResult;
   }
 
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
@@ -1982,6 +2338,8 @@ export function parseLocally(text: string, today: string, context: AgentContext)
         if (end < start) continue;
         const sStart = Math.max(text.lastIndexOf(".", rm.index - 1) + 1, text.lastIndexOf("!", rm.index - 1) + 1, text.lastIndexOf("?", rm.index - 1) + 1, text.lastIndexOf("\n", rm.index - 1) + 1, text.lastIndexOf(";", rm.index - 1) + 1, 0);
         const rangeSentence = text.slice(sStart, rm.index + rm[0].length);
+        // Group 12.3: a bleeding/period range is a log, never a calendar event.
+        if (/\b(?:bled|bleed|bleeding|period|periods|spotting|flow|menstruat\w*)\b/i.test(rangeSentence) && !/\b(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|meeting|holiday|travel)\b/i.test(rangeSentence)) continue;
         const rangeTitle = focusNounTitle(cleanTitle(text.slice(sStart, rm.index)) || "Event", rangeSentence);
         eventMatches.push({ name: rangeTitle, date: start, endDate: end });
         rangeSpans.push({ index: rm.index, length: rm[0].length });
@@ -2080,45 +2438,32 @@ export function parseLocally(text: string, today: string, context: AgentContext)
 
   const earlyLandmark = resolveLandmarkExpression(text, today, context.landmarkPacks);
   const isLandmarkPlan = /\b(plan|planning)\b/i.test(lower) && !hasLogContent && eventMatches.length === 0 && earlyLandmark.found && !!earlyLandmark.resolvedDate;
+  // Group 1: plans and events resolve a landmark to its NEXT occurrence (>= today),
+  // offset included; logs keep the past-occurrence rule in resolveDateExpression.
+  const nextLandmark = earlyLandmark.found ? resolveNextLandmarkOccurrence(text, today, context.landmarkPacks) : null;
   if (isLandmarkPlan && earlyLandmark.resolvedDate) {
-    if (earlyLandmark.resolvedDate >= today) {
-      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: earlyLandmark.resolvedDate });
+    if (nextLandmark) {
+      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: nextLandmark.resolvedDate });
       unplacedEvents.length = 0;
       activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
       planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-    } else {
-      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today, context.landmarkPacks);
-      if (nextLm.found && nextLm.resolvedDate && nextLm.resolvedDate > today) {
-        passedPlanCandidates.push({ name: earlyLandmark.landmarkName || "Event", thisYear: earlyLandmark.resolvedDate, nextYear: nextLm.resolvedDate });
-        unplacedEvents.length = 0;
-      }
     }
   }
   // Prompt 8 Group A: event/planning intent + landmark -> NEXT occurrence event,
   // never a log slip, never the past-year question. Log intent keeps clarifying.
   const EVENT_NOUN_RE = /\b(exam|party|trip|appointment|wedding|interview|birthday|dentist|flight|conference|presentation|holiday|vacation|marathon|race|dinner|event|meeting)\b/i;
   if (!hasLogContent && eventMatches.length === 0 && earlyLandmark.found && earlyLandmark.resolvedDate && (intent === "plan_event" || EVENT_NOUN_RE.test(lower))) {
-    let evDate: string | null = earlyLandmark.resolvedDate;
-    if (evDate && evDate < today) {
-      const lmName = earlyLandmark.landmarkName || "Event";
-      const nextLm = resolveLandmarkExpression(`${lmName} next year`, today, context.landmarkPacks);
-      if (nextLm.found && nextLm.baseDate) {
-        const off = earlyLandmark.baseDate ? Math.round((Date.parse(earlyLandmark.resolvedDate) - Date.parse(earlyLandmark.baseDate)) / 86400000) : 0;
-        evDate = applyDayOffset(nextLm.baseDate, off);
-      } else { evDate = null; }
+    const title = landmarkEventTitle(text, earlyLandmark.landmarkName);
+    if (!nextLandmark) {
+      const q = `Which date is your ${title === "Event" ? "event" : title}? I don't have a verified upcoming date for ${earlyLandmark.landmarkName}.`;
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
     }
-    if (evDate && evDate >= today) {
-      let title = text.replace(/\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+(?:before|after)\b/gi, " ");
-      if (earlyLandmark.landmarkName) title = title.replace(new RegExp(earlyLandmark.landmarkName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), " ");
-      title = title.replace(/\b(on|is|starts?|at|coming up)\b/gi, " ").replace(/[^a-zA-Z' ]+/g, " ").replace(/\s+/g, " ").trim().replace(/^(my|the|a|an)\s+/i, "");
-      if (!title) title = "Event";
-      eventMatches.push({ name: title, date: evDate });
-      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
-      activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
-      toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-      return withIntent({ message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
-    }
+    eventMatches.push({ name: title, date: nextLandmark.resolvedDate });
+    planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+    activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
+    toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return withIntent({ message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
   }
   // Backfill: several past periods in one message. Pure-additive branch with
   // zero flow or symptom detail; everything else falls through unchanged.
@@ -2189,7 +2534,7 @@ export function parseLocally(text: string, today: string, context: AgentContext)
       const startedFromLogs = (context.logs || []).filter((g) => (g as any) && (g as any).kind === "period_started" && (g as any).logDate).map((g) => (g as any).logDate as string);
       const lastStart = [...(context.periods || []).map((x) => x.startDate).filter(Boolean), ...(context.cycleStats?.lastPeriodStart ? [context.cycleStats.lastPeriodStart] : []), ...startedFromEntries, ...startedFromLogs].filter(Boolean).sort().pop() || null;
       if (!isDatedVisitNote && !isLogDateRequest) {
-        const q = late ? (lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it.") : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
+        const q = late ? (lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it.") : (hasPendingSlip ? "I didn't catch a change for your pending slip, so it's still there unchanged. You can say things like 'make the flow heavy' or 'it started yesterday', or tap Discard." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.");
         return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
       // else: dated visit note falls through to daily-note logging below.

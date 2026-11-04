@@ -35,6 +35,30 @@ function isLeakedDemoEventInRealMode(e: any): boolean {
   return false;
 }
 
+/** Group 2: identity of an event for duplicate prevention. Same normalised
+ * title, same start date, same end date (a one-day event's end is its start),
+ * and the same ICS uid when there is one. Events whose span or uid differ are
+ * different events even if title and start date match. Source is NOT part of
+ * the key: the same "exam" on the same day saved by voice and again from Plan
+ * Around It is one event, not two. */
+export function eventDedupeKey(e: { title: string; date: string; endDate?: string; uid?: string }): string {
+  const title = (e.title || "").toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return [title, e.date, e.endDate || e.date, e.uid || ""].join("|");
+}
+
+/** Collapse exact duplicates, keeping the first occurrence (stable order). */
+export function dedupeEvents<T extends { title: string; date: string; endDate?: string; uid?: string }>(events: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const e of events) {
+    const k = eventDedupeKey(e);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(e);
+  }
+  return out;
+}
+
 export function loadEvents(): CalendarEvent[] {
   try {
     const demoMode = isDemoActive();
@@ -51,11 +75,16 @@ export function loadEvents(): CalendarEvent[] {
     const valid = parsed.filter(
       (e: any) => e && typeof e.title === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date),
     );
-    if (demoMode) {
-      return valid.filter((e: any) => e.demo !== false);
+    // Group 2: heal stored duplicates once, before any caller (and so any render) reads them.
+    const healed = dedupeEvents(valid);
+    if (healed.length !== valid.length) {
+      try { ls?.setItem(key, JSON.stringify(healed)); } catch {}
     }
-    const cleaned = valid.filter((e: any) => !isLeakedDemoEventInRealMode(e));
-    if (cleaned.length !== valid.length) {
+    if (demoMode) {
+      return healed.filter((e: any) => e.demo !== false);
+    }
+    const cleaned = healed.filter((e: any) => !isLeakedDemoEventInRealMode(e));
+    if (cleaned.length !== healed.length) {
       try { ls?.setItem(REAL_EVENTS_KEY, JSON.stringify(cleaned)); } catch {}
     }
     return cleaned;
@@ -67,7 +96,7 @@ export function loadEvents(): CalendarEvent[] {
 export function saveEvents(events: CalendarEvent[]): void {
   try {
     const demoMode = isDemoActive();
-    const tagged = events.map((e) => ({ ...e, demo: demoMode }));
+    const tagged = dedupeEvents(events).map((e) => ({ ...e, demo: demoMode }));
     store()?.setItem(getEventsKey(), JSON.stringify(tagged));
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("feather_events_changed"));
@@ -84,8 +113,17 @@ export function upsertEvent(event: Omit<CalendarEvent, "id"> & { id?: string }):
     demo: demoMode,
   };
   const i = events.findIndex((e) => e.id === saved.id);
-  if (i >= 0) events[i] = saved;
-  else events.push(saved);
+  if (i >= 0) {
+    events[i] = saved;
+  } else {
+    // Group 2: idempotent insert. The duplicate check and the insert happen in the
+    // same synchronous read-modify-write, so a double click, a retry or a second
+    // component firing the same save returns the existing event instead of adding one.
+    const k = eventDedupeKey(saved);
+    const existing = events.find((e) => eventDedupeKey(e) === k);
+    if (existing) return existing;
+    events.push(saved);
+  }
   saveEvents(events);
   return saved;
 }

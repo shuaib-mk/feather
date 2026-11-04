@@ -56,6 +56,17 @@ const suites = [
   ["arch_natural", ["npx", "tsx", "ai/test/arch_natural.test.ts"]],
   ["conversation", ["npx", "tsx", "ai/test/conversation.test.ts"]],
   ["arch_dialogue", ["npx", "tsx", "ai/test/arch_dialogue.test.ts"]],
+  ["p13_g1_landmarks", ["npx", "tsx", "ai/test/p13_g1_landmarks.test.ts"]],
+  ["p13_g2_events", ["npx", "tsx", "ai/test/p13_g2_events.test.ts"]],
+  ["p13_g3_pending", ["npx", "tsx", "ai/test/p13_g3_pending.test.ts"]],
+  ["p13_g4_merge", ["npx", "tsx", "ai/test/p13_g4_merge.test.ts"]],
+  ["p13_g5_writes", ["npx", "tsx", "ai/test/p13_g5_writes.test.ts"]],
+  ["p13_g6_saved_edits", ["npx", "tsx", "ai/test/p13_g6_saved_edits.test.ts"]],
+  ["p13_g7_g8_g9", ["npx", "tsx", "ai/test/p13_g7_g8_g9.test.ts"]],
+  ["p13_g10_languages", ["npx", "tsx", "ai/test/p13_g10_languages.test.ts"]],
+  ["p13_g11_watchdog", ["npx", "tsx", "ai/test/p13_g11_watchdog.test.ts"]],
+  ["p13_g12_corpus", ["npx", "tsx", "ai/test/p13_g12_corpus.test.ts"]],
+  ["p13_g13_g14", ["npx", "tsx", "ai/test/p13_g13_g14.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

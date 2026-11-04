@@ -372,17 +372,24 @@ export function getCycleStatistics(
     ? roundDay(durations.reduce((a, b) => a + b, 0) / durations.length)
     : null;
 
+  // Group 9: ONE eligibility rule. The summary numbers (median, average,
+  // shortest, longest) use the same eligible cycles as getPrediction, and the
+  // median uses the same recent window, so the stated cycle length always
+  // matches the predicted window. allCycleLengths keeps every completed cycle
+  // (anomalies included) for the history chart, and excludedForEstimationCount
+  // reports how many were left out.
+  const eligibleLengths = eligible.map((c) => c.lengthDays!);
   return {
     cycles,
     completedCycleCount: completed.length,
     eligibleCycleCount: eligible.length,
     excludedForEstimationCount: completed.length - eligible.length,
-    averageCycleLength: allLengths.length
-      ? roundDay(allLengths.reduce((a, b) => a + b, 0) / allLengths.length)
+    averageCycleLength: eligibleLengths.length
+      ? roundDay(eligibleLengths.reduce((a, b) => a + b, 0) / eligibleLengths.length)
       : null,
-    medianCycleLength: allLengths.length ? roundDay(median(allLengths)) : null,
-    shortestCycle: allLengths.length ? Math.min(...allLengths) : null,
-    longestCycle: allLengths.length ? Math.max(...allLengths) : null,
+    medianCycleLength: recent.length ? roundDay(median(recent)) : null,
+    shortestCycle: eligibleLengths.length ? Math.min(...eligibleLengths) : null,
+    longestCycle: eligibleLengths.length ? Math.max(...eligibleLengths) : null,
     allCycleLengths: allLengths,
     recentCycleLengths: recent,
     averageBleedingDuration,
@@ -541,8 +548,12 @@ export function evaluateEventOverlap(
     };
   }
 
-  const stats = getCycleStatistics(confirmed, settings);
-  if (stats.completedCycleCount < 2 || !stats.medianCycleLength) {
+  // Group 9: same anchor and same statistics as getPrediction (confirmed starts
+  // on or before today, eligible recent cycles), so cycle 1's window starts
+  // exactly where the predicted window starts.
+  const pastConfirmed = confirmed.filter((r) => r.startDate <= today);
+  const stats = getCycleStatistics(pastConfirmed, settings);
+  if (stats.eligibleCycleCount < 2 || !stats.medianCycleLength || pastConfirmed.length === 0) {
     return {
       status: "unknown",
       window: null,
@@ -550,9 +561,9 @@ export function evaluateEventOverlap(
     };
   }
 
-  const last = confirmed[confirmed.length - 1];
+  const last = pastConfirmed[pastConfirmed.length - 1];
   const cycleLength = stats.medianCycleLength;
-  const lengths = stats.recentCycleLengths.length ? stats.recentCycleLengths : stats.allCycleLengths;
+  const lengths = stats.recentCycleLengths;
   const deviations = lengths.map((len) => Math.abs(len - cycleLength));
   const variability = deviations.length ? median(deviations) : 0;
   const bleedingDays = stats.averageBleedingDuration ?? settings.defaultPeriodDuration;
@@ -568,7 +579,7 @@ export function evaluateEventOverlap(
   const k = Math.max(1, Math.round(dayDifference(anchorStart, eventDate) / cycleLength));
   const expectedStart = addDays(anchorStart, cycleLength * k);
   const coreEnd = addDays(expectedStart, Math.max(0, bleedingDays - 1));
-  const baseHalf = Math.max(3, Math.ceil(1.5 * variability));
+  const baseHalf = Math.min(10, Math.max(3, Math.ceil(1.5 * variability)));
   const halfWidth = Math.ceil(baseHalf * Math.sqrt(k)) + approxHalfWidth;
   const window = { start: addDays(expectedStart, -halfWidth), end: addDays(coreEnd, halfWidth) };
 
@@ -585,7 +596,7 @@ export function evaluateEventOverlap(
     return {
       status: "possible",
       window,
-      note: `Possible overlap: this date is inside the wider estimate window ${window.start} to ${window.end}.`,
+      note: `Possible overlap: this date is inside the wider window for this event (${window.start} to ${window.end}).`,
       cyclesAhead: k,
       expectedStart,
     };
@@ -593,7 +604,7 @@ export function evaluateEventOverlap(
   return {
     status: "unlikely",
     window,
-    note: `Unlikely to overlap (estimate): the estimated window for that cycle is ${window.start} to ${window.end}.`,
+    note: `Unlikely to overlap (estimate): the wider window for this event is ${window.start} to ${window.end}.`,
     cyclesAhead: k,
     expectedStart,
   };

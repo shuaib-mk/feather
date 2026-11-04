@@ -58,9 +58,11 @@ async function main() {
     check("typo live: validated slip, never invented date", !!r.entry && r.entry.date === "2026-11-02" && r.entry.kind === "period_started", r.entry);
     check("typo live: intentions recorded", (r.intentions || []).some((s: string) => s.indexOf("log_entry:period_started:2026-11-02") !== -1), r.intentions);
   });
-  { // offline floor for the same typo: no entry, asks (never silently re-dates)
+  { // offline floor for the same typo. Prompt 13 Group 10 (owner-approved change):
+    // common typos now parse offline to the SAME date the live path validates,
+    // and nothing that was not said is invented (no flow, no symptoms).
     const r: any = parseLocally("My peroid started yestrday", TODAY, {});
-    check("typo offline: no invented record", r.entry == null, JSON.stringify(r.entry));
+    check("typo offline: same date as live, no invented facts", !!r.entry && r.entry.date === "2026-11-02" && r.entry.kind === "period_started" && r.entry.flow == null && (r.entry.symptoms || []).length === 0, JSON.stringify(r.entry));
   }
   // --- 2b. indirect phrasing, live pipeline ---
   await withLive([toolMsg([logCall("u2", { date: "2026-11-02", kind: "period_started" })]), textMsg("Noted.")], async () => {

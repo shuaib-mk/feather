@@ -29,6 +29,26 @@ const OWN_EVENTS_LOG_CUE_RE =
 const EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
 const LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "दर्द", "थकान", "सिरदर्द", "ತಲೆನೋವು", "தலைவலி", "തലവേദന"];
 
+export const LAST_CYCLE_PATTERNS = [
+  /\bhow\s+long\s+(?:was|is)\s+my\s+(?:last|previous|most\s+recent)\s+cycle\b/i,
+  /\b(?:length\s+of|how\s+many\s+days\s+(?:was|were\s+in))\s+my\s+(?:last|previous)\s+cycle\b/i,
+  /\bmy\s+(?:last|previous)\s+cycle(?:'s)?\s+length\b/i,
+];
+export const DAYS_UNTIL_PATTERNS = [
+  /\bhow\s+(?:many\s+days|long)\s+(?:until|till|til|before|to)\s+my\s+(?:next\s+)?period\b/i,
+  /\bdays\s+(?:left\s+)?(?:until|till|til|to)\s+my\s+(?:next\s+)?period\b/i,
+  /\bhow\s+soon\s+(?:is|will)\s+my\s+(?:next\s+)?period\b/i,
+];
+export const GUARANTEE_PATTERNS = [
+  /\b(?:is|are)\s+(?:that|this|it|those|these|the)\s*(?:date|dates|prediction|estimate|window)?\s+(?:guaranteed|certain|exact|definite|sure|accurate|reliable|100%)\b/i,
+  /\bhow\s+(?:accurate|reliable|sure|certain|exact)\s+is\s+(?:that|this|it|the\s+(?:prediction|estimate|date|window))\b/i,
+  /\bcan\s+i\s+(?:rely|count)\s+on\s+(?:that|this|it|the\s+(?:prediction|estimate|date))\b/i,
+  /\bis\s+(?:that|this|it)\s+a\s+guarantee\b/i,
+];
+export const SYMPTOM_HISTORY_PATTERNS = [
+  /\b(?:have|did)\s+i\s+(?:ever\s+)?(?:had|have|get|got|experienced?|felt|feel|logged|log)\b[^?.!]*\b(?:before|previously|last\s+(?:cycle|period|time|month)|earlier|ever)\b/i,
+  /\bhave\s+i\s+experienced\s+(?:this|that|these|those)\s+before\b/i,
+];
 const OWN_DATA_PATTERNS = [
   /\bwhat(?:'s|\s+is)\s+my\s+(?:average|avg)\s+cycle\b/i,
   /\bmy\s+(?:average|avg)\s+cycle\b/i,
@@ -41,6 +61,8 @@ const OWN_DATA_PATTERNS = [
   /\bdid\s+i\s+log\s+anything\s+in\s+[a-z]+\b/i,
   /\bis\s+\d+\s*days?\s+normal\s+for\s+me\b/i,
   /\bis\s+my\s+cycle\s+regular\b/i, /\bshow\s+(?:me\s+)?my\s+(?:logged\s+)?cycles\b/i,
+  // Prompt 13 Group 8: deterministic own-data answers (no model call).
+  ...LAST_CYCLE_PATTERNS, ...DAYS_UNTIL_PATTERNS, ...GUARANTEE_PATTERNS, ...SYMPTOM_HISTORY_PATTERNS,
 ];
 export function isOwnDataQuestion(text: string): boolean {
   const t = text.trim(); if (!t) return false;

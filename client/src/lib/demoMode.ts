@@ -59,6 +59,45 @@ export function enterDemoMode(today = todayLocal()): void {
   } catch {}
 }
 
+/** Group 14: the ?demo=1 entry point. Entering is idempotent: an existing demo
+ * vault (with everything the visitor saved) is NEVER re-seeded by a reload, a
+ * second ?demo=1 visit or a second "Try Demo" tap. Returns true when the URL
+ * asked for demo mode. */
+export function applyDemoUrlParam(search: string, today = todayLocal()): boolean {
+  try {
+    if (new URLSearchParams(search).get("demo") !== "1") return false;
+    enterDemoMode(today);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Group 14: the ONLY way to restore the demo baseline (explicit user action). */
+export function resetDemoData(today = todayLocal()): void {
+  try {
+    const ls = getStorage();
+    if (ls) { ls.removeItem(DEMO_KEY); ls.removeItem(DEMO_EVENTS_KEY); }
+  } catch {}
+  enterDemoMode(today);
+}
+
+/** Group 14: true when this browser will not keep data across a refresh
+ * (private window, blocked storage, sandboxed preview). */
+export function isStorageVolatile(): boolean {
+  try {
+    const ls = getStorage();
+    if (!ls) return true;
+    const k = "feather_storage_probe";
+    ls.setItem(k, "1");
+    const ok = ls.getItem(k) === "1";
+    ls.removeItem(k);
+    return !ok;
+  } catch {
+    return true;
+  }
+}
+
 export function exitDemoMode(): void {
   try {
     const ls = getStorage();

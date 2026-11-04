@@ -440,6 +440,33 @@ function mergeDayLogs(
   };
 }
 
+/** Group 4: what saving a slip will do to a day that already has an entry.
+ * Returns null when the day is empty. Saves merge losslessly (symptoms are
+ * unioned, notes kept); a field that would be OVERWRITTEN with a different value
+ * is listed so the slip can say so before the user confirms. */
+export function describeSameDayMerge(
+  existing: DayLog | undefined | null,
+  incoming: { date: string; flow?: string | null; mood?: string | null; energy?: number | null; sleep?: number | null; editsSavedEntry?: boolean },
+): { message: string; overwrites: string[] } | null {
+  if (!existing) return null;
+  const label = prettyDate(incoming.date);
+  if (incoming.editsSavedEntry) {
+    return { message: `You're editing the saved entry for ${label} — saving will replace it with what you see here.`, overwrites: [] };
+  }
+  const overwrites: string[] = [];
+  const diff = (name: string, a: unknown, b: unknown) => {
+    if (a != null && a !== "" && b != null && b !== "" && String(a) !== String(b)) overwrites.push(`${name} ${a} → ${b}`);
+  };
+  diff("flow", existing.flow, incoming.flow);
+  diff("mood", existing.mood, incoming.mood);
+  diff("energy", existing.energy, incoming.energy);
+  diff("sleep", existing.sleepHours, incoming.sleep);
+  const message = overwrites.length > 0
+    ? `${label} already has an entry — saving will update it (${overwrites.join(", ")}). Symptoms and notes already recorded are kept.`
+    : `${label} already has an entry — saving will add to it. Nothing already recorded is removed.`;
+  return { message, overwrites };
+}
+
 export function saveLogEntry(
   logInput: Omit<DayLog, "id"> & { id?: number },
   options: SaveLogEntryOptions = {},

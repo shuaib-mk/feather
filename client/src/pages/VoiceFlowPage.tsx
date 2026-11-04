@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { loadEvents, fuzzyMatchEvents, upsertEvent } from "../lib/events";
+import { loadEvents, fuzzyMatchEvents, upsertEvent, deleteEvent } from "../lib/events";
 import { useCycle } from "../context/CycleContext";
 import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
@@ -11,7 +11,7 @@ import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
 import { SEVERE_SYMPTOM_ESCALATION_MESSAGE, SEVERE_FALL_CARE_MESSAGE } from "../../../ai/backend/guardrail";
-import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts } from "../cycleStorage";
+import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts, describeSameDayMerge } from "../cycleStorage";
 import { applyRowCorrection, backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
 /** Prompt 12 (Group B): voice round-trip instrumentation. Marks live in
@@ -175,6 +175,12 @@ const isOfflineFallback = thread.isOfflineFallback;
   const [rateLimitNotice, setRateLimitNotice] = useState<string | null>(null);
   const [slipCorrectionText, setSlipCorrectionText] = useState<string>("");
   const correctionSaveRef = useRef(false);
+  // Group 11: the last send, kept so "Try the AI again" re-sends the identical message.
+  const [liveFallback, setLiveFallback] = useState<{ reason: string; text: string; pending: StructuredEntry | null | undefined; source: "voice" | "text" } | null>(null);
+  // Group 12.4: care signpost shown with an exact refusal (severe + medical question).
+  const [careSignpost, setCareSignpost] = useState<string | null>(null);
+  // Group 6: event removals proposed by chat; deleted only on the user's tap.
+  const [eventRemovals, setEventRemovals] = useState<Array<{ id: string; title: string; date: string }> | null>(null);
   const pipelineActiveRef = useRef(false);
   const processedAudioRef = useRef<Blob | null>(null);
   const archivedPairRef = useRef<{ t: string; m: string } | null>(null);
@@ -298,7 +304,9 @@ const conversationHistory = thread.conversationHistory;
     setRateLimitNotice(null);
     setSavedSuccessMessage(null);
 
-    const pending = activePendingEntry !== undefined ? activePendingEntry : null;
+    // Group 3: every send carries the slip that is on screen, so follow-ups from the
+    // main chat ("make the flow heavy", "undo that") resolve against it.
+    const pending = activePendingEntry !== undefined ? activePendingEntry : (confirmEntry ?? null);
 
     // Q4.2/Q4.4: calendar visibility for the model, validated ?date= default, stored events, landmark packs.
     const calendarPresetDate = presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate) ? presetDate : undefined;
@@ -392,6 +400,8 @@ const conversationHistory = thread.conversationHistory;
       const hasSlip = !!res.entry || !!((res as any).entries && (res as any).entries.length > 0) || !!((res as any).plannedEvents && (res as any).plannedEvents.length > 0) || !!(res.planOverlaps && res.planOverlaps.length > 0);
       const shownMessage = resolveShownMessage(res.message, hasSlip, !!res.needsClarification);
       setAgentMessage(shownMessage);
+      setCareSignpost((res as any).careSignpost || null);
+      setEventRemovals((res as any).eventDeletion ? [(res as any).eventDeletion] : ((res as any).eventDeletionCandidates && (res as any).eventDeletionCandidates.length > 0 ? (res as any).eventDeletionCandidates : null));
       if (res.needsClarification && res.clarificationQuestion) { setThread({ openQuestion: res.clarificationQuestion, priorPrompt: promptText }); } else { setThread({ openQuestion: null, priorPrompt: null }); }
       markVoiceTiming("agentDone");
       setActivityTrail(res.activityTrail || []);
@@ -399,6 +409,7 @@ const conversationHistory = thread.conversationHistory;
         setToolCalls(res.toolCalls);
       }
       setIsOfflineFallback(Boolean(res.isOfflineFallback));
+      setLiveFallback(res.canRetryLive && res.fallbackReason ? { reason: res.fallbackReason, text: promptText, pending: activePendingEntry, source } : null);
       setAgentMode(res);
       const extractedEvents = (res as any).plannedEvents?.length
         ? (res as any).plannedEvents
@@ -488,7 +499,9 @@ const conversationHistory = thread.conversationHistory;
     const isBleeding = confirmEntry.flow === "light" || confirmEntry.flow === "medium" || confirmEntry.flow === "heavy";
     const isPeriod = confirmEntry.kind === "period_started" || isBleeding;
     const kind = isPeriod ? "period_started" : confirmEntry.kind || "daily_log";
-    const replaceExisting = correctionSaveRef.current;
+    // Group 4: confirming replaces the stored day ONLY for an explicit edit of a
+    // saved entry; a correction of an unsaved slip merges losslessly like any save.
+    const replaceExisting = (confirmEntry as any).editsSavedEntry === true;
     correctionSaveRef.current = false;
     const result = saveLog(
       {
@@ -639,6 +652,20 @@ const conversationHistory = thread.conversationHistory;
         </div>
       )}
 
+      {/* Group 11 (C5): why the live AI was not used, in plain words, plus a working retry. */}
+      {liveFallback && !isProcessing && (
+        <div className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-3 text-xs text-amber-950 font-sans flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs" data-testid="live-fallback-card" role="status">
+          <span>{liveFallback.reason}</span>
+          <button
+            type="button"
+            className="liquid-glass-button rounded-full px-4 py-1.5 font-semibold text-xs cursor-pointer shrink-0"
+            onClick={() => { const f = liveFallback; setLiveFallback(null); runAgentPipeline(f.text, f.pending, f.source); }}
+          >
+            Try the AI again
+          </button>
+        </div>
+      )}
+
       {/* Rate Limit Notice */}
       {rateLimitNotice && (
         <div className="rounded-[18px] liquid-glass-card border border-rose-200/80 bg-rose-50/40 p-3.5 text-xs text-rose-900 font-sans flex items-center gap-2.5 shadow-xs">
@@ -691,7 +718,7 @@ const conversationHistory = thread.conversationHistory;
           </div>
         </div>
         <p className="text-[11px] text-stone-500 font-sans shrink-0">
-          Voice transcription supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu. Malayalam voice is not supported by Meta — Malayalam works when typed (offline parser). Recordings are capped at 60 seconds.
+          Voice transcription (Live AI) supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported by Meta. Without the Live AI, typed period-start messages work in English, Hindi (Devanagari or romanized, e.g. "mera period aaj shuru hua"), romanized Bengali and Malayalam; anything more in those languages, and all other languages, needs the Live AI. Recordings are capped at 60 seconds.
         </p>
 
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
@@ -782,6 +809,12 @@ const conversationHistory = thread.conversationHistory;
 
         {(agentMessage || isProcessing || (planOverlaps && planOverlaps.length > 0) || plannedEventsState.length > 0 || backfillRows || confirmEntry) && (
           <FeatherTurn>
+      {careSignpost && (
+        <div className="rounded-[22px] liquid-glass-card border border-rose-200/80 bg-rose-50/40 p-5 space-y-2 shadow-xs" data-testid="care-signpost" role="alert">
+          <div className="flex items-center gap-2 text-rose-950 font-bold text-sm"><span>Please take care</span></div>
+          <p className="font-sans text-xs text-rose-950 leading-relaxed">{careSignpost}</p>
+        </div>
+      )}
       {/* Medical Guardrail Refusal Alert */}
       {agentMessage && agentMessage.includes("talk to a doctor") && (
         <div className="rounded-[22px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 p-5 space-y-2 shadow-xs">
@@ -865,6 +898,37 @@ const conversationHistory = thread.conversationHistory;
         </p>
       )}
 
+      {eventRemovals && eventRemovals.length > 0 && (
+        <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/90 shadow-sm" data-testid="event-removal-card">
+          <span className="font-sans text-xs font-semibold text-rose-700 block">{eventRemovals.length === 1 ? "Remove this event?" : "Which event should I remove?"}</span>
+          {eventRemovals.map((ev) => (
+            <div key={ev.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-white/40 p-3 rounded-xl border border-white/60">
+              <div>
+                <span className="font-semibold text-stone-900 block font-sans text-sm">{ev.title}</span>
+                <span className="text-stone-600 font-sans">{prettyDate(ev.date)} ({ev.date})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="liquid-glass-button rounded-full px-4 py-2 font-semibold text-xs cursor-pointer"
+                  onClick={() => {
+                    const existed = loadEvents().some((x) => x.id === ev.id);
+                    deleteEvent(ev.id);
+                    setEventRemovals(null);
+                    setSavedSuccessMessage(existed ? `Removed "${ev.title}" on ${prettyDate(ev.date)} from your calendar.` : `"${ev.title}" was already gone from your calendar.`);
+                    setSavedLink({ to: "/calendar", label: "View in Calendar" });
+                  }}
+                >
+                  Remove
+                </button>
+                <button type="button" className="liquid-glass-pill rounded-full px-3 py-2 text-xs text-stone-600 cursor-pointer" onClick={() => setEventRemovals(null)}>
+                  Keep
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {plannedEventsState.length > 0 && (
         <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/95 shadow-md">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">
@@ -1051,6 +1115,14 @@ const conversationHistory = thread.conversationHistory;
             </span>
           </div>
 
+          {(() => {
+            const sameDay = describeSameDayMerge(data.logs.find((l) => l.logDate === confirmEntry.date), confirmEntry as any);
+            return sameDay ? (
+              <p className="font-sans text-xs text-amber-800 bg-amber-50/70 border border-amber-200/70 rounded-xl px-3 py-2" data-testid="same-day-notice">
+                {sameDay.message}
+              </p>
+            ) : null;
+          })()}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             {/* Date Picker */}
             <div className="space-y-1">

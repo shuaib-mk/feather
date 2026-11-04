@@ -113,7 +113,7 @@ export function PlanAroundIt({ events: eventsProp, maskWhenDiscreet = false }: {
               <span className="text-stone-500">{e.date}</span>
               {planMasked ? <span className="block text-violet-700 font-medium">Details hidden in Discreet Mode</span> : <><span className="block text-stone-600">
                 {LABELS[r.status] || r.status}
-                {cleanNote ? ` · ${cleanNote}` : ""}{r.window ? ` · wider estimate window ${r.window.start} to ${r.window.end}` : ""}
+                {cleanNote ? ` · ${cleanNote}` : ""}{r.window ? ` · wider window for this event: ${r.window.start} to ${r.window.end}` : ""}
               </span>
               {clearLine && <span className="block text-stone-600">{clearLine}</span>}
               {positionLine && <span className="block text-stone-600">{positionLine}</span>}

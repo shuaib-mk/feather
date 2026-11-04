@@ -101,6 +101,17 @@ export function parseRelativeExpression(text: string): RelativeOffsetResult {
   if (lower.includes("तीन दिन पहले") || lower.includes("3 दिन पहले")) return { days: -3, direction: "before" };
   if (lower.includes("पहले") || lower.includes("pehle")) return { days: -1, direction: "before" };
 
+  // 2b. Week offsets: "a week before Diwali", "two weeks after Christmas".
+  const weekRe = /\b(?:(\d+|one|two|three|four|a|an|the)\s+)?weeks?\s+(before|prior to|ahead of|after|following)\b/i;
+  const wm = lower.match(weekRe);
+  if (wm) {
+    const wMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, a: 1, an: 1, the: 1 };
+    const raw = (wm[1] || "1").toLowerCase();
+    const n = /^\d+$/.test(raw) ? parseInt(raw, 10) : (wMap[raw] ?? 1);
+    const before = /before|prior|ahead/.test(wm[2].toLowerCase());
+    return { days: (before ? -1 : 1) * 7 * n, direction: before ? "before" : "after" };
+  }
+
   // 3. Day count offset in English / Code-mixed: "2 days before", "three days after"
   const offsetRegex =
     /(?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+)?days?\s+(before|prior to|ahead of|after|following)/i;
@@ -146,6 +157,72 @@ export interface LandmarkPacks {
   india?: boolean;
 }
 
+/** A landmark's date in a given year: the verified table first; for fixed-date
+ * landmarks (same month-day in every verified year, e.g. New Year's Day,
+ * Christmas) the same month-day in any other year. Moving festivals outside the
+ * table return null rather than a guess. */
+export function landmarkDateForYear(fest: MilestoneItem, year: number): string | null {
+  const table = fest.dates as Record<string, string>;
+  if (table[String(year)]) return table[String(year)];
+  const mds = Array.from(new Set(Object.values(table).filter((d) => typeof d === "string").map((d) => d.slice(5))));
+  if (mds.length !== 1) return null;
+  const key = `${year}-${mds[0]}`;
+  return isValidDateKey(key) ? key : null;
+}
+
+/** The NEXT occurrence (>= today) of a landmark-relative phrase, offset applied
+ * ("2 days before New Year's" on 2026-11-04 -> 2026-12-30; on 2027-01-05 ->
+ * 2027-12-30). For plans and events only; logs keep the past-occurrence rule.
+ * Returns null when the landmark is unknown or no verified future date exists. */
+export function resolveNextLandmarkOccurrence(
+  text: string,
+  today: string,
+  packs?: LandmarkPacks | null,
+): { landmarkName: string; baseDate: string; resolvedDate: string } | null {
+  const first = resolveLandmarkExpression(text, today, packs);
+  if (!first.found || !first.landmarkName) return null;
+  const fest = MILESTONES_DATA.find((m) => m.name === first.landmarkName);
+  if (!fest) return null;
+  const lower = text.toLowerCase();
+  const rel = parseRelativeExpression(lower);
+  const currentYear = parseInt(today.slice(0, 4), 10);
+  for (let y = currentYear - 1; y <= currentYear + 2; y++) {
+    const base = landmarkDateForYear(fest, y);
+    if (!base) continue;
+    let resolved = base;
+    if (rel.weekday && rel.direction) resolved = findWeekdayOffset(base, rel.weekday, rel.direction);
+    else if (rel.days !== 0) resolved = applyDayOffset(base, rel.days);
+    if (resolved >= today) return { landmarkName: fest.name, baseDate: base, resolvedDate: resolved };
+  }
+  return null;
+}
+
+/** For the live milestone_lookup tool: the most recent past (<= today) and the
+ * next upcoming (>= today) occurrence of a landmark with an offset applied, so
+ * the model can use the past one for period logs and the upcoming one for plans. */
+export function landmarkOccurrencesAround(
+  name: string,
+  today: string,
+  offsetDays: number,
+  packs?: LandmarkPacks | null,
+): { landmarkName: string; mostRecentPast: string | null; nextUpcoming: string | null } | null {
+  const hit = resolveLandmarkExpression(name, today, packs);
+  if (!hit.found || !hit.landmarkName) return null;
+  const fest = MILESTONES_DATA.find((m) => m.name === hit.landmarkName);
+  if (!fest) return null;
+  const y0 = parseInt(today.slice(0, 4), 10);
+  let past: string | null = null;
+  let next: string | null = null;
+  for (let y = y0 - 2; y <= y0 + 2; y++) {
+    const base = landmarkDateForYear(fest, y);
+    if (!base) continue;
+    const d = offsetDays ? applyDayOffset(base, offsetDays) : base;
+    if (d <= today) past = d;
+    if (d >= today && !next) next = d;
+  }
+  return { landmarkName: fest.name, mostRecentPast: past, nextUpcoming: next };
+}
+
 /**
  * Resolves calendar landmark fuzzy recall deterministically across 2025-2027.
  * Handles "last Diwali", "Christmas next year", explicit years, and relative offsets.
@@ -184,8 +261,7 @@ export function resolveLandmarkExpression(
       if (explicitYearMatch && (fest.dates as any)[explicitYearMatch[1]]) {
         baseDate = (fest.dates as any)[explicitYearMatch[1]];
       } else if (lower.includes("next year")) {
-        const nextYear = String(currentYear + 1);
-        baseDate = (fest.dates as any)[nextYear] || (fest.dates as any)["2027"];
+        baseDate = landmarkDateForYear(fest, currentYear + 1) || (fest.dates as any)["2027"];
       } else if (lower.includes("last ") || lower.includes("past ") || lower.includes("കഴിഞ്ഞ") || lower.includes("पिछली")) {
         // "last Diwali", "last Christmas", "കഴിഞ്ഞ ദീപാവലിക്ക്", "पिछली दीवाली" -> most recent past occurrence <= today
         const pastDates = Object.values(fest.dates)
@@ -242,10 +318,30 @@ export function resolveLandmarkExpression(
 export function applySlipCorrections(
   current: StructuredEntry,
   correctionText: string,
+  today?: string,
 ): { updated: StructuredEntry; changes: string[] } {
   const updated: StructuredEntry = { ...current, symptoms: [...(current.symptoms || [])] };
   const lower = correctionText.toLowerCase();
   const changes: string[] = [];
+  const todayKey = today || todayLocal();
+
+  // 0. Relative date correction (Group 3): "actually it started yesterday",
+  // "change it to yesterday", "it was 2 days ago", "make it today".
+  // Requires a correction or start verb so a stray "today" never moves a slip.
+  const relDate = lower.match(/\b(?:started|began|begun|start|came|was|happened|change(?:\s+(?:it|the\s+date))?\s+to|move(?:\s+it)?\s+to|make\s+it|set(?:\s+it|\s+the\s+date)?\s+to|actually|no,?|meant)\s+(?:on\s+)?(today|yesterday|the\s+day\s+before\s+yesterday|(\d{1,2}|one|two|three|four|five|six|seven)\s+days?\s+ago)\b/i);
+  if (relDate) {
+    const word = relDate[1].toLowerCase();
+    const nMap: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+    let back = 0;
+    if (word === "yesterday") back = 1;
+    else if (/day before yesterday/.test(word)) back = 2;
+    else if (relDate[2]) back = /^\d+$/.test(relDate[2]) ? parseInt(relDate[2], 10) : (nMap[relDate[2].toLowerCase()] ?? 0);
+    const k = addDaysToKey(todayKey, -back);
+    if (k <= todayKey && k !== updated.date) {
+      updated.date = k;
+      changes.push(`Date updated to ${updated.date}`);
+    }
+  }
 
   // 1. Date correction
   // "no, make it the 3rd", "make it 3rd", "change to the 12th", "actually 5th"
@@ -307,8 +403,8 @@ export function applySlipCorrections(
   }
 
   // 2. Flow correction
-  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
-  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,\s*|\s+)(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,\s*|\s+)(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
   const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s*(none|spotting|light|medium|heavy)\b/i);
 
   if (flowContrastMatch) {
@@ -337,11 +433,15 @@ export function applySlipCorrections(
     }
   }
 
-  // 3. Symptoms addition
+  // 3. Symptoms addition (plurals tolerated: "headaches"). A symptom named in a
+  // removal phrase ("remove the headache", "no more cramps") is never added.
+  const symRe = (symKey: string) => symKey.replace(/s$/, "").replace(/ /g, "\\s+") + "(?:e?s)?";
+  const removalRe = (symKey: string) => new RegExp(`\\b(?:remove|delete|drop|take\\s+(?:off|out)|no(?:\\s+more)?|without|not)\\s+(?:the\\s+|my\\s+|that\\s+|any\\s+)?${symRe(symKey)}\\b`, "i");
   for (const sym of VALID_SYMPTOMS) {
     const symKey = sym.replace("_", " ");
-    const addPattern = new RegExp(`\\b(?:add|include|also\\s+had|and)\\s+${symKey}\\b`, "i");
-    if (addPattern.test(lower) || (lower.includes(symKey) && !lower.includes(`remove ${symKey}`) && !lower.includes(`no ${symKey}`))) {
+    if (removalRe(symKey).test(lower)) continue;
+    const mentioned = new RegExp(`\\b${symRe(symKey)}\\b`, "i").test(lower);
+    if (mentioned) {
       if (!updated.symptoms.includes(sym)) {
         updated.symptoms.push(sym);
         changes.push(`Added symptom: ${symKey}`);
@@ -352,7 +452,7 @@ export function applySlipCorrections(
   // 4. Symptoms removal
   for (const sym of VALID_SYMPTOMS) {
     const symKey = sym.replace("_", " ");
-    const removePattern = new RegExp(`\\b(?:remove|delete|no|without)\\s+${symKey}\\b`, "i");
+    const removePattern = removalRe(symKey);
     if (removePattern.test(lower)) {
       const idx = updated.symptoms.indexOf(sym);
       if (idx !== -1) {

@@ -14,6 +14,12 @@ export interface ClientAgentResult extends AgentResult {
   isOfflineFallback?: boolean;
   rateLimited?: boolean;
   pipelineStage?: "recording" | "transcribing" | "resolving" | "previewing" | "confirming";
+  /** Group 11: plain-words reason the live AI was not used for this send. */
+  fallbackReason?: string;
+  /** Group 11: the UI offers "Try the AI again" (re-sends the identical message). */
+  canRetryLive?: boolean;
+  /** Group 11: the whole-send watchdog fired. */
+  watchdogFired?: boolean;
 }
 
 export const SESSION_API_KEY = "feather_session_api_calls";
@@ -176,7 +182,58 @@ export async function transcribeAudioBlob(
 export const MAX_PROMPT_CHARS = 1000;
 export const OVER_LIMIT_MESSAGE = "Please keep it under 1,000 characters — try splitting it into two entries";
 
+/** Group 11: hard ceiling for a whole send (both attempts, the retry pause and
+ * reading the reply). If nothing terminal has happened by then, the send lands
+ * on the on-device fallback with the real reason and "Try the AI again". */
+export const WATCHDOG_MS = AGENT_ATTEMPTS * AGENT_TIMEOUT_MS + AGENT_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0) + 4000;
+export const WATCHDOG_COUNTER_KEY = "feather_watchdog_activations";
+export function getWatchdogActivations(): number {
+  try { return parseInt(localStorage.getItem(WATCHDOG_COUNTER_KEY) || "0", 10) || 0; } catch { return 0; }
+}
+function recordWatchdogActivation(): void {
+  try {
+    const next = getWatchdogActivations() + 1;
+    localStorage.setItem(WATCHDOG_COUNTER_KEY, String(next));
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("feather_watchdog_fired", { detail: next }));
+  } catch {}
+}
+function onDeviceFallback(message: string, context: any, reason: string, extra: Record<string, any> = {}): ClientAgentResult {
+  const today = context?.currentDate || todayLocal();
+  const r = parseLocally(message, today, { ...context });
+  r.activityTrail = [...(r.activityTrail || []), { step: "On-device fallback", detail: reason, status: "done" }];
+  return { ...r, isOfflineFallback: true, fallbackReason: reason, canRetryLive: true, ...extra } as ClientAgentResult;
+}
+
 export async function sendAgentMessage(
+  message: string,
+  context: any = {},
+  conversationHistory: any[] = [],
+  onRetry?: (attempt: number, totalAttempts: number) => void,
+  attemptTimeoutMs: number = AGENT_TIMEOUT_MS,
+  watchdogMs: number = WATCHDOG_MS,
+): Promise<ClientAgentResult> {
+  let timer: any = null;
+  const watchdog = new Promise<ClientAgentResult>((resolve) => {
+    timer = setTimeout(() => {
+      recordWatchdogActivation();
+      resolve(onDeviceFallback(message, context, `The live AI didn't answer within ${Math.round(watchdogMs / 1000)} seconds, so this was handled on your device.`, { watchdogFired: true }));
+    }, watchdogMs);
+  });
+  try {
+    return await Promise.race([sendAgentMessageInner(message, context, conversationHistory, onRetry, attemptTimeoutMs), watchdog]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readJsonWithin<T>(res: Response, ms: number): Promise<T> {
+  let t: any;
+  try {
+    return await Promise.race([res.json() as Promise<T>, new Promise<T>((_, rej) => { t = setTimeout(() => rej(Object.assign(new Error("reply body timed out"), { name: "AbortError" })), ms); })]);
+  } finally { clearTimeout(t); }
+}
+
+async function sendAgentMessageInner(
   message: string,
   context: any = {},
   conversationHistory: any[] = [],
@@ -193,6 +250,7 @@ export async function sendAgentMessage(
       ? "baseten"
       : "meta");
 
+  let failReason = "The live AI couldn't be reached, so this was handled on your device.";
   try {
     const res = await fetchWithTimeoutAndRetry("/api/agent", {
       method: "POST",
@@ -206,7 +264,7 @@ export async function sendAgentMessage(
     }, attemptTimeoutMs, AGENT_ATTEMPTS - 1, { retryOnTimeout: false, retryStatuses: [502, 503], backoffMs: AGENT_RETRY_DELAYS_MS, onRetry });
 
     if (res.ok) {
-      const data: AgentResult = await res.json();
+      const data: AgentResult = await readJsonWithin<AgentResult>(res, 15000);
       const hasSlip = !!((data as any).entry) || !!((data as any).entries && (data as any).entries.length) || !!((data as any).plannedEvents && (data as any).plannedEvents.length) || !!((data as any).planOverlaps && (data as any).planOverlaps.length)
       const blankLive = !(data.message || '').trim() && !hasSlip && !(data as any).needsClarification
       if (blankLive) { const today = context && context.currentDate ? context.currentDate : todayLocal(); const fb = parseLocally(message, today, { ...context, provider }); fb.activityTrail = [...(fb.activityTrail || []), { step: 'Empty Live Reply', detail: 'Live API returned no usable reply, offline parser used', status: 'done' }]; return { ...fb, isOfflineFallback: true } }
@@ -228,21 +286,18 @@ export async function sendAgentMessage(
         isOfflineFallback: true,
       };
     }
+    if (!res.ok) failReason = `The live AI returned an error (${res.status}), so this was handled on your device.`;
   } catch (err: any) {
     console.warn("Backend /api/agent unavailable after " + AGENT_ATTEMPTS + " attempts, running on-device deterministic rules engine.");
+    failReason = err && err.name === "AbortError"
+      ? "The live AI took too long to answer, so this was handled on your device."
+      : "The live AI couldn't be reached, so this was handled on your device.";
   }
 
   // Pure on-device deterministic rules fallback
-  const today = context?.currentDate || todayLocal();
-  const localResult = parseLocally(message, today, { ...context, provider });
-  localResult.activityTrail = [
-    ...(localResult.activityTrail || []),
-    { step: "Retry", detail: "Live AI unreachable after " + AGENT_ATTEMPTS + " attempts; using on-device rules", status: "done" },
-  ];
-  return {
-    ...localResult,
-    isOfflineFallback: true,
-  };
+  const fb = onDeviceFallback(message, { ...context, provider }, failReason);
+  fb.activityTrail = [...(fb.activityTrail || []), { step: "Retry", detail: "Live AI unreachable after " + AGENT_ATTEMPTS + " attempts; using on-device rules", status: "done" }];
+  return fb;
 }
 
 export async function analyzeDiaryPhoto(
