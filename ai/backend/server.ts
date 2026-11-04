@@ -150,6 +150,6 @@ export function createAiServer() {
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("server.ts") || process.argv[1]?.endsWith("server.js")) {
   const server = createAiServer();
   server.listen(config.port, () => {
-    console.log(`[Lavender Voice AI Server] Listening on http://localhost:${config.port}`);
+    console.log(`[Feather AI Server] Listening on http://localhost:${config.port}`);
   });
 }

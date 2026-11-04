@@ -375,6 +375,16 @@ function parseMonthDay(text, year) {
 }
 
 // client/src/lib/periodEngine.ts
+var NOTE_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+var NOTE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function noteDate(key, withYear = false) {
+  const d = dateKeyToUTCDate(key);
+  return `${NOTE_DAYS[d.getUTCDay()]}, ${NOTE_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}` + (withYear ? `, ${d.getUTCFullYear()}` : "");
+}
+function noteRange(a, b) {
+  const crosses = a.slice(0, 4) !== b.slice(0, 4);
+  return `${noteDate(a, crosses)} to ${noteDate(b, crosses)}`;
+}
 function isBleedingFlow(flow) {
   return flow === "light" || flow === "medium" || flow === "heavy";
 }
@@ -634,7 +644,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
     return {
       status: "likely",
       window: window2,
-      note: `Likely overlap: a period is estimated around ${expectedStart} to ${coreEnd}.`,
+      note: `Likely overlap: a period is estimated around ${noteRange(expectedStart, coreEnd)}.`,
       cyclesAhead: k,
       expectedStart
     };
@@ -643,7 +653,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
     return {
       status: "possible",
       window: window2,
-      note: `Possible overlap: this date is inside the wider window for this event (${window2.start} to ${window2.end}).`,
+      note: `Possible overlap: this date is inside the wider window for this event (${noteRange(window2.start, window2.end)}).`,
       cyclesAhead: k,
       expectedStart
     };
@@ -651,7 +661,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
   return {
     status: "unlikely",
     window: window2,
-    note: `Unlikely to overlap (estimate): the wider window for this event is ${window2.start} to ${window2.end}.`,
+    note: `Unlikely to overlap (estimate): the wider window for this event is ${noteRange(window2.start, window2.end)}.`,
     cyclesAhead: k,
     expectedStart
   };
@@ -4069,8 +4079,8 @@ function parseLocallyCore(text, today, context) {
     const toks = phrase.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 1 && !stopW.has(w));
     const pool = (context.events || []).filter((e) => e && e.title && e.date && e.id);
     const hits = toks.length === 0 ? [] : pool.filter((e) => {
-      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/);
-      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || w.startsWith(x)));
+      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || x.length > 1 && w.startsWith(x)));
     });
     const looksLikeEvent = hits.length > 0 || /\b(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|shaadi|sangeet|holiday|event)\b/i.test(phrase);
     if (looksLikeEvent) {

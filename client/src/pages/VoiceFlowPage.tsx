@@ -13,6 +13,7 @@ import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from
 import { SEVERE_SYMPTOM_ESCALATION_MESSAGE, SEVERE_FALL_CARE_MESSAGE } from "../../../ai/backend/guardrail";
 import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts, describeSameDayMerge } from "../cycleStorage";
 import { applyRowCorrection, backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
+import { loadLandmarkPacks } from "../lib/landmarkPacks";
 
 /** Prompt 12 (Group B): voice round-trip instrumentation. Marks live in
  * window.featherVoicePerf.marks for before/after measurement; no UI effect. */
@@ -329,7 +330,7 @@ const conversationHistory = thread.conversationHistory;
 
     // Q4.2/Q4.4: calendar visibility for the model, validated ?date= default, stored events, landmark packs.
     const calendarPresetDate = presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate) ? presetDate : undefined;
-    const landmarkPackPrefs = (() => { try { const raw = localStorage.getItem("feather_landmark_packs"); if (raw) return JSON.parse(raw); } catch {} return { global: true, india: typeof navigator !== "undefined" && navigator.language.endsWith("-IN") }; })();
+    const landmarkPackPrefs = loadLandmarkPacks();
 
     // Resolve most recent saved entry for standalone corrections
     const sortedLogs = [...data.logs].sort((a, b) => b.logDate.localeCompare(a.logDate));
@@ -921,12 +922,12 @@ const conversationHistory = thread.conversationHistory;
 
       {eventRemovals && eventRemovals.length > 0 && (
         <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/90 shadow-sm" data-testid="event-removal-card">
-          <span className="font-sans text-xs font-semibold text-rose-700 block">{eventRemovals.length === 1 ? "Remove this event?" : "Which event should I remove?"}</span>
+          <span className="font-sans text-xs font-semibold text-rose-700 block">{eventRemovals.length === 1 ? "Remove this event?" : "Choose one to remove"}</span>
           {eventRemovals.map((ev) => (
             <div key={ev.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-white/40 p-3 rounded-xl border border-white/60">
               <div>
                 <span className="font-semibold text-stone-900 block font-sans text-sm">{ev.title}</span>
-                <span className="text-stone-600 font-sans">{prettyDate(ev.date)} ({ev.date})</span>
+                <span className="text-stone-600 font-sans">{prettyDate(ev.date)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -966,7 +967,7 @@ const conversationHistory = thread.conversationHistory;
               <div>
                 <span className="font-semibold text-stone-900 block font-sans text-sm">{e.title}</span>
                 <span className="text-stone-600 font-sans">
-                  {prettyDate(e.date)} ({e.date})
+                  {prettyDate(e.date)}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1233,12 +1234,12 @@ const conversationHistory = thread.conversationHistory;
                 value={slipCorrectionText}
                 onChange={(e) => setSlipCorrectionText(e.target.value)}
                 placeholder="e.g. 'Actually it was light flow with backache'"
-                className="flex-1 liquid-glass-input rounded-xl p-2 text-xs font-sans text-stone-900"
+                className="flex-1 min-w-0 liquid-glass-input rounded-xl p-2 text-xs font-sans text-stone-900"
               />
               <button
                 type="submit"
                 disabled={!slipCorrectionText.trim() || isProcessing}
-                className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold text-stone-900 cursor-pointer shadow-xs disabled:opacity-40"
+                className="shrink-0 liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold text-stone-900 cursor-pointer shadow-xs disabled:opacity-40"
               >
                 Apply
               </button>

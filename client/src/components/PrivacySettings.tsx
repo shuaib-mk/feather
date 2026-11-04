@@ -97,7 +97,7 @@ export function PrivacySettings() {
         Cycle data is stored on this device. It is <strong>not encrypted unless App Lock is on</strong>. What leaves this device: audio is sent for transcription, and text is sent to the assistant agent. Cycle dates are not sent unless you ask about them in text.
       </p>
       <p className="text-xs text-stone-600 leading-relaxed">
-        while unlocked the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
+        While unlocked, the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
       </p>
       <p className="text-xs text-amber-950 liquid-glass-card border border-amber-200/80 bg-amber-50/40 rounded-[18px] p-4 font-sans leading-relaxed shadow-xs">
         Forgotten passphrase = your data cannot be recovered. Export a backup first. App Lock protects against casual access, not a determined attacker with your device.

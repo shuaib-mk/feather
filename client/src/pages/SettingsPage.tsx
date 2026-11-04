@@ -3,6 +3,7 @@ import { useCycle } from "../context/CycleContext";
 import { PageHeader } from "../components/PageHeader";
 import { PrivacySettings } from "../components/PrivacySettings";
 import { getWatchdogActivations } from "../../../ai/frontend/aiClient";
+import { loadLandmarkPacks, type LandmarkPackPrefs } from "../lib/landmarkPacks";
 
 export function SettingsPage() {
   const { data, stats } = useCycle();
@@ -16,10 +17,7 @@ export function SettingsPage() {
   });
 
   const [activeDocTab, setActiveDocTab] = useState<"models" | "guardrail" | "landmarks" | "privacy">("models");
-  const [landmarkPacks, setLandmarkPacks] = useState<{global:boolean; india:boolean}>(() => {
-    try { const raw = localStorage.getItem("feather_landmark_packs"); if (raw) return JSON.parse(raw); } catch {}
-    return { global: true, india: typeof navigator !== "undefined" && navigator.language.endsWith("-IN") };
-  });
+  const [landmarkPacks, setLandmarkPacks] = useState<LandmarkPackPrefs>(() => loadLandmarkPacks());
   const toggleLandmarkPack = (pack: "global"|"india", enabled: boolean) => { const next = { ...landmarkPacks, [pack]: enabled }; setLandmarkPacks(next); try { localStorage.setItem("feather_landmark_packs", JSON.stringify(next)); } catch {} };
 
   const handleToggleBaseten = (enabled: boolean) => {

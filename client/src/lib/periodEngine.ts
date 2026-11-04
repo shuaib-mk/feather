@@ -13,6 +13,19 @@
  */
 
 import { parseDateKey, dateKeyToUTCDate, utcDateToDateKey, type DateKey } from "./localDate";
+
+const NOTE_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const NOTE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-12-05" -> "Sat, Dec 5" (year added when asked). Deterministic, locale-free. */
+export function noteDate(key: string, withYear = false): string {
+  const d = dateKeyToUTCDate(key);
+  return `${NOTE_DAYS[d.getUTCDay()]}, ${NOTE_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}` + (withYear ? `, ${d.getUTCFullYear()}` : "");
+}
+/** User-facing date range for overlap notes; shows years only when the range crosses one. */
+export function noteRange(a: string, b: string): string {
+  const crosses = a.slice(0, 4) !== b.slice(0, 4);
+  return `${noteDate(a, crosses)} to ${noteDate(b, crosses)}`;
+}
 export type { DateKey };
 
 export type PeriodRecord = {
@@ -587,7 +600,7 @@ export function evaluateEventOverlap(
     return {
       status: "likely",
       window,
-      note: `Likely overlap: a period is estimated around ${expectedStart} to ${coreEnd}.`,
+      note: `Likely overlap: a period is estimated around ${noteRange(expectedStart, coreEnd)}.`,
       cyclesAhead: k,
       expectedStart,
     };
@@ -596,7 +609,7 @@ export function evaluateEventOverlap(
     return {
       status: "possible",
       window,
-      note: `Possible overlap: this date is inside the wider window for this event (${window.start} to ${window.end}).`,
+      note: `Possible overlap: this date is inside the wider window for this event (${noteRange(window.start, window.end)}).`,
       cyclesAhead: k,
       expectedStart,
     };
@@ -604,7 +617,7 @@ export function evaluateEventOverlap(
   return {
     status: "unlikely",
     window,
-    note: `Unlikely to overlap (estimate): the wider window for this event is ${window.start} to ${window.end}.`,
+    note: `Unlikely to overlap (estimate): the wider window for this event is ${noteRange(window.start, window.end)}.`,
     cyclesAhead: k,
     expectedStart,
   };

@@ -101,7 +101,7 @@ Per git history, all commits fall inside the hackathon building period; see PROV
 ### Unit Tests (`npm test`)
 - **Guardrail Unit Tests (`ai/test/guardrail.test.ts`)**: **57 / 57 passed**
 - **Date Resolution & Landmark Tests (`ai/test/date_resolution.test.ts`)**: **22 / 22 passed**
-- **Full chain (`npm test`)**: **all 67 suites pass, 0 failed** (about 1,600 assertions), including multi-turn conversation, slip correction/cancel, idempotent event saves, lossless same-day merges, the send watchdog, App Lock hardening and import validation.
+- **Full chain (`npm test`)**: **all 68 suites pass, 0 failed** (about 1,600 assertions), including multi-turn conversation, slip correction/cancel, idempotent event saves, lossless same-day merges, the send watchdog, App Lock hardening and import validation.
 
 ### Evaluation Harness (`npm run eval`)
 - **Total Labelled Samples**: **242 samples** (`author's own internal regression set, not an independent benchmark`)

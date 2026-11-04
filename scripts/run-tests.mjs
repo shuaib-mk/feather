@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 
 const suites = [
   ["guardrail", ["npx", "tsx", "ai/test/guardrail.test.ts"]],
+  ["audit_fixes", ["npx", "tsx", "ai/test/audit_fixes.test.ts"]],
   ["date_resolution", ["npx", "tsx", "ai/test/date_resolution.test.ts"]],
   ["periodEngine", ["npx", "tsx", "ai/test/periodEngine.test.ts"]],
   ["localdate", ["npm", "run", "test:localdate"]],

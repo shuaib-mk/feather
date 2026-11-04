@@ -2139,8 +2139,10 @@ function parseLocallyCore(text: string, today: string, context: AgentContext): A
     const toks = phrase.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 1 && !stopW.has(w));
     const pool = (context.events || []).filter((e) => e && e.title && e.date && (e as any).id);
     const hits = toks.length === 0 ? [] : pool.filter((e) => {
-      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/);
-      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || w.startsWith(x)));
+      // filter(Boolean): a title ending in punctuation ("Demo trip (fictional)") left an
+      // empty token, and w.startsWith("") made every such event match every phrase.
+      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || (x.length > 1 && w.startsWith(x))));
     });
     const looksLikeEvent = hits.length > 0 || /\b(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|shaadi|sangeet|holiday|event)\b/i.test(phrase);
     if (looksLikeEvent) {

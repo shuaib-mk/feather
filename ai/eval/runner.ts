@@ -68,7 +68,7 @@ async function runEvaluations(): Promise<EvalReport> {
   // -------------------------------------------------------------
   // SUITE 1: LANDMARK RECALL EVALUATION (65 SAMPLES)
   // -------------------------------------------------------------
-  console.log("--> [1/2] Running Landmark Recall Benchmark (65 samples across EN, ML, HI, Code-Mixed)...");
+  console.log(`--> [1/2] Running Landmark Recall Benchmark (${LANDMARK_DATASET.length} samples across EN, ML, HI, Code-Mixed)...`);
   const landmarkLatencies: number[] = [];
   const landmarkMisses: Array<{ id: string; phrase: string; expected: string; got: string | undefined }> = [];
   const byLanguage: Record<string, { total: number; passed: number; accuracyPct: number; datePassed: number; dateTotal: number; clarifyPassed: number; clarifyTotal: number }> = {
@@ -155,9 +155,9 @@ async function runEvaluations(): Promise<EvalReport> {
   console.log("");
 
   // -------------------------------------------------------------
-  // SUITE 2: MEDICAL SAFETY GUARDRAIL EVALUATION (105 SAMPLES)
+  // SUITE 2: MEDICAL SAFETY GUARDRAIL EVALUATION (count from GUARDRAIL_DATASET)
   // -------------------------------------------------------------
-  console.log("--> [2/2] Running Medical Safety Guardrail Benchmark (105 samples)...");
+  console.log(`--> [2/2] Running Medical Safety Guardrail Benchmark (${GUARDRAIL_DATASET.length} samples)...`);
   const guardrailLatencies: number[] = [];
   let tp = 0; // True Positive: correctly refused medical request
   let fp = 0; // False Positive: incorrectly refused valid log/plan

@@ -24,8 +24,6 @@ Meta Global AI Developer Hackathon · Indie Developer · Build for Your World
 - Phrases that work offline (no key): "period started yesterday, heavy flow with cramps", "period started 2 days before New Year's Day", "exam on Nov 20", "exam on 23rd November", "Anu's wedding is on Nov 20", "dinner on Nov 21", "actually it was light, not heavy" (correction), "my period is late" (asks what to log), "mera period aaj shuru hua" (Hindi), "my peroid started tday, hevy flow" (typos), "log cramps today and tell me my average cycle length" (log + question in one), "how long was my last cycle?", "cancel the exam" (asks before removing), "undo that" (discards the slip).
 - Phrases that work live (Meta key configured server-side): the same phrases via Muse Spark tool-calling, plus voice input via Muse Voice Transcribe. Without a key the app honestly reports offline mode.
 
-> **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap estimates using Meta Muse Voice & Spark. Cycle data is stored only on your device; voice and text are sent to Meta's API for processing when you use those features.
-
 ---
 
 > **Meta Global AI Developer Hackathon**  
@@ -81,8 +79,6 @@ flowchart TD
 
 ---
 
-**Hackathon Window:** October 27 – November 4, 2026 · **Target Models:** Meta Muse Voice Transcribe (`muse-voice-transcribe-1.0`) & Meta Muse Spark (`muse-spark-1.3`)
-
 ## Safety and non-medical boundaries
 Feather is built strictly for **logging and milestone planning**. It is not a diagnostic tool, does not provide medical or contraception advice, and does not provide fitness coaching.
 
@@ -119,7 +115,7 @@ Safety scope (guardrail v2): Feather refuses diagnosis, medication, fertility an
 
 ---
 
-Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features. while unlocked the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
+Cycle data is stored on this device in localStorage. It is not encrypted unless App Lock is on (Settings -> Privacy). With App Lock on, the vault is encrypted with AES-GCM-256 using a PBKDF2-SHA-256 key (600,000 iterations) derived from your passphrase; the key stays in memory only. Forgotten passphrase = data cannot be recovered. What leaves the device: audio is sent to transcription, and text is sent to the agent, only when you use those features. While unlocked, the vault is held decrypted on this device for the session and is re-encrypted when you lock, hide or close the tab (an abrupt close may skip this).
 
 ### Local Vault & Unmissable Backup
 Because all cycle data lives exclusively on the user's device, clearing browser cache or changing devices would lose data. Feather makes backup prominent:
@@ -187,15 +183,6 @@ npx tsx ai/eval/run-holdout.ts
 
 ---
 
-To protect infrastructure credits against automated scrapers, denial-of-wallet loops, and replay attacks, Feather enforces best-effort request protection across all serverless endpoints:
-- **True Client IP Address:** Client IPs are extracted directly from authentic edge headers set by Vercel (`x-real-ip` and `x-vercel-forwarded-for`) rather than trusting a spoofable client-supplied `x-forwarded-for`.
-- **Per-IP Limits:** 20 requests/minute and 150 requests/day per serverless instance.
-- **Server-Side Daily Cap:** Enforces `DAILY_REQUEST_CAP` (default: 500 requests/day) to safeguard hackathon API credit quotas.
-- **Payload Sanitization:** Maximum 4MB request body, 1,000 characters text prompt, and 60 seconds audio duration.
-- **Stateless Best-Effort Architecture Note:** Serverless functions on Vercel run as ephemeral, distributed containers that scale independently across multiple instances and regions without a shared centralized Redis or database. Consequently, these rate limits are strictly best-effort per running instance and not a hard global cap across all distributed nodes. When a limit is hit, endpoints return HTTP 429 with a user-friendly notice without crashing the UI.
-
----
-
 ## Run locally
 ### 1. Prerequisites
 - Node.js 20.12+ (the local backend calls `process.loadEnvFile`, added in Node 20.12; developed and verified on Node 24)
@@ -217,7 +204,7 @@ PORT=3001
 ```
 
 ### 3. Run Automated Tests & Eval Harness
-`npm test` runs 67 suites (about 1,600 assertions) and exits non-zero if any fails.
+`npm test` runs 68 suites (about 1,600 assertions) and exits non-zero if any fails.
 ```sh
 npm test
 
@@ -265,19 +252,27 @@ Feather is ready for zero-configuration serverless deployment on Vercel:
 ## Project structure
 ```
 feather/
-client/src/lib/
-  appLock.ts
-  calendarView.ts
-  demoMode.ts
-  discreetMode.ts
-  events.ts
-  ics.ts
-  localDate.ts
-  periodEngine.ts
-  planInsights.ts
-  statsView.ts
-  vaultCrypto.ts
-  voiceMessage.ts
+client/src/
+  App.tsx
+  cycleStorage.ts
+  globals.d.ts
+  main.tsx
+  theme.css
+client/src/context/
+  CycleContext.tsx
+  VoiceThreadContext.tsx
+client/src/components/
+  AgentMessageCard.tsx
+  AppLayout.tsx
+  ConfirmDialog.tsx
+  ConversationThread.tsx
+  EmptyState.tsx
+  LiquidGlassFilter.tsx
+  PageHeader.tsx
+  PlanAroundIt.tsx
+  PrivacySettings.tsx
+  ScrollToTop.tsx
+  Sidebar.tsx
 client/src/pages/
   CalendarPage.tsx
   ChroniclePage.tsx
@@ -287,56 +282,47 @@ client/src/pages/
   StatsPage.tsx
   VaultPage.tsx
   VoiceFlowPage.tsx
-client/src/components/
-  AgentMessageCard.tsx
-  AppLayout.tsx
-  ConfirmDialog.tsx
-  EmptyState.tsx
-  LiquidGlassFilter.tsx
-  PageHeader.tsx
-  PlanAroundIt.tsx
-  PrivacySettings.tsx
-  ScrollToTop.tsx
-  Sidebar.tsx
+client/src/lib/
+  appLock.ts
+  backfill.ts
+  calendarView.ts
+  conversation.ts
+  demoMode.ts
+  discreetMode.ts
+  events.ts
+  ics.ts
+  landmarkPacks.ts
+  localDate.ts
+  periodEngine.ts
+  planInsights.ts
+  statsView.ts
+  vaultCrypto.ts
+  voiceMessage.ts
 ai/backend/
   agent.ts
   config.ts
   dateArithmetic.ts
+  eventAnswers.ts
   guardrail.ts
   intent.ts
   landmarks.json
   landmarks.ts
+  ownDataAnswer.ts
   protection.ts
   server.ts
   transcribe.ts
   vision.ts
+ai/backend/lexicon/
+  en.ts
+  hi.ts
+  kn.ts
+  ml.ts
+  ta.ts
 ai/frontend/
   PaperDiaryImportModal.tsx
   aiClient.ts
   useAudioRecorder.ts
   wavEncode.ts
-ai/test/
-  batch1.test.ts
-  batch2.test.ts
-  batch3.test.ts
-  batch4.test.ts
-  batch5.test.ts
-  batch6.test.ts
-  batch7.test.ts
-  batch8.test.ts
-  date_resolution.test.ts
-  fact_coverage.test.ts
-  guardrail.test.ts
-  localDate.test.ts
-  parser-fixes.test.ts
-  periodEngine.test.ts
-  plan_insights.test.ts
-  prompt6_audit.test.ts
-  qa_batch2.test.ts
-  qa_batch2_followup.test.ts
-  qa_bugs.test.ts
-  render_smoke.test.tsx
-  transcribe.test.ts
 ai/eval/
   guardrail.dataset.ts
   holdout.dataset.ts
@@ -358,18 +344,21 @@ api/
   vision.ts
 scripts/
   bundle-api.mjs
+  run-tests.mjs
   with-tz.mjs
+ai/test/
+  68 test suites (*.test.ts / *.test.tsx), all run by scripts/run-tests.mjs
 ```
 
 ## Known limitations
-Live Meta results are Not measured until run with a real key (`npx tsx ai/eval/run-live-meta.ts`). Languages in the internal regression suite: en, hi, ml, ta, kn and code-mixed. Rate limits are best-effort in-memory per serverless instance. Storage is localStorage (device/browser bound, size-limited). Landmark dates are limited to verified entries in `ai/backend/landmarks.json`; unverifiable dates are omitted rather than invented.
+Live Meta results are Not measured until run with a real key (`npx tsx ai/eval/run-live-meta.ts`). Languages in the eval datasets: en, hi, ml, es and code-mixed (Tamil and Kannada appear only in landmark names and a few unit tests). Rate limits are best-effort in-memory per serverless instance. Storage is localStorage (device/browser bound, size-limited). Landmark dates are limited to verified entries in `ai/backend/landmarks.json`; unverifiable dates are omitted rather than invented.
 
 
 
 - Google Calendar OAuth is future work and is not implemented. Feather supports local .ics export/import only (see Settings and /calendar). Processing of imported .ics files happens entirely in the browser.
 
 ## Provenance and what was built during the hackathon
-Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, inside the hackathon building period (Oct 27 – Nov 4, 2026); no file's first commit predates the Oct 26 kickoff. No pre-existing code is knowingly included; asset provenance (including one asset whose source is unknown and must be confirmed by the owner) is recorded in [PROVENANCE.md](PROVENANCE.md). History has not been rewritten.
+Per `git log`, this repository's earliest commit is `c09d38f` dated 2026-10-28, inside the hackathon building period (Oct 27 – Nov 4, 2026); no file's first commit predates the Oct 26 kickoff. No pre-existing code is knowingly included; asset provenance is recorded in [PROVENANCE.md](PROVENANCE.md). History has not been rewritten.
 
 ## License
 MIT License. Built for the Meta Global AI Developer Hackathon. See [LICENSE](LICENSE).

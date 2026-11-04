@@ -10,7 +10,7 @@
 | Asset | Source | License / status |
 |---|---|---|
 | `client/public/icon.webp` | App icon (icon.webp and derived 192/512 PNGs): original artwork created for this project on 2026-11-01 by the project owner using Meta AI image generation (Muse). Master: icon-master.png in this repo. No third-party source. | Original to this repo; no third-party source. |
-| `client/public/icon-192.png`, `client/public/icon-512.png` | Generated in this repo (2026-10-30) by resizing `client/public/icon.webp` | Derived from the above; same unknown status |
+| `client/public/icon-192.png`, `client/public/icon-512.png` | Regenerated in this repo on 2026-11-01 (commit `a632694`) from the same original artwork as `icon-master.png` | Derived from the original artwork above; no third-party source |
 | Fonts: Newsreader, Plus Jakarta Sans, Inter, JetBrains Mono | Loaded at runtime from Google Fonts (`fonts.googleapis.com`, see `client/src/theme.css` and `client/index.html`); no font files are vendored in this repo | As published by Google Fonts for each family |
 | `ai/backend/landmarks.json` date data | Each entry carries its own `source` URL and `verifiedOn` date inside the file (e.g. timeanddate.com holiday pages, un.org, earthday.org) | Factual calendar dates; sources recorded per entry |
 | Demo data (`client/src/lib/demoMode.ts`) | Written for this project; fictional cycles, labelled fictional in the UI | Original to this repo |
