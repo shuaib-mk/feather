@@ -110,7 +110,7 @@ export function weekdayOfKey(key: DateKey): number {
  */
 export function parseMonthDay(text: string, year: number): DateKey | null {
   if (!Number.isInteger(year)) return null;
-  const cleaned = text.trim().toLowerCase().replace(/,/g, " ").replace(/\s+/g, " ");
+  const cleaned = text.trim().toLowerCase().replace(/,/g, " ").replace(/\bthe\b/g, " ").replace(/\s+/g, " ");
   const monthFirst = cleaned.match(/^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?$/);
   const dayFirst = cleaned.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)$/);
   let month: number | undefined;

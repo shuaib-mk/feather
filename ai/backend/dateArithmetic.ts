@@ -285,6 +285,27 @@ export function applySlipCorrections(
     changes.push(`Date updated to ${updated.date}`);
   }
 
+  // General date-target correction: the destination of a move/change/set
+  // ('move it to October 9th', 'change the date to November 1'). The first
+  // dated 'to <month day>' after the verb wins as the destination.
+  const moveToMonthDay = lower.match(/\b(?:move|change|set|correct|update)\b[^.]*?\bto\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+
+  if (moveToMonthDay) {
+    const mm2 = MONTH_NAME_TO_NUM[moveToMonthDay[1]];
+    const dd2 = parseInt(moveToMonthDay[2], 10);
+    if (mm2 && dd2 >= 1 && dd2 <= 31) {
+      const y2 = (updated.date || todayLocal()).slice(0, 4);
+      const k2 = y2 + '-' + String(mm2).padStart(2, '0') + '-' + String(dd2).padStart(2, '0');
+
+
+      if (isValidDateKey(k2)) {
+        updated.date = k2;
+        changes.push('Date updated to ' + updated.date);
+
+      }
+    }
+  }
+
   // 2. Flow correction
   const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
   const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
@@ -663,8 +684,8 @@ export function resolveDateExpression(text: string, today: string, packs?: Landm
   }
 
   // Month/day ordinals: "3rd November", "3 Nov", "Nov 3"
-  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) ||
-    lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:the\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) ||
+    lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/);
   if (ordinalMatch && !landmarkRes.found) {
     const year = parseInt(today.slice(0, 4), 10);
     let key = parseMonthDay(ordinalMatch[0].trim(), year);

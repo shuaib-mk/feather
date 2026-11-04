@@ -63,6 +63,8 @@ export interface StructuredEntry {
   kind?: "period_started" | "period_ended" | "daily_log";
   dateExplanation?: string | null;
   dateWindow?: { start: string; end: string } | null;
+  /** Stable identifier for this pending action, preserved across corrections. */
+  slipId?: string | null;
 }
 
 export interface ActivityStep {
@@ -95,6 +97,12 @@ export interface AgentContext {
   currentDate?: string; // YYYY-MM-DD
   provider?: "meta" | "baseten";
   pendingEntry?: StructuredEntry | null;
+  /** Unsaved multi-pending actions (for example backfill rows), oldest first. */
+  pendingEntries?: StructuredEntry[];
+  /** The clarifying question the backend last asked, if still unresolved. */
+  openQuestion?: string | null;
+  /** The user message that prompted the open question. */
+  priorPrompt?: string | null;
   recentEntry?: StructuredEntry | null;
   recentEntries?: StructuredEntry[];
   locale?: string;
@@ -145,6 +153,8 @@ export interface AgentResult {
   entry?: StructuredEntry | null;
   /** True when entry is a corrected slip that must replace (not merge into) the stored day log. */
   replacesExisting?: boolean;
+  /** True when this turn explicitly discarded a pending draft; the UI must clear it. */
+  discardedSlip?: boolean;
   /** All backfilled entries, oldest first. entry is always entries[0] for old code. */
   entries?: StructuredEntry[];
   /** Backend-computed summary of what this message led to (observability, no behaviour change). */
@@ -794,6 +804,11 @@ export async function runLavenderAgent(
     return { ...fallbackResult, mode: "offline" as const, modeReason: "Offline parser — Meta model not used (late-period question answered directly; no entry created)" };
   }
 
+  // Deterministic lifecycle intents bypass the model (as with late-period and
+  // reminders): an explicit cancel or undo discards the pending slip, never logs.
+  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && /\b(?:undo\s+that|cancel\s+that|don\u0027t\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(userPrompt)) {
+    return { ...fallbackResult, mode: 'offline', modeReason: 'Offline parser - Meta model not used (explicit cancel discards the pending slip; nothing saved)' };
+  }
   // Phase 2: date comparison is deterministic in BOTH paths; nothing is saved.
 
   if ((fallbackResult as any).comparison) {
@@ -1441,7 +1456,7 @@ function resolveBackfillDate(seg: string, today: string): { date?: string; futur
   }
   if (/\byesterday\b/i.test(seg)) return { date: addDaysToKey(today, -1) };
   if (/\btoday\b/i.test(seg)) return { date: today };
-  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+\\d{1,2}(?:st|nd|rd|th)?)", "i"));
+  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:the\\s+)?(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+(?:the\\s+)?\\d{1,2}(?:st|nd|rd|th)?)", "i"));
   if (md) {
     const raw = md[1].replace(/,/g, " ").replace(/\s+/g, " ").trim();
     const explicit = seg.match(/\b(20\d{2})\b/);
@@ -1671,6 +1686,8 @@ function withIntent<T extends AgentResult>(result: T, userPrompt: string): T {
     const tools = validated.map((c) => c.toolName);
     const hasSevere = typeof r.message === "string" && (r.message.indexOf("please get help now from a trusted adult") !== -1 || r.message.indexOf("Important safety notice") !== -1);
     const isRefusalMsg = typeof r.message === "string" && (r.message === MEDICAL_REFUSAL_MESSAGE || (Object.values(REDIRECT_MESSAGES) as string[]).includes(r.message));
+    if (entry && !entry.slipId) entry.slipId = "slip-" + entry.date + "-" + (entry.kind || "daily_log");
+    entries.forEach((e, ii) => { if (e && !e.slipId) e.slipId = "slip-" + e.date + "-" + (e.kind || "daily_log") + "-" + ii; });
     if (r.replacesExisting && entry) { r.responseType = "correction"; }
     else if (entries.length > 1) { r.responseType = "backfill"; }
     else if (entry && ((r.planOverlaps && r.planOverlaps.length > 0) || (r.plannedEvents && r.plannedEvents.length > 0))) { r.responseType = "log"; }
@@ -1747,6 +1764,23 @@ export function parseLocally(text: string, today: string, context: AgentContext)
     return withIntent({ message: conversationalReply(), entry: null, needsClarification: false, activityTrail, toolCalls, ...offline }, text);
   }
 
+  // Follow-up answers to our own clarifying question (a bare date after we asked
+  // which day): a fragment that is meaningless alone is re-read together with
+  // the turn that prompted the question. Self-sufficient new messages never
+  // take this path.
+  if (context.openQuestion && context.priorPrompt) {
+    const fragExt = extractWithLexicon(text);
+    const fragSevere = severeTier(text);
+    const fragHasContent = fragExt.symptoms.length > 0 || fragExt.flow !== null || fragExt.mood !== null || fragExt.periodStart || fragExt.periodEnd || fragSevere.isSevere;
+    const fragWords = text.toLowerCase().split(/[^a-z]+/);
+    const fragHasEvent = fragWords.some((w) => ('|' + BACKFILL_EVENT_NOUNS + '|').indexOf('|' + w + '|') !== -1);
+    const fragIsQuestion = /\?/.test(text.trim()) || /^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)[^a-z]/i.test(text.trim());
+    if (!fragHasContent && !fragHasEvent && !fragIsQuestion && !isConversationalMessage(text)) {
+      const resumed = parseLocally(context.priorPrompt + ' ' + text, today, { ...context, openQuestion: null, priorPrompt: null });
+      resumed.activityTrail.unshift({ step: 'Follow-up Context', detail: 'Answered the open question with the prior turn', status: 'done' });
+      return resumed;
+    }
+  }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that — try something like 'period started yesterday, medium flow'.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
@@ -1758,9 +1792,9 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   }
   // Q3.4: undo/cancel discards the pending slip; nothing is saved.
   if (/\b(?:undo\s+that|cancel\s+that|don't\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(text)) {
-    if (context.pendingEntry) {
+    if (context.pendingEntry || (context.pendingEntries || []).length > 0) {
       activityTrail.push({ step: "Slip Discarded", detail: "Pending slip cancelled by user", status: "done" });
-      return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+      return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, discardedSlip: true, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
     return { message: "There's no pending slip to discard.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
@@ -1805,9 +1839,19 @@ export function parseLocally(text: string, today: string, context: AgentContext)
   let namedDateMatched = false;
   if (!targetSlip && (isExplicitCorrection || lastEntryMentioned || (hasCorrectionVerb && namedDate)) && !todayOnlyStatement) {
     if (namedDate) {
-      const pool = context.recentEntries && context.recentEntries.length ? context.recentEntries : (context.recentEntry ? [context.recentEntry] : []);
+      const pool = [...(context.pendingEntries || []), ...(context.recentEntries && context.recentEntries.length ? context.recentEntries : (context.recentEntry ? [context.recentEntry] : []))];
       const namedHit = pool.find((e) => e.date === namedDate) ?? null;
       if (namedHit) { targetSlip = namedHit; namedDateMatched = true; }
+    } else if ((context.pendingEntries || []).length > 0) {
+      const pendRows = (context.pendingEntries || []).map((e) => e.date).filter(Boolean);
+      if (pendRows.length === 1) {
+        targetSlip = (context.pendingEntries || [])[0];
+      } else if (pendRows.length > 1) {
+        const pendQ = 'Which date should I change? Your pending dates are ' + pendRows.filter((d, i, a) => a.indexOf(d) === i).sort().join(', ') + '.';
+        return { message: pendQ, entry: null, needsClarification: true, clarificationQuestion: pendQ, activityTrail, toolCalls, ...offline };
+      } else {
+        targetSlip = selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries);
+      }
     } else {
       targetSlip = selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries);
     }

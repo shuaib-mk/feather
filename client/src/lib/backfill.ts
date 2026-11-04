@@ -10,7 +10,7 @@ export interface BackfillRow {
 }
 
 export function backfillRowsFromEntries(entries: StructuredEntry[]): BackfillRow[] {
-  return entries.map((e, i) => ({ key: e.date + "-" + i, date: e.date, endDate: e.endDate || "", selected: true }));
+  return entries.map((e, i) => ({ key: e.slipId || e.date + "-" + i, date: e.date, endDate: e.endDate || "", selected: true }));
 }
 
 export function backfillSelected(rows: BackfillRow[]): BackfillRow[] {
@@ -110,4 +110,9 @@ export function saveBackfillRows(rows: BackfillRow[], today: string, confirmLong
     throw err;
   }
   return backfillSelected(rows).length;
+}
+
+
+export function applyRowCorrection(rows: BackfillRow[], slipId: string, date: string, endDate?: string | null): BackfillRow[] {
+  return rows.map((r) => (r.key === slipId ? { ...r, date, endDate: endDate || '' } : r));
 }

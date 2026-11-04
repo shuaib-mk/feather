@@ -55,6 +55,7 @@ const suites = [
   ["arch_refine", ["npx", "tsx", "ai/test/arch_refine.test.ts"]],
   ["arch_natural", ["npx", "tsx", "ai/test/arch_natural.test.ts"]],
   ["conversation", ["npx", "tsx", "ai/test/conversation.test.ts"]],
+  ["arch_dialogue", ["npx", "tsx", "ai/test/arch_dialogue.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

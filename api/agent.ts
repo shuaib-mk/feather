@@ -351,7 +351,7 @@ function weekdayOfKey(key) {
 }
 function parseMonthDay(text, year) {
   if (!Number.isInteger(year)) return null;
-  const cleaned = text.trim().toLowerCase().replace(/,/g, " ").replace(/\s+/g, " ");
+  const cleaned = text.trim().toLowerCase().replace(/,/g, " ").replace(/\bthe\b/g, " ").replace(/\s+/g, " ");
   const monthFirst = cleaned.match(/^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?$/);
   const dayFirst = cleaned.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)$/);
   let month;
@@ -1451,6 +1451,19 @@ function applySlipCorrections(current, correctionText) {
     updated.date = addDaysToKey(updated.date || todayLocal(), 1);
     changes.push(`Date updated to ${updated.date}`);
   }
+  const moveToMonthDay = lower.match(/\b(?:move|change|set|correct|update)\b[^.]*?\bto\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+  if (moveToMonthDay) {
+    const mm2 = MONTH_NAME_TO_NUM[moveToMonthDay[1]];
+    const dd2 = parseInt(moveToMonthDay[2], 10);
+    if (mm2 && dd2 >= 1 && dd2 <= 31) {
+      const y2 = (updated.date || todayLocal()).slice(0, 4);
+      const k2 = y2 + "-" + String(mm2).padStart(2, "0") + "-" + String(dd2).padStart(2, "0");
+      if (isValidDateKey(k2)) {
+        updated.date = k2;
+        changes.push("Date updated to " + updated.date);
+      }
+    }
+  }
   const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
   const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
   const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s*(none|spotting|light|medium|heavy)\b/i);
@@ -1841,7 +1854,7 @@ function resolveDateExpression(text, today, packs) {
       if (bareKey) return { date: bareKey, confidence: "high", explanation: `${bareSpelled[0].trim()} = ${explain(bareKey)}` };
     }
   }
-  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) || lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b/);
+  const ordinalMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:the\s+)?(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/) || lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/);
   if (ordinalMatch && !landmarkRes.found) {
     const year = parseInt(today.slice(0, 4), 10);
     let key = parseMonthDay(ordinalMatch[0].trim(), year);
@@ -2638,6 +2651,9 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b|\bam\s+i\s+late\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (late-period question answered directly; no entry created)" };
   }
+  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && /\b(?:undo\s+that|cancel\s+that|don\u0027t\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(userPrompt)) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - Meta model not used (explicit cancel discards the pending slip; nothing saved)" };
+  }
   if (fallbackResult.comparison) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (date comparison answered directly; nothing saved)" };
   }
@@ -3261,7 +3277,7 @@ function resolveBackfillDate(seg, today) {
   }
   if (/\byesterday\b/i.test(seg)) return { date: addDaysToKey(today, -1) };
   if (/\btoday\b/i.test(seg)) return { date: today };
-  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+\\d{1,2}(?:st|nd|rd|th)?)", "i"));
+  const md = seg.match(new RegExp("\\b(\\d{1,2}(?:st|nd|rd|th)?\\s+(?:the\\s+)?(?:" + BACKFILL_MONTHS + ")\\b|\\b(?:" + BACKFILL_MONTHS + ")\\s+(?:the\\s+)?\\d{1,2}(?:st|nd|rd|th)?)", "i"));
   if (md) {
     const raw = md[1].replace(/,/g, " ").replace(/\s+/g, " ").trim();
     const explicit = seg.match(/\b(20\d{2})\b/);
@@ -3450,6 +3466,10 @@ function withIntent(result, userPrompt) {
     const tools = validated.map((c) => c.toolName);
     const hasSevere = typeof r.message === "string" && (r.message.indexOf("please get help now from a trusted adult") !== -1 || r.message.indexOf("Important safety notice") !== -1);
     const isRefusalMsg = typeof r.message === "string" && (r.message === MEDICAL_REFUSAL_MESSAGE || Object.values(REDIRECT_MESSAGES).includes(r.message));
+    if (entry && !entry.slipId) entry.slipId = "slip-" + entry.date + "-" + (entry.kind || "daily_log");
+    entries.forEach((e, ii) => {
+      if (e && !e.slipId) e.slipId = "slip-" + e.date + "-" + (e.kind || "daily_log") + "-" + ii;
+    });
     if (r.replacesExisting && entry) {
       r.responseType = "correction";
     } else if (entries.length > 1) {
@@ -3525,6 +3545,19 @@ function parseLocally(text, today, context) {
     activityTrail.push({ step: "Conversation", detail: "Greeting/help answered directly, no log created", status: "done" });
     return withIntent({ message: conversationalReply(), entry: null, needsClarification: false, activityTrail, toolCalls, ...offline }, text);
   }
+  if (context.openQuestion && context.priorPrompt) {
+    const fragExt = extractWithLexicon(text);
+    const fragSevere = severeTier(text);
+    const fragHasContent = fragExt.symptoms.length > 0 || fragExt.flow !== null || fragExt.mood !== null || fragExt.periodStart || fragExt.periodEnd || fragSevere.isSevere;
+    const fragWords = text.toLowerCase().split(/[^a-z]+/);
+    const fragHasEvent = fragWords.some((w) => ("|" + BACKFILL_EVENT_NOUNS + "|").indexOf("|" + w + "|") !== -1);
+    const fragIsQuestion = /\?/.test(text.trim()) || /^(did|do|does|is|are|was|were|will|would|could|should|can|when|where|why|how|what|which|who|am|has|have)[^a-z]/i.test(text.trim());
+    if (!fragHasContent && !fragHasEvent && !fragIsQuestion && !isConversationalMessage(text)) {
+      const resumed = parseLocally(context.priorPrompt + " " + text, today, { ...context, openQuestion: null, priorPrompt: null });
+      resumed.activityTrail.unshift({ step: "Follow-up Context", detail: "Answered the open question with the prior turn", status: "done" });
+      return resumed;
+    }
+  }
   if (!hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
@@ -3533,9 +3566,9 @@ function parseLocally(text, today, context) {
     return { message: "Open Chronicle or Calendar to delete entries.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
   if (/\b(?:undo\s+that|cancel\s+that|don't\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(text)) {
-    if (context.pendingEntry) {
+    if (context.pendingEntry || (context.pendingEntries || []).length > 0) {
       activityTrail.push({ step: "Slip Discarded", detail: "Pending slip cancelled by user", status: "done" });
-      return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+      return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, discardedSlip: true, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
     return { message: "There's no pending slip to discard.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
@@ -3559,11 +3592,21 @@ function parseLocally(text, today, context) {
   let namedDateMatched = false;
   if (!targetSlip && (isExplicitCorrection || lastEntryMentioned || hasCorrectionVerb && namedDate) && !todayOnlyStatement) {
     if (namedDate) {
-      const pool = context.recentEntries && context.recentEntries.length ? context.recentEntries : context.recentEntry ? [context.recentEntry] : [];
+      const pool = [...context.pendingEntries || [], ...context.recentEntries && context.recentEntries.length ? context.recentEntries : context.recentEntry ? [context.recentEntry] : []];
       const namedHit = pool.find((e) => e.date === namedDate) ?? null;
       if (namedHit) {
         targetSlip = namedHit;
         namedDateMatched = true;
+      }
+    } else if ((context.pendingEntries || []).length > 0) {
+      const pendRows = (context.pendingEntries || []).map((e) => e.date).filter(Boolean);
+      if (pendRows.length === 1) {
+        targetSlip = (context.pendingEntries || [])[0];
+      } else if (pendRows.length > 1) {
+        const pendQ = "Which date should I change? Your pending dates are " + pendRows.filter((d, i, a) => a.indexOf(d) === i).sort().join(", ") + ".";
+        return { message: pendQ, entry: null, needsClarification: true, clarificationQuestion: pendQ, activityTrail, toolCalls, ...offline };
+      } else {
+        targetSlip = selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries);
       }
     } else {
       targetSlip = selectCorrectionTarget(text, null, context.recentEntry, context.recentEntries);

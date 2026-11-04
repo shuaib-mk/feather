@@ -6,13 +6,13 @@ import { useVoiceThread } from "../context/VoiceThreadContext";
 import { PageHeader } from "../components/PageHeader";
 import { AgentMessageCard } from "../components/AgentMessageCard";
 import { UserBubble, FeatherTurn, FeatherBubble, SystemBubble } from "../components/ConversationThread";
-import { appendTurn, makeTurnId, resolveShownMessage, shouldArchiveTurn } from "../lib/conversation";
+import { appendTurn, makeTurnId, resolveShownMessage, shouldArchiveTurn, nextPendingSlip } from "../lib/conversation";
 import { useAudioRecorder } from "../../../ai/frontend/useAudioRecorder";
 import { sendAgentMessage, transcribeAudioBlob, type ClientAgentResult } from "../../../ai/frontend/aiClient";
 import type { StructuredEntry, ToolCallRecord, ActivityStep, ValidSymptom } from "../../../ai/backend/agent";
 import { SEVERE_SYMPTOM_ESCALATION_MESSAGE, SEVERE_FALL_CARE_MESSAGE } from "../../../ai/backend/guardrail";
 import { prettyDate, todayStr, addDays, loadCycleData, addOrUpdatePeriod, findShortGapStarts } from "../cycleStorage";
-import { backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
+import { applyRowCorrection, backfillRowsFromEntries, backfillSelected, validateBackfillRows, backfillRowWarnings, backfillGapDays, backfillDurationDays, saveBackfillRows, type BackfillRow } from "../lib/backfill";
 
 /** Prompt 12 (Group B): voice round-trip instrumentation. Marks live in
  * window.featherVoicePerf.marks for before/after measurement; no UI effect. */
@@ -35,6 +35,8 @@ export interface VoicePendingSession {
   planOverlaps: any[] | null;
   agentMode: any;
   isOfflineFallback: boolean;
+  openQuestion?: string | null;
+  priorPrompt?: string | null;
 }
 
 export function loadVoicePendingSession(): VoicePendingSession | null {
@@ -364,6 +366,9 @@ const conversationHistory = thread.conversationHistory;
           logs: data.logs,
           currentDate: todayStr(),
           pendingEntry: pending,
+          pendingEntries: backfillRows && backfillRows.length > 0 ? backfillRows.map((r) => ({ date: r.date, endDate: r.endDate || null, flow: null, symptoms: [], mood: null, energy: null, sleep: null, notes: null, isApproximate: false, landmarkName: null, kind: 'period_started', slipId: r.key })) : undefined,
+          openQuestion: thread.openQuestion ?? null,
+          priorPrompt: thread.priorPrompt ?? null,
           events: (() => { try { return loadEvents(); } catch { return []; } })(),
           calendarVisible: allowMatchedCalendar,
           defaultDate: calendarPresetDate,
@@ -387,6 +392,7 @@ const conversationHistory = thread.conversationHistory;
       const hasSlip = !!res.entry || !!((res as any).entries && (res as any).entries.length > 0) || !!((res as any).plannedEvents && (res as any).plannedEvents.length > 0) || !!(res.planOverlaps && res.planOverlaps.length > 0);
       const shownMessage = resolveShownMessage(res.message, hasSlip, !!res.needsClarification);
       setAgentMessage(shownMessage);
+      if (res.needsClarification && res.clarificationQuestion) { setThread({ openQuestion: res.clarificationQuestion, priorPrompt: promptText }); } else { setThread({ openQuestion: null, priorPrompt: null }); }
       markVoiceTiming("agentDone");
       setActivityTrail(res.activityTrail || []);
       if (res.toolCalls && res.toolCalls.length > 0) {
@@ -406,23 +412,27 @@ const conversationHistory = thread.conversationHistory;
       }
 
       const isMessageOnly = !res.entry && extractedEvents.length === 0 && !(res.planOverlaps && res.planOverlaps.length > 0);
-      if (isMessageOnly) {
+      const rowSlipId: string | null = res.entry && (res.entry as any).slipId ? String((res.entry as any).slipId) : null;
+      const rowMatch = rowSlipId && backfillRows ? backfillRows.find((r) => r.key === rowSlipId) : null;
+      if (res.discardedSlip) {
         setConfirmEntry(null);
+        setBackfillRows(null);
         setPlannedEventsState([]);
         setPlanOverlaps(null);
-      }
-
-      if (res.entries && res.entries.length > 1) {
+      } else if (rowMatch && res.entry) {
+        setBackfillRows(applyRowCorrection(backfillRows || [], rowMatch.key, res.entry.date, (res.entry as any).endDate ?? null));
+        setConfirmEntry(null);
+      } else if (res.entries && res.entries.length > 1) {
         setBackfillRows(backfillRowsFromEntries(res.entries));
         setConfirmEntry(null);
+      } else if (res.entry) {
+        if (res.entry.date <= todayStr()) setConfirmEntry((prev) => nextPendingSlip(prev, res));
+        else setAgentMessage('That date is in the future, so there is nothing to confirm yet. Pick a past or today\'s date.');
+      } else if (!isMessageOnly) {
+        setConfirmEntry((prev) => nextPendingSlip(prev, res));
       } else {
-        setBackfillRows(null);
-      if (res.entry) {
-        if (res.entry.date <= todayStr()) setConfirmEntry(res.entry);
-        else { setConfirmEntry(null); setAgentMessage("That date is in the future, so there is nothing to confirm yet. Pick a past or today's date."); }
-      } else {
-        setConfirmEntry(null);
-      }
+        setPlannedEventsState([]);
+        setPlanOverlaps(null);
       }
 
       if (!isMessageOnly) {

@@ -14,6 +14,8 @@ export interface VoiceThreadState {
   agentMode: any;
   isOfflineFallback: boolean;
   conversationHistory: Array<{ role: "user" | "assistant"; content: string; id?: string }>;
+  openQuestion: string | null;
+  priorPrompt: string | null;
 }
 
 export const EMPTY_VOICE_THREAD: VoiceThreadState = {
@@ -26,6 +28,8 @@ export const EMPTY_VOICE_THREAD: VoiceThreadState = {
   agentMode: null,
   isOfflineFallback: false,
   conversationHistory: [],
+  openQuestion: null,
+  priorPrompt: null,
 };
 
 export function applyThreadPatch(

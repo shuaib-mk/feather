@@ -69,3 +69,21 @@ export function shouldArchiveTurn(
   if (!archived) return true;
   return archived.t !== transcript || archived.m !== agentMessage;
 }
+
+import type { StructuredEntry } from '../../../ai/backend/agent';
+
+export interface SlipResult {
+  entry?: StructuredEntry | null;
+  entries?: StructuredEntry[] | null;
+  discardedSlip?: boolean;
+}
+
+/** Next pending slip after a turn. A new slip replaces the old one; an
+ *  explicit discard clears it; multi-entry results hand pendings to the rows;
+ *  anything else leaves the previous pending draft untouched. */
+export function nextPendingSlip(prev: StructuredEntry | null, res: SlipResult): StructuredEntry | null {
+  if (res.entry) return res.entry;
+  if (res.discardedSlip) return null;
+  if (res.entries && res.entries.length > 0) return null;
+  return prev;
+}
