@@ -82,6 +82,18 @@ export function checkStatelessProtection(req: any, options: ProtectionOptions): 
   const headers = req.headers || {};
   const origin = headers["origin"] || headers["referer"];
 
+  // Group 15.2: state-changing calls fail CLOSED without Origin/Referer (browsers
+  // always send Origin on a POST; scripts that omit it are refused).
+  const method = String(req.method || req.httpMethod || "POST").toUpperCase();
+  if (!origin && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Missing origin.",
+      code: "ORIGIN_REQUIRED",
+    };
+  }
+
   // 1. Allowed Origin Check
   if (!isOriginAllowed(origin, req)) {
     return {

@@ -67,6 +67,8 @@ const suites = [
   ["p13_g11_watchdog", ["npx", "tsx", "ai/test/p13_g11_watchdog.test.ts"]],
   ["p13_g12_corpus", ["npx", "tsx", "ai/test/p13_g12_corpus.test.ts"]],
   ["p13_g13_g14", ["npx", "tsx", "ai/test/p13_g13_g14.test.ts"]],
+  ["p13_g15_security", ["npx", "tsx", "ai/test/p13_g15_security.test.ts"]],
+  ["p13_g16_storage", ["npx", "tsx", "ai/test/p13_g16_storage.test.ts"]],
   ["render_smoke", ["npx", "tsx", "ai/test/render_smoke.test.tsx"]],
 ];
 

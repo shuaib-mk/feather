@@ -67,7 +67,7 @@ export function PlanAroundIt({ events: eventsProp, maskWhenDiscreet = false }: {
       next.add(saved.id);
       return next;
     });
-    setSavedNotice(`Event "${saved.title}" on ${prettyDate(saved.date)} (${saved.date}) saved to calendar.`);
+    setSavedNotice(`Event "${saved.title}" on ${prettyDate(saved.date)} saved to calendar.`);
   };
 
   if (!rows.length)
@@ -110,10 +110,10 @@ export function PlanAroundIt({ events: eventsProp, maskWhenDiscreet = false }: {
           >
             <div>
               <span className="font-semibold">{e.title}</span>{" "}
-              <span className="text-stone-500">{e.date}</span>
+              <span className="text-stone-500">{prettyDate(e.date)}</span>
               {planMasked ? <span className="block text-violet-700 font-medium">Details hidden in Discreet Mode</span> : <><span className="block text-stone-600">
                 {LABELS[r.status] || r.status}
-                {cleanNote ? ` · ${cleanNote}` : ""}{r.window ? ` · wider window for this event: ${r.window.start} to ${r.window.end}` : ""}
+                {r.window ? ` · wider window for this event: ${prettyDate(r.window.start)} – ${prettyDate(r.window.end)}` : cleanNote ? ` · ${cleanNote}` : ""}
               </span>
               {clearLine && <span className="block text-stone-600">{clearLine}</span>}
               {positionLine && <span className="block text-stone-600">{positionLine}</span>}

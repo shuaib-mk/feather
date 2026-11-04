@@ -11,8 +11,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   {
     path: "/",
-    label: "Dashboard",
-    shortLabel: "Hero",
+    label: "Home",
+    shortLabel: "Home",
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round">
         <rect width="7" height="9" x="3" y="3" rx="1" />
@@ -37,7 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     path: "/voice",
-    label: "Voice Capture",
+    label: "Log by voice",
     shortLabel: "Voice",
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round">
@@ -73,7 +73,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     path: "/vault",
-    label: "Local Vault",
+    label: "Privacy & data",
     shortLabel: "Vault",
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round">
@@ -96,7 +96,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     path: "/settings",
     label: "Settings",
-    shortLabel: "Config",
+    shortLabel: "Settings",
     icon: (active) => (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.2" : "1.8"} strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -167,36 +167,11 @@ export function Sidebar() {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
                 <span className="font-sans text-[11px] text-stone-500 font-medium whitespace-nowrap">
-                  Cycle Companion
+                  Cycle companion
                 </span>
               </div>
             )}
           </Link>
-
-          {/* Quick Action: Voice Record CTA */}
-          <div className="my-1 px-0.5">
-            <Link
-              to="/voice"
-              className={`flex items-center gap-2.5 rounded-[16px] transition-all cursor-pointer liquid-glass-nav-cta font-semibold text-stone-900 ${
-                isHovered ? "p-2 justify-start w-full" : "size-10 justify-center mx-auto"
-              }`}
-              aria-label="Record Log"
-              title="Record Log"
-            >
-              <div className="size-5 shrink-0 flex items-center justify-center">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="22" />
-                </svg>
-              </div>
-              {isHovered && (
-                <span className="font-sans text-[13px] font-semibold truncate animate-in fade-in duration-150 whitespace-nowrap">
-                  Record Log
-                </span>
-              )}
-            </Link>
-          </div>
 
           {/* Core Routes Navigation */}
           <nav aria-label="Desktop Navigation" className="flex flex-col gap-1 mt-1 border-t border-black/[0.04] pt-1">
@@ -236,7 +211,7 @@ export function Sidebar() {
           className={`liquid-glass-lens flex items-center transition-all duration-200 ease-out overflow-hidden shadow-sm ${
             isHovered ? "w-[216px] rounded-[20px] p-2.5 justify-start" : "w-[58px] h-11 rounded-[20px] justify-center p-0 mx-auto"
           }`}
-          title="100% On-Device Zero Server Vault"
+          title="Data stored on your device — AI answers are generated in the cloud from what you send"
         >
           <div className="size-6 shrink-0 flex items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -247,10 +222,10 @@ export function Sidebar() {
           {isHovered && (
             <div className="flex flex-col text-left pl-2 animate-in fade-in duration-150 whitespace-nowrap">
               <span className="font-sans text-[11px] font-semibold text-stone-800">
-                100% On-Device
+                Stored on your device
               </span>
               <span className="font-sans text-[10px] text-stone-500 font-medium">
-                Zero Server Vault
+                AI replies use the cloud
               </span>
             </div>
           )}

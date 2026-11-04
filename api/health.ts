@@ -79,8 +79,16 @@ function healthPayload() {
   const sha = (typeof process !== "undefined" && process.env ? String(process.env.VERCEL_GIT_COMMIT_SHA || "") : "").slice(0, 7);
   return { metaKeyConfigured: !!c.metaApiKey, voiceModel: c.museVoiceModel, sparkModel: c.museSparkModel, baseUrl: c.metaBaseUrl, basetenConfigured: !!c.basetenApiKey, buildId: sha || null };
 }
+function publicHealthPayload() {
+  return { status: "ok" };
+}
+function healthPayloadFor(req) {
+  const token = typeof process !== "undefined" && process.env ? process.env.DIAGNOSTICS_TOKEN || "" : "";
+  const sent = req?.headers?.["x-feather-diagnostics"];
+  return token && sent && String(sent) === token ? healthPayload() : publicHealthPayload();
+}
 async function handler(req, res) {
-  const payload = healthPayload();
+  const payload = healthPayloadFor(req);
   if (res?.setHeader) {
     const aco = corsAllowOrigin(req);
     if (aco) res.setHeader("Access-Control-Allow-Origin", aco);
@@ -98,5 +106,7 @@ var health_default = handler;
 export {
   health_default as default,
   handler,
-  healthPayload
+  healthPayload,
+  healthPayloadFor,
+  publicHealthPayload
 };

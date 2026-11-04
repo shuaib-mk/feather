@@ -822,3 +822,49 @@ textarea:focus-visible,
     inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.90),
     0 4px 12px -1px rgba(244, 63, 94, 0.20) !important;
 }
+
+/* ========================================================
+   FEATHER ACCENTS (submission polish)
+   Additive only: the Liquid Glass system above is unchanged.
+   - .fe-primary: the ONE solid violet call to action per screen.
+   - Cards fade in gently (transform + opacity only).
+   - Visible keyboard focus, and solid fallbacks for users who ask for
+     reduced transparency or more contrast.
+   ======================================================== */
+:root {
+  --fe-accent: #6d28d9;
+  --fe-accent-hover: #5b21b6;
+  --fe-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fe-primary,
+.fe-primary:hover,
+.fe-primary:active {
+  background: var(--fe-accent) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 20px -8px rgba(109, 40, 217, 0.6) !important;
+}
+.fe-primary:hover { background: var(--fe-accent-hover) !important; }
+.fe-primary:active { transform: scale(0.97) !important; }
+
+@keyframes fe-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+main .liquid-glass-card { animation: fe-appear 260ms var(--fe-ease) both; }
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--fe-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .liquid-glass-lens, .liquid-glass-dock, .liquid-glass-topbar,
+  .liquid-glass-card, .liquid-glass-pill, .liquid-glass-tile {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  main .liquid-glass-card { animation: none !important; }
+  .fe-primary:active { transform: none !important; }
+}

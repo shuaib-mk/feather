@@ -72,8 +72,14 @@ export const OVERLAP_DISCLAIMER =
 const STORAGE_KEY = "feather_cycle_vault_v1";
 export const DEMO_STORAGE_KEY = "feather_demo_v1";
 export function activeVaultKey(): string { try { const ls = (globalThis as any).localStorage; if (ls && ls.getItem("feather_demo_active")==="1") return DEMO_STORAGE_KEY; } catch {} return STORAGE_KEY; }
-const LAST_EXPORT_KEY = "feather_last_export_ts";
-const ENTRIES_SINCE_EXPORT_KEY = "feather_entries_since_export";
+const REAL_LAST_EXPORT_KEY = "feather_last_export_ts";
+const REAL_ENTRIES_SINCE_EXPORT_KEY = "feather_entries_since_export";
+export const DEMO_LAST_EXPORT_KEY = "feather_demo_last_export_ts";
+export const DEMO_ENTRIES_SINCE_EXPORT_KEY = "feather_demo_entries_since_export";
+// Group 16.5: demo mode keeps its own backup-reminder counters, so demo activity
+// never touches (or, on exit, deletes) the real vault's export history.
+function demoOn(): boolean { try { return (globalThis as any).localStorage?.getItem("feather_demo_active") === "1"; } catch { return false; } }
+const exportKeys = () => demoOn() ? { last: DEMO_LAST_EXPORT_KEY, since: DEMO_ENTRIES_SINCE_EXPORT_KEY } : { last: REAL_LAST_EXPORT_KEY, since: REAL_ENTRIES_SINCE_EXPORT_KEY };
 
 const inMemoryVault = new Map<string, string>();
 
@@ -168,56 +174,33 @@ export function prettyDate(s: string): string {
 
 
 // Initial sample seed to demonstrate landmark recall immediately on first launch
-const INITIAL_DATA: { periods: Period[]; logs: DayLog[] } = {
-  periods: [
-    {
-      id: 1,
-      startDate: addDays(todayStr(), -26),
-      endDate: addDays(todayStr(), -21),
-      isApproximate: false,
-    },
-    {
-      id: 2,
-      startDate: addDays(todayStr(), -54),
-      endDate: addDays(todayStr(), -49),
-      landmarkName: "International Women's Day",
-      isApproximate: true,
-    },
-  ],
-  logs: [
-    {
-      id: 1,
-      logDate: addDays(todayStr(), -26),
-      flow: "heavy",
-      symptoms: ["cramps", "fatigue"],
-      mood: "Low",
-      energy: 2,
-      sleepHours: 7,
-      notes: "First day, heavy flow",
-    },
-    {
-      id: 2,
-      logDate: addDays(todayStr(), -25),
-      flow: "medium",
-      symptoms: ["cramps", "bloating"],
-      mood: "Okay",
-      energy: 3,
-      sleepHours: 8,
-      notes: "Cramps eased after warm compress",
-    },
-  ],
-};
+
+let vaultLoadProblem: string | null = null;
+/** Group 16.2: set when the stored vault could not be read; the UI shows it. */
+export function lastVaultLoadProblem(): string | null { return vaultLoadProblem; }
 
 export function loadCycleData(): { periods: Period[]; logs: DayLog[] } {
+  const raw = safeGetItem(activeVaultKey());
+  if (!raw) { vaultLoadProblem = null; return { periods: [], logs: [] }; }
+  let parsed: any;
   try {
-    const raw = safeGetItem(activeVaultKey());
-    if (!raw) {
-      return { periods: [], logs: [] };
-    }
-    return JSON.parse(raw);
+    parsed = JSON.parse(raw);
   } catch {
+    // Group 16.2: corruption degrades to an empty vault with a visible notice.
+    // The unreadable text is left in storage untouched (never overwritten here).
+    vaultLoadProblem = "Your saved data on this device could not be read, so Feather is showing an empty vault. Restore a backup from Settings → Privacy.";
     return { periods: [], logs: [] };
   }
+  if (!parsed || typeof parsed !== "object" || (!Array.isArray(parsed.periods) && !Array.isArray(parsed.logs))) {
+    vaultLoadProblem = "Your saved data on this device is not in the expected format, so Feather is showing an empty vault. Restore a backup from Settings → Privacy.";
+    return { periods: [], logs: [] };
+  }
+  const isKey = (d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const periods = (Array.isArray(parsed.periods) ? parsed.periods : []).filter((p: any) => p && isKey(p.startDate));
+  const logs = (Array.isArray(parsed.logs) ? parsed.logs : []).filter((l: any) => l && isKey(l.logDate)).map((l: any) => ({ ...l, symptoms: Array.isArray(l.symptoms) ? l.symptoms : [] }));
+  const dropped = (Array.isArray(parsed.periods) ? parsed.periods.length : 0) - periods.length + (Array.isArray(parsed.logs) ? parsed.logs.length : 0) - logs.length;
+  vaultLoadProblem = dropped > 0 ? `${dropped} damaged record${dropped === 1 ? " was" : "s were"} skipped while loading your data.` : null;
+  return { ...parsed, periods, logs };
 }
 
 export function saveCycleData(data: { periods: Period[]; logs: DayLog[] }): boolean {
@@ -864,47 +847,47 @@ export function computeCycleStats(periods: Period[], logs: DayLog[] = []): Cycle
 // ========================================================
 
 export function getLastExportTimestamp(): number | null {
-  const ts = safeGetItem(LAST_EXPORT_KEY);
+  const ts = safeGetItem(exportKeys().last);
   return ts ? parseInt(ts, 10) : null;
 }
 
 export function recordExportTimestamp(): void {
-  safeSetItem(LAST_EXPORT_KEY, String(Date.now()));
+  safeSetItem(exportKeys().last, String(Date.now()));
   resetEntriesSinceExport();
 }
 
 export function clearExportTracking(): void {
   try {
     if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.removeItem(LAST_EXPORT_KEY);
-      window.localStorage.removeItem(ENTRIES_SINCE_EXPORT_KEY);
+      window.localStorage.removeItem(exportKeys().last);
+      window.localStorage.removeItem(exportKeys().since);
     }
   } catch {}
   try {
     if (typeof globalThis !== "undefined" && (globalThis as any).localStorage) {
-      (globalThis as any).localStorage.removeItem(LAST_EXPORT_KEY);
-      (globalThis as any).localStorage.removeItem(ENTRIES_SINCE_EXPORT_KEY);
+      (globalThis as any).localStorage.removeItem(exportKeys().last);
+      (globalThis as any).localStorage.removeItem(exportKeys().since);
     }
   } catch {}
   try {
-    inMemoryVault.delete(LAST_EXPORT_KEY);
-    inMemoryVault.delete(ENTRIES_SINCE_EXPORT_KEY);
+    inMemoryVault.delete(exportKeys().last);
+    inMemoryVault.delete(exportKeys().since);
   } catch {}
 }
 
 export function getEntriesSinceExport(): number {
-  const val = safeGetItem(ENTRIES_SINCE_EXPORT_KEY);
+  const val = safeGetItem(exportKeys().since);
   return val ? parseInt(val, 10) : 0;
 }
 
 export function incrementEntriesSinceExport(): number {
   const current = getEntriesSinceExport() + 1;
-  safeSetItem(ENTRIES_SINCE_EXPORT_KEY, String(current));
+  safeSetItem(exportKeys().since, String(current));
   return current;
 }
 
 export function resetEntriesSinceExport(): void {
-  safeSetItem(ENTRIES_SINCE_EXPORT_KEY, "0");
+  safeSetItem(exportKeys().since, "0");
 }
 
 export function isExportOverdue(days: number = 14): boolean {
@@ -916,7 +899,8 @@ export function isExportOverdue(days: number = 14): boolean {
 
 export function exportCycleDataJSON(): string {
   const data = loadCycleData();
-  recordExportTimestamp();
+  // Group 16.4: generating the file does NOT reset the backup reminders; the
+  // caller records the export only once the download has actually started.
   return JSON.stringify(
     {
       app: "Feather",
@@ -976,6 +960,10 @@ export function describeSkipped(skipped: ImportSkippedRow[], max = 5): string {
  * writes once. Returns per-row skip reasons; id collisions with different
  * content get a fresh id instead of overwriting.
  */
+const IMPORT_FLOWS = ["none", "spotting", "light", "medium", "heavy"];
+const IMPORT_SYMPTOMS = ["cramps", "headache", "backache", "bloating", "breast_tenderness", "acne", "fatigue", "cravings", "nausea", "mood_swings", "anxiety", "insomnia", "dizziness", "appetite_change"];
+const isImportDate = (d: any): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d + "T00:00:00Z"));
+
 export function importCycleDataJSON(jsonStr: string): ImportResult {
   const empty: ImportResult = { success: false, count: 0, added: { periods: 0, logs: 0, events: 0 }, skipped: [] };
   let parsed: any;
@@ -1022,6 +1010,10 @@ export function importCycleDataJSON(jsonStr: string): ImportResult {
       continue;
     }
     const end: string | null = p.endDate || null;
+    if (p.startDate > todayStr()) {
+      skipped.push({ kind: "period", key: p.startDate, reason: "future-dated" });
+      continue;
+    }
     if (end && end < p.startDate) {
       skipped.push({ kind: "period", key: p.startDate, reason: "end date precedes start date" });
       continue;
@@ -1045,8 +1037,9 @@ export function importCycleDataJSON(jsonStr: string): ImportResult {
       id,
       startDate: p.startDate,
       endDate: end,
-      startEarliest: typeof p.startEarliest === "string" ? p.startEarliest : null,
-      startLatest: typeof p.startLatest === "string" ? p.startLatest : null,
+      // Group 16.1: uncertainty fields must be real dates in the right order.
+      startEarliest: isImportDate(p.startEarliest) && isImportDate(p.startLatest) && p.startEarliest <= p.startLatest ? p.startEarliest : null,
+      startLatest: isImportDate(p.startEarliest) && isImportDate(p.startLatest) && p.startEarliest <= p.startLatest ? p.startLatest : null,
       landmarkName: p.landmarkName || null,
       isApproximate: Boolean(p.isApproximate),
     });
@@ -1067,13 +1060,22 @@ export function importCycleDataJSON(jsonStr: string): ImportResult {
       skipped.push({ kind: "log", key: l.logDate, reason: "invalid date" });
       continue;
     }
+    if (l.logDate > todayStr()) {
+      skipped.push({ kind: "log", key: l.logDate, reason: "future-dated" });
+      continue;
+    }
+    // Group 16.1: enum-validate flow, keep only known symptoms, clamp numbers.
+    if (l.flow != null && l.flow !== "" && !IMPORT_FLOWS.includes(l.flow)) {
+      skipped.push({ kind: "log", key: l.logDate, reason: "invalid flow value" });
+      continue;
+    }
     const row = {
       flow: l.flow || null,
-      symptoms: Array.isArray(l.symptoms) ? l.symptoms : [],
-      mood: l.mood || null,
-      energy: typeof l.energy === "number" ? l.energy : null,
-      sleepHours: typeof l.sleepHours === "number" ? l.sleepHours : null,
-      notes: l.notes || null,
+      symptoms: Array.isArray(l.symptoms) ? l.symptoms.filter((x: any) => IMPORT_SYMPTOMS.includes(x)) : [],
+      mood: typeof l.mood === "string" && l.mood ? l.mood.slice(0, 40) : null,
+      energy: typeof l.energy === "number" && isFinite(l.energy) ? Math.min(5, Math.max(1, Math.round(l.energy))) : null,
+      sleepHours: typeof l.sleepHours === "number" && isFinite(l.sleepHours) ? Math.min(24, Math.max(0, l.sleepHours)) : null,
+      notes: typeof l.notes === "string" && l.notes ? l.notes.slice(0, 2000) : null,
     };
     const localSameDate = [...existing.logs, ...acceptedLogs].find((x) => x.logDate === l.logDate);
     if (localSameDate && sameImportedLog(localSameDate, row)) {

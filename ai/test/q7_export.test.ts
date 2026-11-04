@@ -29,7 +29,9 @@ check("Q7.6 STEP0: erase-lock clears export tracking", getLastExportTimestamp() 
 seedExported();
 enterDemoMode();
 exitDemoMode();
-check("Q7.6 STEP0: exit demo clears export tracking", getLastExportTimestamp() === null && getEntriesSinceExport() === 0, getLastExportTimestamp() + "/" + getEntriesSinceExport());
+// Prompt 13 Group 16.5 (owner-approved change): demo mode keeps its own export
+// counters; exiting demo must NOT delete the real vault's export history.
+check("Q7.6 STEP0: exit demo keeps the real vault's export tracking", getLastExportTimestamp() !== null && getEntriesSinceExport() === 2, getLastExportTimestamp() + "/" + getEntriesSinceExport());
 for (const k in store) delete store[k];
 saveCycleData({ periods: [{ id: 1, startDate: "2026-10-02", endDate: "2026-10-06" } as any], logs: [] });
 const backup = exportCycleDataJSON();

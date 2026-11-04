@@ -10,6 +10,12 @@ import { getDayGreeting } from "../lib/localDate";
 import { useDiscreetMode } from "../lib/discreetMode";
 import { gradeWindowTrust, formatWindowTrustLine } from "../lib/planInsights";
 
+/** "Oct 29" style short date for compact tiles. */
+function shortDay(key: string): string {
+  const d = new Date(key + "T12:00:00Z");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 export function DashboardPage() {
   const { data, stats, loadDemo, isDemoActive } = useCycle();
   const { isDiscreet } = useDiscreetMode();
@@ -44,20 +50,19 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Cycle Overview"
-        subtitle={getDayGreeting() + " \u00b7 Your private, voice-first companion for cycle logging and calendar landmark recall."}
-        badge={hasHistory ? "Active Vault" : "New Setup"}
+        subtitle={getDayGreeting() + " \u00b7 here's where your cycle stands."}
         actions={
           <div className="flex items-center gap-2">
             <Link
               to="/voice"
-              className="liquid-glass-button rounded-full px-4 py-2 font-sans text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button fe-primary rounded-full px-4 py-2 min-h-[40px] font-sans text-xs font-semibold hidden sm:flex items-center gap-2 cursor-pointer"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" y1="19" x2="12" y2="22" />
               </svg>
-              <span>Record Voice</span>
+              <span>Log by voice</span>
             </Link>
           </div>
         }
@@ -80,29 +85,28 @@ export function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1 max-w-lg">
             <span className="font-sans text-[11px] font-semibold tracking-wide text-violet-700 uppercase block">
-              Voice &amp; Landmark Accession
+              Landmark recall
             </span>
             <h2 className="font-serif text-xl sm:text-2xl font-semibold text-stone-900 leading-snug">
               "Period started 2 days before New Year's..."
             </h2>
             <p className="font-sans text-xs text-stone-600 leading-relaxed">
-              Understands dates like 'two days before New Year's'.
+              Say it the way you remember it. Feather turns holidays and festivals into exact dates, then asks you to confirm.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               to="/voice"
-              className="liquid-glass-button rounded-full px-5 py-2.5 font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              className="liquid-glass-button fe-primary rounded-full px-5 py-2.5 min-h-[44px] font-sans text-xs font-semibold text-center flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span className="size-2 rounded-full bg-rose-500 animate-pulse" />
-              <span>Start Recording</span>
+              <span>Try it by voice</span>
             </Link>
             <Link
               to="/voice"
               className="liquid-glass-pill rounded-full px-4 py-2.5 font-sans text-xs font-medium text-stone-700 hover:text-stone-950 text-center cursor-pointer shadow-2xs"
             >
-              Type via Text →
+              Type instead
             </Link>
           </div>
         </div>
@@ -119,14 +123,14 @@ export function DashboardPage() {
             </svg>
           }
           title="No cycle entries in your vault yet"
-          description="Record your first period using natural voice or text. Your data is stored strictly on this device in localStorage."
+          description="Log your first period by voice or text. Your entries are stored on this device."
           action={
             <div className="flex items-center gap-2.5 flex-wrap justify-center">
               <Link
                 to="/voice"
                 className="liquid-glass-button rounded-full px-5 py-2 font-sans text-xs font-semibold cursor-pointer shadow-sm"
               >
-                Record First Entry
+                Log your first period
               </Link>
               <p className="basis-full text-center text-[11px] text-stone-500">Tell me your last few periods, for example: my periods started October 2nd and September 9th.</p>
             </div>
@@ -165,9 +169,9 @@ export function DashboardPage() {
                   <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                     {stats.nextPeriodDate ? prettyDate(stats.nextPeriodDate) : "Estimating"}
                   </div>
-                  <span className="font-sans text-[11px] text-violet-700 font-medium block truncate" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}` : undefined}>
+                  <span className="font-sans text-[11px] text-violet-700 font-medium block leading-snug" title={stats.earliestNextDate && stats.latestNextDate ? `${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}` : undefined}>
                     {stats.earliestNextDate && stats.latestNextDate
-                      ? `Estimated window: ${prettyDate(stats.earliestNextDate)} – ${prettyDate(stats.latestNextDate)}`
+                      ? `Window ${shortDay(stats.earliestNextDate)} – ${shortDay(stats.latestNextDate)}`
                       : daysUntilNext != null
                       ? daysUntilNext > 0
                         ? `In ~${daysUntilNext} days`
@@ -176,7 +180,7 @@ export function DashboardPage() {
                         : `${Math.abs(daysUntilNext)}d past est.`
                       : "Based on logs"}
                   </span>
-                  <span data-testid="window-trust" className="font-sans text-[11px] text-stone-500 block truncate">{formatWindowTrustLine(gradeWindowTrust(stats.statistics?.allCycleLengths ?? []))}</span>
+                  <span data-testid="window-trust" className="font-sans text-[11px] text-stone-500 block leading-snug">{formatWindowTrustLine(gradeWindowTrust(stats.statistics?.allCycleLengths ?? []))}</span>
                 </>
               )}
             </div>
@@ -191,14 +195,14 @@ export function DashboardPage() {
               {isMasked("cycleLength") ? (
                 <>
                   <div className="font-serif text-2xl font-semibold text-stone-700 truncate">•••</div>
-                  <span className="font-sans text-[11px] text-stone-500 block truncate">Tap to reveal</span>
+                  <span className="font-sans text-[11px] text-stone-500 block leading-snug">Tap to reveal</span>
                 </>
               ) : (
                 <>
                   <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                     {stats.isDefaultCycle ? "Not enough data yet" : `${stats.medianCycleLength || stats.avgCycleLength}d`}
                   </div>
-                  <span className="font-sans text-[11px] text-stone-500 block truncate">
+                  <span className="font-sans text-[11px] text-stone-500 block leading-snug">
                     {stats.isDefaultCycle ? "Log a completed cycle to learn this" : "Observed median"}
                   </span>
                 </>
@@ -215,14 +219,14 @@ export function DashboardPage() {
               {isMasked("flowDuration") ? (
                 <>
                   <div className="font-serif text-2xl font-semibold text-stone-700 truncate">•••</div>
-                  <span className="font-sans text-[11px] text-stone-500 block truncate">Tap to reveal</span>
+                  <span className="font-sans text-[11px] text-stone-500 block leading-snug">Tap to reveal</span>
                 </>
               ) : (
                 <>
                   <div className="font-serif text-2xl font-semibold text-stone-900 truncate">
                     {stats.isDefaultPeriod ? "Not enough data yet" : `${stats.avgPeriodLength}d`}
                   </div>
-                  <span className="font-sans text-[11px] text-stone-500 block truncate">
+                  <span className="font-sans text-[11px] text-stone-500 block leading-snug">
                     {stats.isDefaultPeriod ? "Log a completed period to learn this" : "Observed average"}
                   </span>
                 </>
@@ -231,14 +235,14 @@ export function DashboardPage() {
 
             <div className="liquid-glass-card rounded-[20px] p-4 space-y-1 min-w-0">
               <span className="font-sans text-xs font-medium text-stone-500 block truncate">
-                Vault Status
+                Storage
               </span>
               <div className="font-serif text-2xl font-semibold text-emerald-700 flex items-center gap-1.5 truncate">
-                <span>Local</span>
+                <span>On device</span>
                 <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
               </div>
-              <span className="font-sans text-[11px] text-stone-500 block truncate">
-                100% on-device
+              <span className="font-sans text-[11px] text-stone-500 block leading-snug">
+                AI replies use the cloud
               </span>
             </div>
           </div>
@@ -249,13 +253,13 @@ export function DashboardPage() {
             <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-stone-200/50 pb-2.5">
                 <span className="font-sans text-xs font-semibold text-stone-700">
-                  Latest Period Entry
+                  Last period
                 </span>
                 <Link
                   to="/chronicle"
                   className="font-sans text-xs font-medium text-violet-700 hover:text-violet-900"
                 >
-                  View All History →
+                  History →
                 </Link>
               </div>
 
@@ -294,9 +298,6 @@ export function DashboardPage() {
                       )}
                     </div>
 
-                    <p className="text-xs text-stone-600 leading-relaxed pt-1">
-                      Logged with zero cloud database. All cycle intervals and statistics update dynamically.
-                    </p>
                   </div>
                 )
               ) : (
@@ -308,13 +309,13 @@ export function DashboardPage() {
             <div className="liquid-glass-card rounded-[22px] p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-stone-200/50 pb-2.5">
                 <span className="font-sans text-xs font-semibold text-stone-700">
-                  Recent Symptom Logs
+                  Recent logs
                 </span>
                 <Link
                   to="/chronicle"
                   className="font-sans text-xs font-medium text-violet-700 hover:text-violet-900"
                 >
-                  Log History →
+                  All logs →
                 </Link>
               </div>
 

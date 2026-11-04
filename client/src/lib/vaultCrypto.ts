@@ -15,7 +15,8 @@ export async function encryptJSON(passphrase:string, data:unknown): Promise<Encr
   return { version:1, kdf:"PBKDF2-SHA-256", iterations:PBKDF2_ITERATIONS, salt:toB64(salt), iv:toB64(iv), ciphertext:toB64(new Uint8Array(ct)) };
 }
 export async function decryptJSON<T=any>(passphrase:string, payload:EncryptedPayload): Promise<T> {
-  const key = await deriveKey(passphrase, fromB64(payload.salt), payload.iterations || PBKDF2_ITERATIONS);
+  // Group 15.5d: a stored payload can never lower the work factor below the floor.
+  const key = await deriveKey(passphrase, fromB64(payload.salt), Math.max(PBKDF2_ITERATIONS, Number(payload.iterations) || 0));
   const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv: fromB64(payload.iv) as BufferSource}, key, fromB64(payload.ciphertext) as BufferSource);
   return JSON.parse(dec.decode(pt));
 }

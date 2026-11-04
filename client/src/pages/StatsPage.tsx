@@ -12,7 +12,7 @@ export function StatsPage() {
   const maxLen = view.last12Lengths.length ? Math.max(...view.last12Lengths) : 0;
   return (
     <div className="space-y-6">
-      <PageHeader title="Your cycles" subtitle="Summary of the cycles you have logged on this device." badge="Logged data" />
+      <PageHeader title="Your cycles" subtitle="Summary of the cycles you have logged on this device." />
       {!view.hasEnoughData ? (
         <div className="liquid-glass-card rounded-[24px] p-6 space-y-3">
           <h2 className="font-serif text-xl font-semibold text-stone-900">Not enough data yet</h2>

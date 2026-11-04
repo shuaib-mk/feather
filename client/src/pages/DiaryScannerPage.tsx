@@ -107,8 +107,8 @@ export function DiaryScannerPage() {
     <div className="space-y-6">
       <PageHeader
         title="Paper Diary Scanner"
-        subtitle="Extract marked cycle dates from calendar photos into your local vault using Muse Spark Vision."
-        badge="Vision Model"
+        subtitle="Photograph a paper diary or calendar; Feather reads the marked dates and asks you to confirm each one."
+        badge="Optional"
       />
 
       {/* Privacy Notice Card */}
@@ -216,7 +216,7 @@ export function DiaryScannerPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/50 pb-3">
             <div>
               <span className="font-sans text-xs font-semibold text-emerald-700 block">
-                Extracted Dates (Confirmation Required)
+                Dates found (not saved yet)
               </span>
               <h3 className="font-serif text-xl font-semibold text-stone-900">
                 Review Extracted Period Dates

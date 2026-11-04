@@ -26,7 +26,7 @@ const OWN_EVENTS_DATE_HINT_RE = new RegExp(
 const OWN_EVENTS_LOG_CUE_RE =
   /\bperiod\s+(?:started|ended|began|came|stopped|finished)\b|\b(?:flow|cramps?|headaches?|nausea|fatigue|bloating|spotting|bleeding|back\s+pain|mood|tender|acne|cravings|insomnia)\b|\benergy\s*(?:is|level|:)?\s*[1-5]\b|\b(?:slept|sleep)\b/i;
 
-const EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
+const EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "travel", "plan", "planning", "dinner", "meeting", "appointment", "birthday", "anniversary", "concert", "dentist"];
 const LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "दर्द", "थकान", "सिरदर्द", "ತಲೆನೋವು", "தலைவலி", "തലവേദന"];
 
 export const LAST_CYCLE_PATTERNS = [

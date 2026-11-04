@@ -78,6 +78,28 @@ function expandRRULE(start:string, rrule:string|undefined, exdate:any, windowSta
   const freq=parts.FREQ; if(!["DAILY","WEEKLY","MONTHLY","YEARLY"].includes(freq)){ warnings.push(`Skipped unsupported recurrence rule: ${rrule}`); return [start]; }
   const interval=parseInt(parts.INTERVAL||"1",10)||1; const count=parts.COUNT?parseInt(parts.COUNT,10):Infinity; const until=parts.UNTIL?parseICSDate(parts.UNTIL,""):windowEnd;
   const out:string[]=[]; let cur=start; let n=0;
+  // Group 16.6: WEEKLY;BYDAY=MO,WE,FR expands to every listed weekday, not only the start weekday.
+  const unsupportedBy = Object.keys(parts).filter((k) => k.startsWith("BY") && !(freq==="WEEKLY" && k==="BYDAY"));
+  if (unsupportedBy.length) warnings.push(`Recurrence ${unsupportedBy.join(", ")} is not supported; only the start date's pattern was imported for: ${rrule}`);
+  if (freq==="WEEKLY" && parts.BYDAY) {
+    const map:Record<string,number>={SU:0,MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+    const want = parts.BYDAY.split(",").map((d)=>d.trim().replace(/^[+-]?\d+/,"").toUpperCase()).filter((d)=>d in map).map((d)=>map[d]).sort((a,b)=>a-b);
+    if (want.length === 0) { warnings.push(`Could not read BYDAY in: ${rrule}; imported the start date only.`); return ex.has(start)?[]:[start]; }
+    const dow = (k:string)=> new Date(k+"T00:00:00Z").getUTCDay();
+    let weekStart = addDays(start, -dow(start));
+    let week = 0;
+    outer: while (weekStart <= windowEnd && out.length < 2000 && week < 2000) {
+      for (const wd of want) {
+        const d = addDays(weekStart, wd);
+        if (d < start) continue;
+        if ((until && d > until) || d > windowEnd || n >= count) break outer;
+        n++;
+        if (d >= windowStart && !ex.has(d)) out.push(d);
+      }
+      week++; weekStart = addDays(weekStart, 7*interval);
+    }
+    return out;
+  }
   if (freq==="DAILY" || freq==="WEEKLY") {
     while(cur<=windowEnd && n<count && out.length<2000){ if(cur>=windowStart && !ex.has(cur)) out.push(cur); n++; if(freq==="DAILY") cur=addDays(cur,interval); else cur=addDays(cur,7*interval); if(until && cur>until) break; }
     return out;

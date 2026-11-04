@@ -88,8 +88,8 @@ export function ChroniclePage() {
     <div className="space-y-6">
       <PageHeader
         title="Chronicle"
-        subtitle="Chronological historical timeline of confirmed cycle periods and daily symptom observations."
-        badge={`${allItems.length} Entries`}
+        subtitle="Every period and daily note you have saved, newest first."
+        badge={`${allItems.length} entries`}
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -300,9 +300,9 @@ export function ChroniclePage() {
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
         title="Delete History Record?"
-        message={`Are you sure you want to remove the record for ${
-          deleteTarget ? prettyDate(deleteTarget.date) : ""
-        }? This cannot be undone.`}
+        message={deleteTarget && (deleteTarget.type === "period" || data.periods.some((p) => p.startDate === deleteTarget.date))
+          ? `This deletes the entire period starting ${prettyDate(deleteTarget.date)}, including that day's note. This cannot be undone.`
+          : `Are you sure you want to remove the record for ${deleteTarget ? prettyDate(deleteTarget.date) : ""}? This cannot be undone.`}
         confirmLabel="Delete Record"
         cancelLabel="Cancel"
         isDestructive={true}

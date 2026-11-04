@@ -105,8 +105,10 @@ export function exitDemoMode(): void {
       ls.removeItem(DEMO_ACTIVE_KEY);
       ls.removeItem(DEMO_EVENTS_KEY);
       ls.removeItem(DEMO_KEY);
-      ls.removeItem("feather_last_export_ts");
-      ls.removeItem("feather_entries_since_export");
+      // Group 16.5: the real vault's export-reminder keys are left alone; only
+      // demo mode's own counters are cleared.
+      ls.removeItem("feather_demo_last_export_ts");
+      ls.removeItem("feather_demo_entries_since_export");
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("feather_events_changed"));

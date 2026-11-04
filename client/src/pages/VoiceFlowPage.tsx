@@ -637,8 +637,7 @@ const conversationHistory = thread.conversationHistory;
     <div className="space-y-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8">
       <PageHeader
         title="Voice Capture"
-        subtitle="Speak or type naturally in any language. Natural calendar landmarks are resolved instantly."
-        badge="Universal Voice AI"
+        subtitle="Speak or type the way you remember it. Phrases like “two days before Onam” become exact dates you confirm."
       />
 
       {/* Offline Mode Banner */}
@@ -646,7 +645,7 @@ const conversationHistory = thread.conversationHistory;
         <div className="rounded-[18px] liquid-glass-card border border-amber-200/80 bg-amber-50/40 px-4 py-2.5 text-xs text-amber-950 font-sans flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="font-semibold">Offline mode understands English best; other languages need the Meta model.</span>
+            <span className="font-semibold">Running on this device: English and simple period-start messages in Hindi, Bengali and Malayalam work; anything more needs the Live AI.</span>
           </div>
           <span className="liquid-glass-pill rounded-full px-2.5 py-0.5 text-[11px] font-sans font-medium text-amber-900 border border-amber-200/70">On-device</span>
         </div>
@@ -680,47 +679,6 @@ const conversationHistory = thread.conversationHistory;
 
       {/* Recording & Input Console */}
       <div className={"liquid-glass-card rounded-[26px] p-6 sm:p-8 text-center space-y-6 border border-white/90 shadow-sm relative" + (hasConversation ? " flex flex-col overflow-hidden max-h-[calc(100dvh-11rem)] sm:max-h-[calc(100dvh-8rem)]" : "")}>
-        {/* Universal Language Selection Row */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full shrink-0">
-          <span className="text-stone-500 font-sans text-xs font-medium shrink-0">Language:</span>
-          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
-            <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
-              {[
-                { id: "auto", label: "Auto Detect", sub: "" },
-                { id: "en", label: "English" },
-                { id: "hi", label: "Hindi" },
-                { id: "bn", label: "Bengali" },
-                { id: "kn", label: "Kannada" },
-                { id: "mr", label: "Marathi" },
-                { id: "ta", label: "Tamil" },
-                { id: "te", label: "Telugu" },
-              ].map((lang) => (
-                <button
-                  key={lang.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedLanguage(lang.id);
-                    try {
-                      sessionStorage.setItem("feather_voice_lang", lang.id);
-                    } catch {}
-                  }}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
-                    selectedLanguage === lang.id
-                      ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
-                      : "text-stone-600 hover:text-stone-950"
-                  }`}
-                >
-                  {lang.label}
-                  {lang.sub && <span className="hidden sm:inline">{lang.sub}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <p className="text-[11px] text-stone-500 font-sans shrink-0">
-          Voice transcription (Live AI) supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported by Meta. Without the Live AI, typed period-start messages work in English, Hindi (Devanagari or romanized, e.g. "mera period aaj shuru hua"), romanized Bengali and Malayalam; anything more in those languages, and all other languages, needs the Live AI. Recordings are capped at 60 seconds.
-        </p>
-
         {/* Center Microphone Orb (Authentic Liquid Glass Sphere) */}
         <div className="flex flex-col items-center justify-center space-y-3 py-2 shrink-0">
           <button
@@ -728,10 +686,10 @@ const conversationHistory = thread.conversationHistory;
             onClick={isRecording ? stopRecording : startRecording}
             disabled={isProcessing}
             aria-label={isRecording ? "Stop recording voice note" : "Start recording voice note"}
-            className={`relative size-20 sm:size-24 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-md ${
+            className={`relative size-20 sm:size-24 rounded-full flex items-center justify-center transition-transform duration-200 cursor-pointer shadow-md ${
               isRecording
                 ? "bg-rose-500/85 text-white scale-105 shadow-rose-300 ring-8 ring-rose-200/60 backdrop-blur-md animate-pulse"
-                : "liquid-glass-orb hover:scale-105 text-stone-900"
+                : "fe-primary bg-violet-700 text-white hover:scale-105 shadow-lg shadow-violet-300/50"
             }`}
           >
             {isRecording ? (
@@ -793,6 +751,50 @@ const conversationHistory = thread.conversationHistory;
             {permissionError && <span className="text-xs text-rose-600 block">{permissionError}</span>}
           </div>
         </div>
+        {/* Universal Language Selection Row */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs w-full max-w-full shrink-0">
+          <span className="text-stone-500 font-sans text-xs font-medium shrink-0">Language</span>
+          <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-1 flex justify-start sm:justify-center">
+            <div className="inline-flex rounded-full liquid-glass-pill p-1 gap-1 min-w-max">
+              {[
+                { id: "auto", label: "Auto Detect", sub: "" },
+                { id: "en", label: "English" },
+                { id: "hi", label: "Hindi" },
+                { id: "bn", label: "Bengali" },
+                { id: "kn", label: "Kannada" },
+                { id: "mr", label: "Marathi" },
+                { id: "ta", label: "Tamil" },
+                { id: "te", label: "Telugu" },
+              ].map((lang) => (
+                <button
+                  key={lang.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedLanguage(lang.id);
+                    try {
+                      sessionStorage.setItem("feather_voice_lang", lang.id);
+                    } catch {}
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                    selectedLanguage === lang.id
+                      ? "liquid-glass-button font-semibold text-stone-950 shadow-xs"
+                      : "text-stone-600 hover:text-stone-950"
+                  }`}
+                >
+                  {lang.label}
+                  {lang.sub && <span className="hidden sm:inline">{lang.sub}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <details className="text-left shrink-0 max-w-xl mx-auto w-full">
+          <summary className="text-[11px] text-stone-500 font-sans cursor-pointer text-center select-none">Languages &amp; offline support</summary>
+          <p className="text-[11px] text-stone-500 font-sans pt-2 text-left">
+          Voice transcription (Live AI) supports English, Hindi, Bengali, Kannada, Marathi, Tamil and Telugu; Malayalam voice is not supported by Meta. Without the Live AI, typed period-start messages work in English, Hindi (Devanagari or romanized, e.g. "mera period aaj shuru hua"), romanized Bengali and Malayalam; anything more in those languages, and all other languages, needs the Live AI. Recordings are capped at 60 seconds.
+          </p>
+
+        </details>
 
         {hasConversation && (
         <div ref={convoScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[20px]">
@@ -933,11 +935,11 @@ const conversationHistory = thread.conversationHistory;
         <div className="liquid-glass-card rounded-[24px] p-5 space-y-3 border border-white/95 shadow-md">
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-2">
             <div>
-              <span className="font-sans text-xs font-semibold text-emerald-700 block">Plan Around It Event Detected</span>
-              <h3 className="font-serif text-lg font-semibold text-stone-900">Save Event to Calendar</h3>
+              <span className="font-sans text-xs font-semibold text-emerald-700 block">Event found</span>
+              <h3 className="font-serif text-lg font-semibold text-stone-900">Add it to your calendar?</h3>
             </div>
             <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
-              Confirmation Required
+              Not saved yet
             </span>
           </div>
           {plannedEventsState.map((e: any, i: number) => (
@@ -983,7 +985,7 @@ const conversationHistory = thread.conversationHistory;
               <h3 className="font-serif text-xl font-semibold text-stone-900">Confirm Past Periods</h3>
             </div>
             <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
-              Confirmation Required
+              Not saved yet
             </span>
           </div>
           <p className="font-sans text-xs text-stone-600">One row per period. Nothing is saved until you press Save. Uncheck a row to skip it.</p>
@@ -1108,10 +1110,10 @@ const conversationHistory = thread.conversationHistory;
           <div className="flex items-center justify-between border-b border-stone-200/50 pb-3">
             <div>
               <span className="font-sans text-xs font-semibold text-emerald-700 block">Your log preview</span>
-              <h3 className="font-serif text-xl font-semibold text-stone-900">Confirm Cycle Entry Details</h3>
+              <h3 className="font-serif text-xl font-semibold text-stone-900">Check, then save</h3>
             </div>
             <span className="liquid-glass-pill rounded-full font-sans text-[11px] font-medium text-stone-600 px-2.5 py-1">
-              Confirmation Required
+              Not saved yet
             </span>
           </div>
 
@@ -1313,7 +1315,7 @@ const conversationHistory = thread.conversationHistory;
               <polyline points="16 18 22 12 16 6" />
               <polyline points="8 6 2 12 8 18" />
             </svg>
-            <span>Under the Hood (Pipeline &amp; Tool Calls)</span>
+            <span>Under the hood: what the AI did</span>
           </span>
           <span className="text-stone-400">{isUnderHoodOpen ? "Hide" : "Inspect"}</span>
         </button>

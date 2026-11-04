@@ -34,9 +34,8 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings &amp; Architecture"
-        subtitle="Manage speech engines, AI model providers, rate limit quotas, and technical documentation."
-        badge="System Config"
+        title="Settings"
+        subtitle="Privacy, App Lock, backups, landmark packs and diagnostics."
       />
 
       {/* Speech-to-Text Recognition Engine */}
@@ -255,9 +254,9 @@ export function SettingsPage() {
 
           {activeDocTab === "privacy" && (
             <div className="space-y-2">
-              <h4 className="font-bold text-stone-900">Local-First Storage Guarantee:</h4>
+              <h4 className="font-bold text-stone-900">Where your data lives:</h4>
               <p className="text-[11px] leading-relaxed">
-                All cycle entries live in the browser's <code>localStorage</code> under <code>feather_cycle_vault_v1</code>. No server database, no cookies, no advertising SDKs, no external analytics.
+                All cycle entries live in the browser's <code>localStorage</code> under <code>feather_cycle_vault_v1</code>. No server database, no cookies, no advertising SDKs, no external analytics. When you use voice or chat with the Live AI, your message, recent conversation and the cycle records it needs are sent to Meta's API to generate the answer; they are not stored by Feather.
               </p>
             </div>
           )}

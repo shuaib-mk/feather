@@ -20,8 +20,8 @@ Meta Global AI Developer Hackathon · Indie Developer · Build for Your World
 
 ## Try it in 60 seconds
 - Live URL: https://feather-w.vercel.app
-- Demo Mode: open the app, tap **Try Demo** on the first screen (or add `?demo=1`). Fictional data lives in a separate `feather_demo_v1` namespace; use **Exit demo** in the banner to return to your real vault untouched.
-- Phrases that work offline (no key): "period started yesterday, heavy flow with cramps", "period started 2 days before New Year's Day", "exam on Nov 20", "exam on 3rd November", "Anu's wedding is on Nov 20", "dinner on Nov 3", "actually it was light, not heavy" (correction), "my period is late" (asks what to log).
+- Demo Mode: open the app, tap **Try Demo** on the first screen (or add `?demo=1`). Fictional data lives in a separate `feather_demo_v1` namespace and survives a page refresh; **Reset demo** restores the sample data and **Exit demo** returns to your real vault untouched.
+- Phrases that work offline (no key): "period started yesterday, heavy flow with cramps", "period started 2 days before New Year's Day", "exam on Nov 20", "exam on 23rd November", "Anu's wedding is on Nov 20", "dinner on Nov 21", "actually it was light, not heavy" (correction), "my period is late" (asks what to log), "mera period aaj shuru hua" (Hindi), "my peroid started tday, hevy flow" (typos), "log cramps today and tell me my average cycle length" (log + question in one), "how long was my last cycle?", "cancel the exam" (asks before removing), "undo that" (discards the slip).
 - Phrases that work live (Meta key configured server-side): the same phrases via Muse Spark tool-calling, plus voice input via Muse Voice Transcribe. Without a key the app honestly reports offline mode.
 
 > **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap estimates using Meta Muse Voice & Spark. Cycle data is stored only on your device; voice and text are sent to Meta's API for processing when you use those features.
@@ -217,6 +217,7 @@ PORT=3001
 ```
 
 ### 3. Run Automated Tests & Eval Harness
+`npm test` runs 67 suites (about 1,600 assertions) and exits non-zero if any fails.
 ```sh
 npm test
 
@@ -253,6 +254,7 @@ Feather is ready for zero-configuration serverless deployment on Vercel:
      - `MUSE_VOICE_MODEL` (`muse-voice-transcribe-1.0`)
      - `MUSE_SPARK_MODEL` (`muse-spark-1.3`)
      - `DAILY_REQUEST_CAP` (`500`)
+     - `DIAGNOSTICS_TOKEN` (optional): `/api/health` returns only `{"status":"ok"}` publicly; send this value in the `x-feather-diagnostics` header to see model/config details.
    - Run:
      ```sh
      vercel --prod

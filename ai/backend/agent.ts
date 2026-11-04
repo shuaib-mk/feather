@@ -712,6 +712,8 @@ export async function runLavenderAgent(
   const startTime = Date.now();
   const activityTrail: ActivityStep[] = [];
   const toolCallsRecorded: ToolCallRecord[] = [];
+  // Group 15.1: client-supplied history can never inject system/tool turns.
+  conversationHistory = sanitizeConversationHistory(conversationHistory);
 
   // Hotfix: severe input is evaluated BEFORE the refusal rules. It wins when the
   // message also states something loggable (period started/ended, flow or
@@ -851,7 +853,8 @@ export async function runLavenderAgent(
   }
 
   const config = getConfig();
-  const isBaseten = context.provider === "baseten" || config.useBaseten;
+  // Group 15.4: the provider is server configuration, never chosen by the caller.
+  const isBaseten = config.useBaseten;
   const apiKey = isBaseten ? config.basetenApiKey : (config.metaApiKey || config.basetenApiKey);
   const baseUrl = isBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
   const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
@@ -1869,6 +1872,17 @@ export function describeSlipChanges(changes: string[]): string {
     .replace(/^Date updated to /, "date is now ")
     .replace(/^Mood updated to /, "mood is now ")
     .replace(/^Energy level set to /, "energy is now ")).join(", ");
+}
+
+/** Group 15.1: only user/assistant turns with string content, newest 12, each
+ * clipped to 2,000 characters. Anything else from the client is dropped. */
+export const MAX_HISTORY_TURNS = 12;
+export function sanitizeConversationHistory(history: any): Array<{ role: "user" | "assistant"; content: string }> {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim() !== "")
+    .slice(-MAX_HISTORY_TURNS)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 }
 
 /** Group 13: "heavy flow but no bleeding" style contradictions. A correction

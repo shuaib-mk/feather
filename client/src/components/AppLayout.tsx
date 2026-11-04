@@ -1,10 +1,10 @@
 import React, { type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
-import { LiquidGlassFilter } from "./LiquidGlassFilter";
 import { useCycle } from "../context/CycleContext";
 import { isDemoActive as isDemoModeActive, resetDemoData, isStorageVolatile } from "../lib/demoMode";
 import { useDiscreetMode } from "../lib/discreetMode";
+import { lastVaultLoadProblem } from "../cycleStorage";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -22,6 +22,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     refreshData,
   } = useCycle();
   const { isDiscreet, isQuickHidden, toggleQuickHide } = useDiscreetMode();
+  // Group 16.2: a vault that could not be read is reported, never silently shown as empty.
+  const vaultProblem = lastVaultLoadProblem();
   // Group 14: computed once per mount; a probe write tells us if storage survives a refresh.
   const [storageVolatile] = React.useState(() => isStorageVolatile());
 
@@ -64,7 +66,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     <>
       {/* Fixed Ambient Background Canvas (Eliminates scroll tearing & white void) */}
       <div className="feather-fixed-background" aria-hidden="true" />
-      <LiquidGlassFilter />
 
       {/* Main Content Layout */}
       <div className="min-h-screen min-h-[100dvh] w-full text-[#1a1718] antialiased selection:bg-stone-200 selection:text-stone-900 pt-[calc(2rem+env(safe-area-inset-top,0px))] md:pt-[calc(2rem+env(safe-area-inset-top,0px))]">
@@ -90,25 +91,20 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
 
-          {/* Persistent Demo Mode Banner */}
+          {/* Persistent Demo Mode Banner: one slim strip */}
           {(isDemoActive || isDemoModeActive()) && (
-            <div role="status" className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-900 shadow-sm border border-violet-300 bg-violet-50/80">
-              <div className="flex items-center gap-2.5">
-                <div className="size-6 rounded-full bg-violet-200 text-violet-800 flex items-center justify-center shrink-0 font-bold text-xs">
-                  ✦
-                </div>
-                <div className="leading-tight">
-                  <span className="font-semibold text-stone-900">Demo Mode Active:</span>{" "}
-                  <span className="text-stone-700">Fictional demonstration data. Your real vault is untouched. Changes you make here are kept when you refresh.</span>
-                  {storageVolatile && <span className="block text-amber-800 font-medium" data-testid="storage-volatile">This browser isn't keeping data between refreshes (private window or blocked storage), so demo changes will reset when you reload.</span>}
-                </div>
+            <div role="status" className="rounded-full liquid-glass-pill pl-4 pr-1.5 py-1.5 flex items-center justify-between gap-2 text-xs font-sans text-stone-800 !bg-violet-50/90 !border-violet-200">
+              <div className="min-w-0 leading-tight">
+                <span className="font-semibold text-violet-900">Demo Mode Active:</span>{" "}
+                <span className="text-stone-600 hidden sm:inline">Fictional data. Your real vault is untouched; changes are kept when you refresh.</span>
+                <span className="text-stone-600 sm:hidden">Fictional data</span>
+                {storageVolatile && <span className="block text-amber-800 font-medium" data-testid="storage-volatile">This browser isn't keeping data between refreshes (private window or blocked storage), so demo changes will reset when you reload.</span>}
               </div>
-
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => { resetDemoData(); refreshData(); window.dispatchEvent(new CustomEvent("feather_events_changed")); }}
-                  className="liquid-glass-pill rounded-full px-3 py-1.5 font-sans text-xs cursor-pointer"
+                  className="rounded-full px-3 py-1.5 font-sans text-xs text-violet-800 hover:bg-white/80 cursor-pointer min-h-[36px]"
                   data-testid="reset-demo"
                 >
                   Reset demo
@@ -116,15 +112,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <button
                   type="button"
                   onClick={clearDemo}
-                  className="liquid-glass-button rounded-full px-4 py-1.5 font-sans text-xs font-semibold cursor-pointer shadow-xs"
+                  className="liquid-glass-button rounded-full px-3.5 py-1.5 font-sans text-xs font-semibold cursor-pointer min-h-[36px]"
                 >
                   Exit demo
                 </button>
               </div>
             </div>
           )}
+          {vaultProblem && (
+            <div role="alert" data-testid="vault-load-problem" className="rounded-[18px] liquid-glass-card border border-rose-200/80 bg-rose-50/40 px-4 py-2.5 text-xs text-rose-900 font-sans">
+              {vaultProblem}
+            </div>
+          )}
           {/* Gentle 14-Day Export Overdue Reminder Banner */}
-          {showOverdueBanner && (
+          {showOverdueBanner && !(isDemoActive || isDemoModeActive()) && (
             <div className="rounded-[20px] liquid-glass-card p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-stone-800 shadow-xs border border-amber-200/80 bg-amber-50/40">
               <div className="flex items-center gap-2.5">
                 <div className="size-6 rounded-full bg-amber-200/40 border border-amber-300/40 flex items-center justify-center shrink-0 text-amber-800">
@@ -135,8 +136,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </svg>
                 </div>
                 <div className="leading-tight">
-                  <span className="font-semibold text-stone-900">Backup Recommended:</span>{" "}
-                  <span className="text-stone-700">14 days since your last local JSON export.</span>
+                  <span className="font-semibold text-stone-900">Back up your data:</span>{" "}
+                  <span className="text-stone-700">it's been 14+ days since your last export.</span>
                 </div>
               </div>
 
@@ -146,7 +147,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   onClick={exportBackup}
                   className="liquid-glass-button rounded-full px-3.5 py-1 font-sans text-xs font-semibold cursor-pointer shadow-xs"
                 >
-                  Export JSON
+                  Export backup
                 </button>
                 <button
                   type="button"
@@ -167,14 +168,14 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Minimal Editorial Footer */}
           <footer className="pt-8 pb-4 text-center border-t border-stone-200/40 text-[11px] text-stone-600 font-sans space-y-1">
             <p className="flex items-center justify-center gap-2 flex-wrap">
-              <span>Feather · Voice-First Menstrual Companion</span>
+              <span>Feather · voice-first cycle companion</span>
               <span>·</span>
               <Link to="/vault" className="underline hover:text-stone-900">Local Vault</Link>
               <span>·</span>
-              <Link to="/settings" className="underline hover:text-stone-900">Settings &amp; Architecture</Link>
+              <Link to="/settings" className="underline hover:text-stone-900">Settings</Link>
             </p>
             <p className="text-[10px] text-stone-500 font-sans">
-              Meta Global AI Dev Hackathon · Muse Voice Transcribe 1.0 &amp; Muse Spark 1.3 · 100% On-Device Storage
+              Built for the Meta Global AI Developer Hackathon with Muse Voice Transcribe and Muse Spark · Data stored on your device; AI answers are generated in the cloud from what you send
             </p>
           </footer>
         </main>
@@ -184,7 +185,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <Sidebar />
 
       {/* Non-Blocking Backup Toast (After every 5 confirmed entries) */}
-      {backupToast && (
+      {backupToast && !(isDemoActive || isDemoModeActive()) && (
         <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] md:top-[calc(1.5rem+env(safe-area-inset-top,0px))] left-3 right-3 sm:left-auto sm:right-8 z-50 flex items-center gap-2.5 sm:gap-3 rounded-[20px] liquid-glass-island px-3.5 sm:px-4 py-2.5 font-sans text-xs font-medium text-stone-900 shadow-xl border border-white animate-in fade-in slide-in-from-top-3 max-w-sm sm:max-w-md mx-auto sm:mx-0">
           <div className="size-7 rounded-full liquid-glass-pill text-stone-900 flex items-center justify-center shrink-0">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

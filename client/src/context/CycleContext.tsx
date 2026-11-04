@@ -19,6 +19,7 @@ import {
   type Period,
   type DayLog,
   type CycleStats,
+  recordExportTimestamp,
 } from "../cycleStorage";
 import { todayLocal } from "../lib/localDate";
 import { enterDemoMode, exitDemoMode, isDemoActive as isDemoModeActive } from "../lib/demoMode";
@@ -173,10 +174,18 @@ export function CycleProvider({ children }: { children: ReactNode }) {
     const a = document.createElement("a");
     a.href = url;
     a.download = `feather-backup-${todayLocal()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setBackupToast(false);
-    setOverdueDismissed(true);
+    // Group 16.4: the reminder counters reset only once the download has
+    // actually been handed to the browser; a failure leaves them untouched.
+    try {
+      a.click();
+      recordExportTimestamp();
+      setBackupToast(false);
+      setOverdueDismissed(true);
+    } catch (err: any) {
+      setErrorToast("The backup download did not start, so your backup reminder stays on." + (err?.message ? " (" + err.message + ")" : ""));
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
   }, []);
 
   const importBackup = useCallback((jsonContent: string) => {

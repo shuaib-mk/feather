@@ -77,7 +77,7 @@ export function VaultPage() {
       <PageHeader
         title="Local Vault &amp; Privacy"
         subtitle="Stored on this device. Not encrypted unless App Lock is on."
-        badge="100% On-Device"
+        badge="Stored on your device"
       />
 
       {/* Privacy Guarantee Card */}

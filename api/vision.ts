@@ -172,6 +172,15 @@ function corsAllowOrigin(req) {
 function checkStatelessProtection(req, options) {
   const headers = req.headers || {};
   const origin = headers["origin"] || headers["referer"];
+  const method = String(req.method || req.httpMethod || "POST").toUpperCase();
+  if (!origin && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Missing origin.",
+      code: "ORIGIN_REQUIRED"
+    };
+  }
   if (!isOriginAllowed(origin, req)) {
     return {
       allowed: false,

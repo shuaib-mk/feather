@@ -513,19 +513,76 @@ function getCycleStatistics(records, settings = DEFAULT_SETTINGS, observations =
   }).filter((d) => d !== null);
   const hasUnknownEndDates = confirmed.some((r) => !r.endDate);
   const averageBleedingDuration = durations.length ? roundDay(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+  const eligibleLengths = eligible.map((c) => c.lengthDays);
   return {
     cycles,
     completedCycleCount: completed.length,
     eligibleCycleCount: eligible.length,
     excludedForEstimationCount: completed.length - eligible.length,
-    averageCycleLength: allLengths.length ? roundDay(allLengths.reduce((a, b) => a + b, 0) / allLengths.length) : null,
-    medianCycleLength: allLengths.length ? roundDay(median(allLengths)) : null,
-    shortestCycle: allLengths.length ? Math.min(...allLengths) : null,
-    longestCycle: allLengths.length ? Math.max(...allLengths) : null,
+    averageCycleLength: eligibleLengths.length ? roundDay(eligibleLengths.reduce((a, b) => a + b, 0) / eligibleLengths.length) : null,
+    medianCycleLength: recent.length ? roundDay(median(recent)) : null,
+    shortestCycle: eligibleLengths.length ? Math.min(...eligibleLengths) : null,
+    longestCycle: eligibleLengths.length ? Math.max(...eligibleLengths) : null,
     allCycleLengths: allLengths,
     recentCycleLengths: recent,
     averageBleedingDuration,
     hasUnknownEndDates
+  };
+}
+function getPrediction(records, asOfDate, settings = DEFAULT_SETTINGS) {
+  toDate(asOfDate);
+  const sorted = validateRecords(records);
+  const confirmed = sorted.filter((r) => r.confirmed);
+  const pastConfirmed = confirmed.filter((r) => r.startDate <= asOfDate);
+  const last = pastConfirmed[pastConfirmed.length - 1];
+  if (!last) {
+    return {
+      status: "no-data",
+      expectedStart: null,
+      earliestStart: null,
+      latestStart: null,
+      cycleLengthDays: null,
+      cyclesUsed: 0,
+      confidence: "none",
+      reason: "No confirmed period start has been recorded on or before this date.",
+      isDefault: false
+    };
+  }
+  const stats = getCycleStatistics(pastConfirmed, settings);
+  const history = stats.recentCycleLengths;
+  const observedCount = history.length;
+  const approxHalfWidth = last.startEarliest && last.startLatest && last.startEarliest < last.startLatest ? Math.ceil(dayDifference(last.startEarliest, last.startLatest) / 2) : 0;
+  const anchorStart = approxHalfWidth ? addDays(last.startEarliest, Math.floor(dayDifference(last.startEarliest, last.startLatest) / 2)) : last.startDate;
+  if (observedCount === 0) {
+    const next = addDays(anchorStart, settings.defaultCycleLength);
+    return {
+      status: asOfDate > next ? "overdue" : "provisional",
+      expectedStart: next,
+      earliestStart: addDays(next, -4 - approxHalfWidth),
+      latestStart: addDays(next, 4 + approxHalfWidth),
+      cycleLengthDays: settings.defaultCycleLength,
+      cyclesUsed: 0,
+      confidence: "low",
+      reason: "No completed cycle history; using a provisional default.",
+      isDefault: true
+    };
+  }
+  const cycleLength = roundDay(median(history));
+  const expected = addDays(anchorStart, cycleLength);
+  const deviations = history.map((length) => Math.abs(length - cycleLength));
+  const mad = median(deviations);
+  const margin = Math.min(10, Math.max(3, Math.ceil(1.5 * mad))) + approxHalfWidth;
+  const confidence = observedCount >= 4 && mad <= 3 ? "moderate" : observedCount >= 2 ? "limited" : "low";
+  return {
+    status: asOfDate > expected ? "overdue" : "estimated",
+    expectedStart: expected,
+    earliestStart: addDays(expected, -margin),
+    latestStart: addDays(expected, margin),
+    cycleLengthDays: cycleLength,
+    cyclesUsed: observedCount,
+    confidence,
+    reason: observedCount >= 2 ? "Estimated from recent completed cycles." : "Limited personal history; estimate may be inaccurate.",
+    isDefault: false
   };
 }
 function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETTINGS) {
@@ -550,17 +607,18 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
       note: "This date has already passed."
     };
   }
-  const stats = getCycleStatistics(confirmed, settings);
-  if (stats.completedCycleCount < 2 || !stats.medianCycleLength) {
+  const pastConfirmed = confirmed.filter((r) => r.startDate <= today);
+  const stats = getCycleStatistics(pastConfirmed, settings);
+  if (stats.eligibleCycleCount < 2 || !stats.medianCycleLength || pastConfirmed.length === 0) {
     return {
       status: "unknown",
       window: null,
       note: "Not enough data yet: log more cycles to check overlap for this date."
     };
   }
-  const last = confirmed[confirmed.length - 1];
+  const last = pastConfirmed[pastConfirmed.length - 1];
   const cycleLength = stats.medianCycleLength;
-  const lengths = stats.recentCycleLengths.length ? stats.recentCycleLengths : stats.allCycleLengths;
+  const lengths = stats.recentCycleLengths;
   const deviations = lengths.map((len) => Math.abs(len - cycleLength));
   const variability = deviations.length ? median(deviations) : 0;
   const bleedingDays = stats.averageBleedingDuration ?? settings.defaultPeriodDuration;
@@ -569,7 +627,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
   const k = Math.max(1, Math.round(dayDifference(anchorStart, eventDate) / cycleLength));
   const expectedStart = addDays(anchorStart, cycleLength * k);
   const coreEnd = addDays(expectedStart, Math.max(0, bleedingDays - 1));
-  const baseHalf = Math.max(3, Math.ceil(1.5 * variability));
+  const baseHalf = Math.min(10, Math.max(3, Math.ceil(1.5 * variability)));
   const halfWidth = Math.ceil(baseHalf * Math.sqrt(k)) + approxHalfWidth;
   const window2 = { start: addDays(expectedStart, -halfWidth), end: addDays(coreEnd, halfWidth) };
   if (eventDate >= expectedStart && eventDate <= coreEnd) {
@@ -585,7 +643,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
     return {
       status: "possible",
       window: window2,
-      note: `Possible overlap: this date is inside the wider estimate window ${window2.start} to ${window2.end}.`,
+      note: `Possible overlap: this date is inside the wider window for this event (${window2.start} to ${window2.end}).`,
       cyclesAhead: k,
       expectedStart
     };
@@ -593,7 +651,7 @@ function evaluateEventOverlap(eventDate, records, today, settings = DEFAULT_SETT
   return {
     status: "unlikely",
     window: window2,
-    note: `Unlikely to overlap (estimate): the estimated window for that cycle is ${window2.start} to ${window2.end}.`,
+    note: `Unlikely to overlap (estimate): the wider window for this event is ${window2.start} to ${window2.end}.`,
     cyclesAhead: k,
     expectedStart
   };
@@ -607,8 +665,28 @@ var OWN_EVENTS_DATE_HINT_RE = new RegExp(
   "i"
 );
 var OWN_EVENTS_LOG_CUE_RE = /\bperiod\s+(?:started|ended|began|came|stopped|finished)\b|\b(?:flow|cramps?|headaches?|nausea|fatigue|bloating|spotting|bleeding|back\s+pain|mood|tender|acne|cravings|insomnia)\b|\benergy\s*(?:is|level|:)?\s*[1-5]\b|\b(?:slept|sleep)\b/i;
-var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "flight", "travel", "plan", "planning"];
+var EVENT_WORDS = ["exam", "wedding", "trip", "interview", "party", "flight", "vacation", "marathon", "race", "conference", "presentation", "holiday", "travel", "plan", "planning", "dinner", "meeting", "appointment", "birthday", "anniversary", "concert", "dentist"];
 var LOG_WORDS = ["flow", "cramps", "cramp", "headache", "backache", "bloating", "fatigue", "tired", "mood", "energy", "slept", "sleep", "spotting", "bleeding", "period", "log", "dizzy", "dizziness", "nausea", "nauseous", "acne", "cravings", "insomnia", "anxious", "anxiety", "tender", "\u0926\u0930\u094D\u0926", "\u0925\u0915\u093E\u0928", "\u0938\u093F\u0930\u0926\u0930\u094D\u0926", "\u0CA4\u0CB2\u0CC6\u0CA8\u0CCB\u0CB5\u0CC1", "\u0BA4\u0BB2\u0BC8\u0BB5\u0BB2\u0BBF", "\u0D24\u0D32\u0D35\u0D47\u0D26\u0D28"];
+var LAST_CYCLE_PATTERNS = [
+  /\bhow\s+long\s+(?:was|is)\s+my\s+(?:last|previous|most\s+recent)\s+cycle\b/i,
+  /\b(?:length\s+of|how\s+many\s+days\s+(?:was|were\s+in))\s+my\s+(?:last|previous)\s+cycle\b/i,
+  /\bmy\s+(?:last|previous)\s+cycle(?:'s)?\s+length\b/i
+];
+var DAYS_UNTIL_PATTERNS = [
+  /\bhow\s+(?:many\s+days|long)\s+(?:until|till|til|before|to)\s+my\s+(?:next\s+)?period\b/i,
+  /\bdays\s+(?:left\s+)?(?:until|till|til|to)\s+my\s+(?:next\s+)?period\b/i,
+  /\bhow\s+soon\s+(?:is|will)\s+my\s+(?:next\s+)?period\b/i
+];
+var GUARANTEE_PATTERNS = [
+  /\b(?:is|are)\s+(?:that|this|it|those|these|the)\s*(?:date|dates|prediction|estimate|window)?\s+(?:guaranteed|certain|exact|definite|sure|accurate|reliable|100%)\b/i,
+  /\bhow\s+(?:accurate|reliable|sure|certain|exact)\s+is\s+(?:that|this|it|the\s+(?:prediction|estimate|date|window))\b/i,
+  /\bcan\s+i\s+(?:rely|count)\s+on\s+(?:that|this|it|the\s+(?:prediction|estimate|date))\b/i,
+  /\bis\s+(?:that|this|it)\s+a\s+guarantee\b/i
+];
+var SYMPTOM_HISTORY_PATTERNS = [
+  /\b(?:have|did)\s+i\s+(?:ever\s+)?(?:had|have|get|got|experienced?|felt|feel|logged|log)\b[^?.!]*\b(?:before|previously|last\s+(?:cycle|period|time|month)|earlier|ever)\b/i,
+  /\bhave\s+i\s+experienced\s+(?:this|that|these|those)\s+before\b/i
+];
 var OWN_DATA_PATTERNS = [
   /\bwhat(?:'s|\s+is)\s+my\s+(?:average|avg)\s+cycle\b/i,
   /\bmy\s+(?:average|avg)\s+cycle\b/i,
@@ -626,7 +704,12 @@ var OWN_DATA_PATTERNS = [
   /\bdid\s+i\s+log\s+anything\s+in\s+[a-z]+\b/i,
   /\bis\s+\d+\s*days?\s+normal\s+for\s+me\b/i,
   /\bis\s+my\s+cycle\s+regular\b/i,
-  /\bshow\s+(?:me\s+)?my\s+(?:logged\s+)?cycles\b/i
+  /\bshow\s+(?:me\s+)?my\s+(?:logged\s+)?cycles\b/i,
+  // Prompt 13 Group 8: deterministic own-data answers (no model call).
+  ...LAST_CYCLE_PATTERNS,
+  ...DAYS_UNTIL_PATTERNS,
+  ...GUARANTEE_PATTERNS,
+  ...SYMPTOM_HISTORY_PATTERNS
 ];
 function isOwnDataQuestion(text) {
   const t = text.trim();
@@ -679,6 +762,41 @@ function isOwnEventsQuestion(text) {
 var OVERLAP_DISCLAIMER_TEXT = "Estimates based on your logged cycles. Cycles vary, so this is not a guarantee and not contraception or medical advice.";
 var NOT_ENOUGH_DATA_MESSAGE = "Not enough data yet. Log at least 2 more periods and I can show your numbers.";
 var VERDICT_TAIL = "Whether that is typical for you is a question for a doctor. I can only log and plan.";
+function engineRecords(ctx) {
+  const starts = [...new Set((ctx.periods || []).map((p) => p.startDate).filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  return starts.map((s, i) => {
+    const p = (ctx.periods || []).find((x) => x.startDate === s);
+    return { id: "own-" + i, startDate: s, ...p && p.endDate && p.endDate >= s ? { endDate: p.endDate } : {}, confirmed: true, source: "manual" };
+  });
+}
+function ownPredictedWindow(ctx) {
+  if (ctx.cycleStats?.nextPeriodEarliest && ctx.cycleStats?.nextPeriodLatest) return { earliest: ctx.cycleStats.nextPeriodEarliest, latest: ctx.cycleStats.nextPeriodLatest };
+  const recs = engineRecords(ctx);
+  if (!recs.length) return null;
+  const today = ctx.currentDate || recs[recs.length - 1].startDate;
+  const pred = getPrediction(recs, today);
+  return pred.earliestStart && pred.latestStart ? { earliest: pred.earliestStart, latest: pred.latestStart } : null;
+}
+var SYMPTOM_WORDS = [
+  ["cramps", /\bcramps?\b/i],
+  ["headache", /\bheadaches?\b/i],
+  ["backache", /\bback\s*aches?\b|\bback\s+pain\b/i],
+  ["bloating", /\bbloat(?:ing|ed)?\b/i],
+  ["breast_tenderness", /\b(?:breast\s+tenderness|tender\s+breasts?|sore\s+breasts?)\b/i],
+  ["acne", /\bacne\b|\bpimples?\b/i],
+  ["fatigue", /\bfatigue\b|\btired(?:ness)?\b/i],
+  ["cravings", /\bcravings?\b/i],
+  ["nausea", /\bnause(?:a|ous)\b/i],
+  ["mood_swings", /\bmood\s+swings?\b/i],
+  ["anxiety", /\banxi(?:ety|ous)\b/i],
+  ["insomnia", /\binsomnia\b|\bcan'?t\s+sleep\b/i],
+  ["dizziness", /\bdizz(?:y|iness)\b/i],
+  ["appetite_change", /\bappetite\b/i]
+];
+function symptomsIn(text) {
+  return SYMPTOM_WORDS.filter(([, re]) => re.test(text)).map(([k]) => k);
+}
+var symLabel = (s) => s.replace(/_/g, " ");
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var MONTH_NUM = {
   january: 1,
@@ -743,24 +861,66 @@ function addDaysKey(key, days) {
 }
 function computeOwnDataStats(ctx) {
   const starts = [...new Set((ctx.periods || []).map((p) => p.startDate).filter(Boolean))].sort();
-  const lengths = [];
-  for (let i = 1; i < starts.length; i++) {
-    const diff = Math.round((Date.parse(starts[i]) - Date.parse(starts[i - 1])) / 864e5);
-    if (diff > 0) lengths.push(diff);
-  }
+  const engine = getCycleStatistics(engineRecords(ctx));
   let avgPeriodDays = ctx.cycleStats?.avgPeriodLength ?? null;
   if (avgPeriodDays == null) {
     const durs = (ctx.periods || []).filter((p) => p.endDate && p.endDate >= p.startDate).map((p) => Math.round((Date.parse(p.endDate) - Date.parse(p.startDate)) / 864e5) + 1);
     avgPeriodDays = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length * 10) / 10 : null;
   }
   return {
-    completedCycles: lengths.length,
-    medianDays: lengths.length ? median(lengths) : null,
-    minDays: lengths.length ? Math.min(...lengths) : null,
-    maxDays: lengths.length ? Math.max(...lengths) : null,
+    completedCycles: engine.eligibleCycleCount,
+    medianDays: engine.medianCycleLength,
+    minDays: engine.shortestCycle,
+    maxDays: engine.longestCycle,
     avgPeriodDays,
-    lastStart: starts.length ? starts[starts.length - 1] : null
+    lastStart: starts.length ? starts[starts.length - 1] : null,
+    excludedCycles: engine.excludedForEstimationCount
   };
+}
+function buildGroup8Answer(text, ctx, s) {
+  const today = ctx.currentDate || null;
+  const starts = [...new Set((ctx.periods || []).map((p) => p.startDate).filter(Boolean))].sort();
+  if (LAST_CYCLE_PATTERNS.some((p) => p.test(text))) {
+    if (starts.length < 2) return "You need at least two logged period starts for a completed cycle. " + (starts.length === 1 ? "So far one start is logged (" + label(starts[0]) + ")." : "No periods are logged yet.");
+    const a = starts[starts.length - 2], b = starts[starts.length - 1];
+    const days = Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+    const outside = days < 15 || days > 90;
+    return "Your last completed cycle was " + days + " days (" + label(a) + " to " + label(b) + ")." + (outside ? " It is outside 15 to 90 days, so it is left out of your estimates." : "");
+  }
+  if (GUARANTEE_PATTERNS.some((p) => p.test(text))) {
+    return "No \u2014 it's an estimate, not a guarantee. " + OVERLAP_DISCLAIMER_TEXT;
+  }
+  if (DAYS_UNTIL_PATTERNS.some((p) => p.test(text))) {
+    const w = ownPredictedWindow(ctx);
+    if (!w || !today) return "Not enough data yet to estimate your next period. Log your period starts and I can count the days.";
+    const d1 = Math.round((Date.parse(w.earliest) - Date.parse(today)) / 864e5);
+    const d2 = Math.round((Date.parse(w.latest) - Date.parse(today)) / 864e5);
+    const win = label(w.earliest) + " to " + label(w.latest);
+    if (d2 < 0) return "Your estimated window (" + win + ") has passed without a logged start. " + OVERLAP_DISCLAIMER_TEXT;
+    if (d1 <= 0) return "You're inside your estimated window now (" + win + "). " + OVERLAP_DISCLAIMER_TEXT;
+    return "About " + d1 + " to " + d2 + " days from today (estimated window " + win + "). " + OVERLAP_DISCLAIMER_TEXT;
+  }
+  if (SYMPTOM_HISTORY_PATTERNS.some((p) => p.test(text))) {
+    const wanted = Array.from(/* @__PURE__ */ new Set([...symptomsIn(text), ...ctx.focusSymptoms || []]));
+    if (wanted.length === 0) return "Which symptom should I look up? For example: 'did I have cramps last cycle?'";
+    const logs = (ctx.logs || []).filter((l) => l && l.logDate && (!today || l.logDate < today));
+    const lastCycleOnly = /\blast\s+(?:cycle|period|month)\b/i.test(text);
+    let from = null, to = null;
+    if (lastCycleOnly) {
+      const past = starts.filter((d) => !today || d <= today);
+      if (past.length < 2) return "I can't tell which days were your last cycle yet \u2014 at least two period starts are needed.";
+      from = past[past.length - 2];
+      to = past[past.length - 1];
+    }
+    const parts = wanted.map((sym) => {
+      const hits = logs.filter((l) => (l.symptoms || []).includes(sym) && (!from || l.logDate >= from && l.logDate < to)).map((l) => l.logDate).sort().reverse();
+      if (hits.length === 0) return "no record of " + symLabel(sym) + (lastCycleOnly ? " in your last cycle" : " in your earlier logs");
+      return symLabel(sym) + " on " + hits.slice(0, 3).map(label).join(", ") + (hits.length > 3 ? " and " + (hits.length - 3) + " more" : "");
+    });
+    const msg = parts.join("; ");
+    return "From your logs: " + msg.charAt(0) + msg.slice(1) + ".";
+  }
+  return null;
 }
 function buildOwnDataAnswer(text, ctx) {
   if (!isOwnDataQuestion(text)) return null;
@@ -777,13 +937,16 @@ function buildOwnDataAnswer(text, ctx) {
     if (monthDates.length === 0) return { kind: "own_data_answer", message: "Nothing logged in " + monthName + ".", usedLiveModel: false };
     return { kind: "own_data_answer", message: "Logged in " + monthName + ": " + monthDates.join(", ") + ".", usedLiveModel: false };
   }
+  const g8 = buildGroup8Answer(text, ctx, s);
+  if (g8) return { kind: "own_data_answer", message: g8, usedLiveModel: false };
   if (s.completedCycles < 2 || s.medianDays == null) {
     return { kind: "own_data_answer", message: NOT_ENOUGH_DATA_MESSAGE, usedLiveModel: false };
   }
-  const stats = "From your " + s.completedCycles + " logged cycles: median " + s.medianDays + " days (range " + s.minDays + " to " + s.maxDays + " days)." + (s.avgPeriodDays != null ? " Periods last about " + s.avgPeriodDays + " days." : "");
+  const stats = "From your " + s.completedCycles + " logged cycles: median " + s.medianDays + " days (range " + s.minDays + " to " + s.maxDays + " days)." + (s.excludedCycles > 0 ? " " + s.excludedCycles + " unusual cycle" + (s.excludedCycles === 1 ? " is" : "s are") + " left out of the estimate." : "") + (s.avgPeriodDays != null ? " Periods last about " + s.avgPeriodDays + " days." : "");
   if (/\bwhen\s+is\s+my\s+next\s+period\b|\bmy\s+next\s+period\b/i.test(text) && s.lastStart) {
-    const earliest = ctx.cycleStats?.nextPeriodEarliest || addDaysKey(s.lastStart, s.minDays);
-    const latest = ctx.cycleStats?.nextPeriodLatest || addDaysKey(s.lastStart, s.maxDays);
+    const w = ownPredictedWindow(ctx);
+    const earliest = w ? w.earliest : addDaysKey(s.lastStart, s.minDays);
+    const latest = w ? w.latest : addDaysKey(s.lastStart, s.maxDays);
     return { kind: "own_data_answer", message: "Your next period estimated window is between " + label(earliest) + " and " + label(latest) + ". " + OVERLAP_DISCLAIMER_TEXT, usedLiveModel: false };
   }
   if (/\bis\s+\d+\s*days?\s+normal\s+for\s+me\b|\bis\s+my\s+cycle\s+regular\b/i.test(text)) {
@@ -850,6 +1013,21 @@ function isLeakedDemoEventInRealMode(e) {
   if (e.demo === void 0 && e.title === "exam" && e.date === "2026-11-20" && e.source === "voice") return true;
   return false;
 }
+function eventDedupeKey(e) {
+  const title = (e.title || "").toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return [title, e.date, e.endDate || e.date, e.uid || ""].join("|");
+}
+function dedupeEvents(events) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const e of events) {
+    const k = eventDedupeKey(e);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(e);
+  }
+  return out;
+}
 function loadEvents() {
   try {
     const demoMode = isDemoActive();
@@ -869,11 +1047,18 @@ function loadEvents() {
     const valid = parsed.filter(
       (e) => e && typeof e.title === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date)
     );
-    if (demoMode) {
-      return valid.filter((e) => e.demo !== false);
+    const healed = dedupeEvents(valid);
+    if (healed.length !== valid.length) {
+      try {
+        ls?.setItem(key, JSON.stringify(healed));
+      } catch {
+      }
     }
-    const cleaned = valid.filter((e) => !isLeakedDemoEventInRealMode(e));
-    if (cleaned.length !== valid.length) {
+    if (demoMode) {
+      return healed.filter((e) => e.demo !== false);
+    }
+    const cleaned = healed.filter((e) => !isLeakedDemoEventInRealMode(e));
+    if (cleaned.length !== healed.length) {
       try {
         ls?.setItem(REAL_EVENTS_KEY, JSON.stringify(cleaned));
       } catch {
@@ -1327,6 +1512,15 @@ function parseRelativeExpression(text) {
   if (lower.includes("\u090F\u0915 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("1 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("\u0938\u0947 \u090F\u0915 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947")) return { days: -1, direction: "before" };
   if (lower.includes("\u0924\u0940\u0928 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947") || lower.includes("3 \u0926\u093F\u0928 \u092A\u0939\u0932\u0947")) return { days: -3, direction: "before" };
   if (lower.includes("\u092A\u0939\u0932\u0947") || lower.includes("pehle")) return { days: -1, direction: "before" };
+  const weekRe = /\b(?:(\d+|one|two|three|four|a|an|the)\s+)?weeks?\s+(before|prior to|ahead of|after|following)\b/i;
+  const wm = lower.match(weekRe);
+  if (wm) {
+    const wMap = { one: 1, two: 2, three: 3, four: 4, a: 1, an: 1, the: 1 };
+    const raw = (wm[1] || "1").toLowerCase();
+    const n = /^\d+$/.test(raw) ? parseInt(raw, 10) : wMap[raw] ?? 1;
+    const before = /before|prior|ahead/.test(wm[2].toLowerCase());
+    return { days: (before ? -1 : 1) * 7 * n, direction: before ? "before" : "after" };
+  }
   const offsetRegex = /(?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+)?days?\s+(before|prior to|ahead of|after|following)/i;
   const m = lower.match(offsetRegex);
   if (m) {
@@ -1367,6 +1561,49 @@ function parseRelativeExpression(text) {
   }
   return { days: 0 };
 }
+function landmarkDateForYear(fest, year) {
+  const table = fest.dates;
+  if (table[String(year)]) return table[String(year)];
+  const mds = Array.from(new Set(Object.values(table).filter((d) => typeof d === "string").map((d) => d.slice(5))));
+  if (mds.length !== 1) return null;
+  const key = `${year}-${mds[0]}`;
+  return isValidDateKey(key) ? key : null;
+}
+function resolveNextLandmarkOccurrence(text, today, packs) {
+  const first = resolveLandmarkExpression(text, today, packs);
+  if (!first.found || !first.landmarkName) return null;
+  const fest = MILESTONES_DATA.find((m) => m.name === first.landmarkName);
+  if (!fest) return null;
+  const lower = text.toLowerCase();
+  const rel = parseRelativeExpression(lower);
+  const currentYear = parseInt(today.slice(0, 4), 10);
+  for (let y = currentYear - 1; y <= currentYear + 2; y++) {
+    const base = landmarkDateForYear(fest, y);
+    if (!base) continue;
+    let resolved = base;
+    if (rel.weekday && rel.direction) resolved = findWeekdayOffset(base, rel.weekday, rel.direction);
+    else if (rel.days !== 0) resolved = applyDayOffset(base, rel.days);
+    if (resolved >= today) return { landmarkName: fest.name, baseDate: base, resolvedDate: resolved };
+  }
+  return null;
+}
+function landmarkOccurrencesAround(name, today, offsetDays, packs) {
+  const hit = resolveLandmarkExpression(name, today, packs);
+  if (!hit.found || !hit.landmarkName) return null;
+  const fest = MILESTONES_DATA.find((m) => m.name === hit.landmarkName);
+  if (!fest) return null;
+  const y0 = parseInt(today.slice(0, 4), 10);
+  let past = null;
+  let next = null;
+  for (let y = y0 - 2; y <= y0 + 2; y++) {
+    const base = landmarkDateForYear(fest, y);
+    if (!base) continue;
+    const d = offsetDays ? applyDayOffset(base, offsetDays) : base;
+    if (d <= today) past = d;
+    if (d >= today && !next) next = d;
+  }
+  return { landmarkName: fest.name, mostRecentPast: past, nextUpcoming: next };
+}
 function resolveLandmarkExpression(text, today, packs) {
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
@@ -1384,8 +1621,7 @@ function resolveLandmarkExpression(text, today, packs) {
       if (explicitYearMatch && fest.dates[explicitYearMatch[1]]) {
         baseDate = fest.dates[explicitYearMatch[1]];
       } else if (lower.includes("next year")) {
-        const nextYear = String(currentYear + 1);
-        baseDate = fest.dates[nextYear] || fest.dates["2027"];
+        baseDate = landmarkDateForYear(fest, currentYear + 1) || fest.dates["2027"];
       } else if (lower.includes("last ") || lower.includes("past ") || lower.includes("\u0D15\u0D34\u0D3F\u0D1E\u0D4D\u0D1E") || lower.includes("\u092A\u093F\u091B\u0932\u0940")) {
         const pastDates = Object.values(fest.dates).filter((d) => typeof d === "string" && d <= today).sort();
         baseDate = pastDates.length > 0 ? pastDates[pastDates.length - 1] : null;
@@ -1420,10 +1656,25 @@ function resolveLandmarkExpression(text, today, packs) {
     isApproximate: false
   };
 }
-function applySlipCorrections(current, correctionText) {
+function applySlipCorrections(current, correctionText, today) {
   const updated = { ...current, symptoms: [...current.symptoms || []] };
   const lower = correctionText.toLowerCase();
   const changes = [];
+  const todayKey = today || todayLocal();
+  const relDate = lower.match(/\b(?:started|began|begun|start|came|was|happened|change(?:\s+(?:it|the\s+date))?\s+to|move(?:\s+it)?\s+to|make\s+it|set(?:\s+it|\s+the\s+date)?\s+to|actually|no,?|meant)\s+(?:on\s+)?(today|yesterday|the\s+day\s+before\s+yesterday|(\d{1,2}|one|two|three|four|five|six|seven)\s+days?\s+ago)\b/i);
+  if (relDate) {
+    const word = relDate[1].toLowerCase();
+    const nMap = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+    let back = 0;
+    if (word === "yesterday") back = 1;
+    else if (/day before yesterday/.test(word)) back = 2;
+    else if (relDate[2]) back = /^\d+$/.test(relDate[2]) ? parseInt(relDate[2], 10) : nMap[relDate[2].toLowerCase()] ?? 0;
+    const k = addDaysToKey(todayKey, -back);
+    if (k <= todayKey && k !== updated.date) {
+      updated.date = k;
+      changes.push(`Date updated to ${updated.date}`);
+    }
+  }
   const dayMatch = lower.match(
     /\b(?:no,?\s+)?(?:make\s+it\s+(?:the\s+)?|change\s+(?:the\s+)?date\s+to\s+(?:the\s+)?|actually\s+(?:it\s+was\s+)?(?:the\s+)?|set\s+date\s+to\s+(?:the\s+)?|on\s+the\s+|no\s+wait,?\s+(?:it\s+was\s+)?(?:the\s+)?|i\s+meant\s+(?:it\s+was\s+)?(?:the\s+)?|move\s+(?:it\s+)?to\s+(?:the\s+)?)(\d{1,2})(?:st|nd|rd|th)?\b/i
   );
@@ -1468,8 +1719,8 @@ function applySlipCorrections(current, correctionText) {
       }
     }
   }
-  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
-  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,|\s+)?(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch = lower.match(/\b(none|spotting|light|medium|heavy)\s*(?:,\s*|\s+)(?:and\s+)?not\s+(none|spotting|light|medium|heavy)\b/i);
+  const flowContrastMatch2 = lower.match(/\bnot\s+(none|spotting|light|medium|heavy)\s*(?:,\s*|\s+)(?:but\s+|actually\s+|it\s+was\s+)?(none|spotting|light|medium|heavy)\b/i);
   const flowMatch = lower.match(/\b(?:change\s+flow\s+to|flow\s+(?:to|is|was)|make\s+(?:it\s+)?flow|actually\s+(?:it\s+was\s+)?|it\s+was|make\s+it|change\s+(?:it\s+)?to)\s*(none|spotting|light|medium|heavy)\b/i);
   if (flowContrastMatch) {
     updated.flow = flowContrastMatch[1].toLowerCase();
@@ -1495,10 +1746,13 @@ function applySlipCorrections(current, correctionText) {
       changes.push("Flow set to spotting");
     }
   }
+  const symRe = (symKey) => symKey.replace(/s$/, "").replace(/ /g, "\\s+") + "(?:e?s)?";
+  const removalRe = (symKey) => new RegExp(`\\b(?:remove|delete|drop|take\\s+(?:off|out)|no(?:\\s+more)?|without|not)\\s+(?:the\\s+|my\\s+|that\\s+|any\\s+)?${symRe(symKey)}\\b`, "i");
   for (const sym of VALID_SYMPTOMS) {
     const symKey = sym.replace("_", " ");
-    const addPattern = new RegExp(`\\b(?:add|include|also\\s+had|and)\\s+${symKey}\\b`, "i");
-    if (addPattern.test(lower) || lower.includes(symKey) && !lower.includes(`remove ${symKey}`) && !lower.includes(`no ${symKey}`)) {
+    if (removalRe(symKey).test(lower)) continue;
+    const mentioned = new RegExp(`\\b${symRe(symKey)}\\b`, "i").test(lower);
+    if (mentioned) {
       if (!updated.symptoms.includes(sym)) {
         updated.symptoms.push(sym);
         changes.push(`Added symptom: ${symKey}`);
@@ -1507,7 +1761,7 @@ function applySlipCorrections(current, correctionText) {
   }
   for (const sym of VALID_SYMPTOMS) {
     const symKey = sym.replace("_", " ");
-    const removePattern = new RegExp(`\\b(?:remove|delete|no|without)\\s+${symKey}\\b`, "i");
+    const removePattern = removalRe(symKey);
     if (removePattern.test(lower)) {
       const idx = updated.symptoms.indexOf(sym);
       if (idx !== -1) {
@@ -2568,6 +2822,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   const startTime = Date.now();
   const activityTrail = [];
   const toolCallsRecorded = [];
+  conversationHistory = sanitizeConversationHistory(conversationHistory);
   const severeLive = severeTier(userPrompt);
   const severeWinsLive = severeLive.isSevere && hasClearLogStatement(userPrompt);
   const guardrailCheck = severeWinsLive ? { isRefusal: false, refusalMessage: null } : checkMedicalAdviceGuardrail(userPrompt);
@@ -2583,6 +2838,7 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
     }
     return withIntent({
       message: getGuardrailResponseMessage(userPrompt),
+      ...severeLive.isSevere && severeLive.message ? { careSignpost: severeLive.message } : {},
       needsClarification: false,
       activityTrail,
       toolCalls: toolCallsRecorded
@@ -2600,8 +2856,12 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   if (/\bremind(?:er)?\b/i.test(userPrompt) && /\bperiod\b/i.test(userPrompt) && (/\bbefore\b/i.test(userPrompt) || /\bnext\b/i.test(userPrompt))) {
     return { message: "I can't set reminders yet; you can export the calendar (.ics) from Settings.", needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline", modeReason: "Offline parser \u2014 reminders are not supported" };
   }
+  if (!severeCheck.isSevere && splitLogAndQuestion(userPrompt)) {
+    const multiRes = parseLocally(userPrompt, today, context);
+    if (multiRes.multiIntent) return { ...multiRes, mode: "offline", modeReason: "Offline parser - log and question handled together on device" };
+  }
   if (!severeCheck.isSevere) {
-    const ownLive = buildOwnDataAnswer(userPrompt, context);
+    const ownLive = buildOwnDataAnswer(userPrompt, { ...context, currentDate: today });
     if (ownLive) {
       activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
       activityTrail.forEach((a) => a.status = "done");
@@ -2655,14 +2915,20 @@ async function runLavenderAgent(userPrompt, context = {}, conversationHistory = 
   if (/\bperiod\s+(is\s+)?late\b|\blate period\b|\bmissed\s+(my\s+)?period\b|\bam\s+i\s+late\b/i.test(userPrompt) && !/started|flow/i.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (late-period question answered directly; no entry created)" };
   }
-  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && /\b(?:undo\s+that|cancel\s+that|don\u0027t\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(userPrompt)) {
+  if (fallbackResult.contradiction) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - contradictory flow statements; asked before preparing anything" };
+  }
+  if (fallbackResult.eventDeletion || fallbackResult.eventDeletionCandidates || fallbackResult.entry && fallbackResult.entry.editsSavedEntry) {
+    return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - Meta model not used (stored records are changed only on device, after your confirmation)" };
+  }
+  if ((context.pendingEntry || (context.pendingEntries || []).length > 0) && CANCEL_SLIP_RE.test(userPrompt)) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser - Meta model not used (explicit cancel discards the pending slip; nothing saved)" };
   }
   if (fallbackResult.comparison) {
     return { ...fallbackResult, mode: "offline", modeReason: "Offline parser \u2014 Meta model not used (date comparison answered directly; nothing saved)" };
   }
   const config = getConfig();
-  const isBaseten = context.provider === "baseten" || config.useBaseten;
+  const isBaseten = config.useBaseten;
   const apiKey = isBaseten ? config.basetenApiKey : config.metaApiKey || config.basetenApiKey;
   const baseUrl = isBaseten ? config.basetenBaseUrl : config.metaBaseUrl;
   const model = isBaseten ? "meta-models/muse-spark-open-1026" : config.museSparkModel;
@@ -2704,6 +2970,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
   let needsClarification = false;
   let clarificationQuestion = null;
   let finalMessage = "";
+  let replyWasTruncated = false;
   const MODEL_CALL_TIMEOUT_MS = 4e4;
   const OVERALL_MODEL_BUDGET_MS = 5e4;
   const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
@@ -2754,7 +3021,6 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         if (callErr && callErr.name === "AbortError") return modelTimedOut();
         throw callErr;
       }
-      clearTimeout(callTimer);
       modelCallMsTotal += Date.now() - modelCallStart;
       activityTrail.push({
         step: "Model Call " + stepCount,
@@ -2762,11 +3028,20 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         status: "done"
       });
       if (!res.ok) {
-        const errorText = await res.text();
+        const errorText = await res.text().catch(() => "");
+        clearTimeout(callTimer);
         console.error(`[Muse Spark] API call failed ${res.status}:`, errorText);
         return { ...fallbackResult, mode: "offline", modeReason: `Offline parser \u2014 Meta model not used (Meta API error ${res.status})` };
       }
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (bodyErr) {
+        clearTimeout(callTimer);
+        if (bodyErr && bodyErr.name === "AbortError") return modelTimedOut();
+        throw bodyErr;
+      }
+      clearTimeout(callTimer);
       const choice = data.choices?.[0];
       const message = choice?.message;
       if (!message) break;
@@ -2774,6 +3049,10 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       const toolCalls = message.tool_calls;
       if (!toolCalls || toolCalls.length === 0) {
         finalMessage = message.content || "";
+        if (choice?.finish_reason === "length" || looksTruncated(finalMessage)) {
+          replyWasTruncated = true;
+          finalMessage = "";
+        }
         break;
       }
       for (const call of toolCalls) {
@@ -2800,15 +3079,21 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
             detail: `Looking up calendar milestone "${fnArgs.name}" for ${yr || "recent"}`,
             status: "done"
           });
-          const landmarkRes = resolveLandmarkExpression(fnArgs.name, today, context.landmarkPacks);
+          const landmarkRes = resolveLandmarkExpression(yr ? `${fnArgs.name} ${yr}` : fnArgs.name, today, context.landmarkPacks);
           if (landmarkRes.found) {
+            const offsetN = Number(fnArgs.offsetDays) || 0;
             const baseDate = landmarkRes.resolvedDate;
-            const offsetDate = baseDate && fnArgs.offsetDays ? applyDayOffset(baseDate, Number(fnArgs.offsetDays) || 0) : baseDate;
+            const offsetDate = baseDate && offsetN ? applyDayOffset(baseDate, offsetN) : baseDate;
+            const around = landmarkOccurrencesAround(fnArgs.name, today, offsetN, context.landmarkPacks);
             toolResultObj = {
               milestone: landmarkRes.landmarkName,
               year: yr || landmarkRes.resolvedDate?.slice(0, 4),
               date: offsetDate,
               baseDate,
+              // Group 1: period LOGS use mostRecentPast; planned EVENTS use nextUpcoming.
+              mostRecentPast: around?.mostRecentPast ?? null,
+              nextUpcoming: around?.nextUpcoming ?? null,
+              usage: "For a period/symptom log use mostRecentPast (never a future date). For a planned event, exam, trip or other plan use nextUpcoming.",
               source: "landmarks data (verified dates in landmarks.json / milestones data)",
               found: true
             };
@@ -2885,6 +3170,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
             else {
               structuredEntry = patched.entry;
               replacedViaCorrection = true;
+              if (entryToPatch !== context.pendingEntry) structuredEntry = { ...structuredEntry, editsSavedEntry: true };
               toolResultObj = { success: true, entry: structuredEntry };
             }
           }
@@ -2924,7 +3210,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       } else if (firstToolError) {
         finalMessage = "I could not save that: " + firstToolError + ". Which date did you mean?";
       } else if (/logged|saved|done|all set|good to go|prepared/i.test(finalMessage)) {
-        finalMessage = "I could not save that: no valid entry or event. Which date did you mean?";
+        finalMessage = "I could not save that: no valid entry or event, so nothing was saved. Please tell me again what to log (for example 'period started today, heavy flow').";
       }
     }
     const runCorrectiveLogCall = async () => {
@@ -3040,6 +3326,12 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         toolCalls: toolCallsRecorded
       };
     }
+    const alreadyNeutral = activityTrail.some((a) => a.step === "Output Guard");
+    if (planOverlaps && planOverlaps.length > 0 && !alreadyNeutral && OVERLAP_CLAIM_RE.test(finalMessage)) {
+      const lines = planOverlaps.map((o) => `${o.name || "Event"} on ${shortDateLabel(o.eventDate)}: ${o.overlapNote || "overlap checked"}`);
+      finalMessage = lines.join(" ") + " " + OVERLAP_DISCLAIMER_TEXT;
+      activityTrail.push({ step: "Output Guard", detail: "Model overlap claim replaced by the engine's wording", status: "done" });
+    }
     if (finalMessage.includes("?") || finalMessage.toLowerCase().includes("before or after") || finalMessage.toLowerCase().includes("which day")) {
       needsClarification = true;
       clarificationQuestion = finalMessage;
@@ -3054,8 +3346,21 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       finalMessage = cleanTail.startsWith(severeMsg) ? cleanTail : `${severeMsg} ${cleanTail}`;
     }
     if (!finalMessage.trim() && !structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && !needsClarification) {
+      if (replyWasTruncated) {
+        activityTrail.push({ step: "Truncated Live Reply", detail: "Meta model reply was cut off; offline parser used", status: "done" });
+        if (caughtNothing(fallbackResult)) {
+          return { message: "The live AI's reply was cut off, and I couldn't read your message on this device either. Please try again, or rephrase it in English.", entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline", modeReason: "Meta model reply was cut off" };
+        }
+        return { ...fallbackResult, mode: "offline", modeReason: "Meta model reply was cut off, offline parser used" };
+      }
       activityTrail.push({ step: "Empty Live Reply", detail: "Meta model returned no usable reply, offline parser used", status: "done" });
       return { ...fallbackResult, mode: "offline", modeReason: "Meta model returned no usable reply, offline parser used" };
+    }
+    if (!structuredEntry && structuredEntries.length === 0 && livePlannedEvents.length === 0 && !(planOverlaps && planOverlaps.length > 0) && !needsClarification && finalMessage.trim() && finalMessage.indexOf("?") === -1 && !/^(I could not save that|There's no entry)/.test(finalMessage) && fallbackResult.entry && !fallbackResult.needsClarification && !fallbackResult.discardedSlip) {
+      structuredEntry = fallbackResult.entry;
+      if (fallbackResult.entries && fallbackResult.entries.length > 0) structuredEntries.push(...fallbackResult.entries);
+      finalMessage = "The live AI answered without preparing a slip, so I prepared this one on your device from what you said. Please review and confirm below \u2014 nothing is saved until you do.";
+      activityTrail.push({ step: "Slip Recovery", detail: "Model returned prose only; on-device slip prepared from the same message", status: "done" });
     }
     return ensureFactCoverageDisclosure({
       message: finalMessage,
@@ -3084,7 +3389,7 @@ function phraseIndex(lower, phrase) {
   if (!p) return -1;
   if (/^[a-z0-9\s'-]+$/i.test(p)) {
     const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const m = new RegExp(`\\b${escaped}\\b`, "i").exec(lower);
+    const m = new RegExp(`\\b${escaped}(?:e?s)?\\b`, "i").exec(lower);
     return m ? m.index : -1;
   }
   return lower.indexOf(p);
@@ -3316,7 +3621,7 @@ function backfillRangeSeed(text, today) {
     if (!(r1.date < r2.date) || r2.date > today) return null;
     return { date: r1.date, endDate: r2.date };
   };
-  const started = lower.match(/\bstarted\s+(.+?)\s+and\s+ended\s+(.+)/);
+  const started = lower.match(/\b(?:started|began)\s+(?:on\s+)?(.+?)\s+and\s+(?:it\s+|then\s+|it\s+then\s+)?(?:ended|stopped|finished)\s+(?:on\s+)?(.+)/);
   if (started) return finish(started[1], started[2]);
   const fromTo = lower.match(/\bfrom\s+(.+?)\s+(?:to|till|until|through)\s+(.+)/);
   if (fromTo) return finish(fromTo[1], fromTo[2]);
@@ -3327,7 +3632,7 @@ function backfillRangeSeed(text, today) {
   return null;
 }
 function extractBackfillDates(text, today) {
-  if (!/\bperiods?\b/i.test(text)) return null;
+  if (!/\bperiods?\b|\bbled\b|\bbleeding\b|\bmenstruat/i.test(text)) return null;
   const ext = extractWithLexicon(text);
   const lower = text.toLowerCase();
   const hasDetail = ext.symptoms.length > 0 || ext.flow !== null || ext.mood !== null || /\benergy\s*(?:is|level|:)?\s*([1-5])\b/i.test(lower) || /(?:slept|sleep)\s*(?:for\s*)?(\d+(?:\.\d+)?)\s*(?:h|hours?)\b/i.test(lower) || /\b(\d+(?:\.\d+)?)\s*(?:h|hours?)\s+of\s+sleep\b/i.test(lower);
@@ -3341,6 +3646,7 @@ function extractBackfillDates(text, today) {
   const bareMonths = [];
   for (const seg of segments) {
     if (eventRe.test(seg)) continue;
+    if (severeTier(seg).isSevere) continue;
     const bare = backfillBareMonth(seg);
     if (bare) {
       if (!bareMonths.includes(bare)) bareMonths.push(bare);
@@ -3508,7 +3814,137 @@ function withIntent(result, userPrompt) {
   }
   return result;
 }
+var CANCEL_SLIP_RE = /\b(?:undo\s+(?:that|this|it)|cancel\s+(?:that|this|it|the\s+(?:slip|entry|log))|scrap\s+(?:that|this|it)|(?:delete|discard|remove|drop)\s+(?:that|this|the)\s+(?:slip|entry|log|draft)|discard\s+(?:that|this|it)|don'?t\s+(?:log|save|record|keep)\s+(?:that|this|it)|do\s+not\s+(?:log|save|record|keep)\s+(?:that|this|it)|never\s*mind|forget\s+(?:it|that))\b|^\s*(?:discard|cancel|undo|scrap\s+it)\s*[.!]?\s*$/i;
+function landmarkEventTitle(text, landmarkName) {
+  let t = " " + text + " ";
+  t = t.replace(/\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|the)\s+(?:days?|weeks?)\s+(?:before|after|prior to|ahead of|following)\b/gi, " ");
+  t = t.replace(/\b(?:the\s+)?(?:day|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:before|after)\b/gi, " ");
+  const fest = landmarkName ? MILESTONES_DATA.find((m) => m.name === landmarkName) : null;
+  const aliases = fest ? [fest.name, ...fest.aliases].filter(Boolean).sort((x, y) => y.length - x.length) : [];
+  for (const al of aliases) t = t.replace(new RegExp(al.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ");
+  t = t.replace(/\b(?:on|is|starts?|at|coming up|before|after|around)\b/gi, " ").replace(/[^a-zA-Z' ]+/g, " ").replace(/\s+/g, " ").trim();
+  t = t.replace(/(?:^|\s)'s\b/g, " ").replace(/\s+/g, " ").trim();
+  let prev = "";
+  while (prev !== t) {
+    prev = t;
+    t = t.replace(/^(?:i\s+have|i've\s+got|ive\s+got|i\s+got|there\s+is|there's|we\s+have|my|our|the|a|an)\s+/i, "").trim();
+  }
+  return t || "Event";
+}
+function splitLogAndQuestion(text) {
+  const pieces = text.split(/(?<=[.?!])\s+|\s*;\s*|,?\s+(?:and\s+(?:also\s+)?|also\s+|then\s+)(?=(?:tell|let|show|what|when|how|is|are|do|did|have|has|can|could|will)\b)/i).map((x) => x.trim()).filter(Boolean);
+  if (pieces.length < 2) return null;
+  const q = [], l = [];
+  for (const p of pieces) {
+    const asks = isOwnDataQuestion(p) || /^(?:tell|let|show)\s+me\b/i.test(p) && isOwnDataQuestion(p.replace(/^(?:tell|let|show)\s+me\s+(?:know\s+)?/i, ""));
+    if (asks) q.push(p);
+    else l.push(p);
+  }
+  if (!q.length || !l.length) return null;
+  const logPart = l.join(". ");
+  const ex = extractWithLexicon(logPart);
+  const loggable = ex.symptoms.length > 0 || ex.flow !== null || ex.periodStart || ex.periodEnd || ex.mood !== null || /\b(log|record|note)\b/i.test(logPart);
+  if (!loggable) return null;
+  return { logPart, questionPart: q.join(" ") };
+}
+function describeSlipChanges(changes) {
+  return changes.map((c) => c.replace(/^Added symptom: /, "added ").replace(/^Removed symptom: /, "removed ").replace(/^(?:Flow updated to|Flow set to) /, "flow is now ").replace(/^Date updated to /, "date is now ").replace(/^Mood updated to /, "mood is now ").replace(/^Energy level set to /, "energy is now ")).join(", ");
+}
+var MAX_HISTORY_TURNS = 12;
+function sanitizeConversationHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim() !== "").slice(-MAX_HISTORY_TURNS).map((m) => ({ role: m.role, content: m.content.slice(0, 2e3) }));
+}
+function detectFlowContradiction(text) {
+  const pos = text.match(/\b((?:light|medium|moderate|heavy)\s+(?:flow|bleeding|period)|flow\s+(?:is|was)\s+(?:light|medium|heavy)|bleeding\s+(?:heavily|a\s+lot))\b/i);
+  const neg = text.match(/\b(no\s+(?:bleeding|flow|blood)|not\s+bleeding|(?:haven'?t|didn'?t|did\s+not|have\s+not)\s+(?:bled|been\s+bleeding))\b/i);
+  if (!pos || !neg) return null;
+  if (/\b(?:none|spotting|light|medium|heavy)\s*,?\s*not\s+(?:none|spotting|light|medium|heavy)\b/i.test(text)) return null;
+  const p = pos[1].toLowerCase(), n = neg[1].toLowerCase();
+  return { positive: p, negative: n, question: `You mentioned ${p} and ${n} \u2014 which should I record? Say, for example, "${p}" or "no flow".` };
+}
+var OVERLAP_CLAIM_RE = /\b(?:overlap\w*|clash\w*|coincid\w*|in\s+the\s+clear|all\s+clear|safe|safely|risk[-\s]?free|period[-\s]?free|free\s+(?:of|from)\s+(?:your\s+)?period|won'?t\s+(?:have|get|be\s+on)\s+your\s+period|no\s+(?:period|bleeding)\s+(?:during|on|for))\b/i;
+function looksTruncated(msg) {
+  const t = (msg || "").trim();
+  if (!t) return false;
+  if (/[.!?।॥…)"'”’:]$/.test(t)) return false;
+  if (/\b(?:and|or|the|a|an|to|of|with|your|for|so\s+i\s+will|i\s+will|because|but)$/i.test(t)) return true;
+  if (/[\u0900-\u0DFF]/.test(t) && t.length < 80) {
+    const last = Array.from(t.split(/\s+/).pop() || "");
+    if (last.length <= 2) return true;
+  }
+  return false;
+}
+var OFFLINE_PHRASES = [
+  // Hindi (Devanagari)
+  [/(?:मेरा|मेरी)\s*/g, " "],
+  [/पीरियड्?स?|माहवारी|मासिक\s*धर्म/g, " period "],
+  [/शुरू\s*(?:हुआ|हुई|हो\s*गया|हो\s*गई|हो\s*गयी)/g, " started "],
+  [/आज/g, " today "],
+  [/परसों/g, " the day before yesterday "],
+  [/कल/g, " yesterday "],
+  // Malayalam (script)
+  [/എന്റെ\s*/g, " "],
+  [/പീരിയഡ്|ആർത്തവം/g, " period "],
+  [/തുടങ്ങി|ആരംഭിച്ചു/g, " started "],
+  [/ഇന്നലെ/g, " yesterday "],
+  [/ഇന്ന്/g, " today "],
+  // Romanized Hindi / Bengali / Malayalam
+  [/\b(?:mera|meri|amar|aamar|ente)\b/gi, " "],
+  [/\bperiods?\b|\bmahvari\b|\bmasik\b/gi, " period "],
+  [/\bshuru\s+(?:hua|hui|ho\s+gaya|ho\s+gayi|hoyeche|hoyechhe|hoyecche|holo|hoye\s+geche)\b|\bthudangi\b|\bstart\s+hua\b/gi, " started "],
+  [/\b(?:aaj|aj)\b|\binnu\b/gi, " today "],
+  [/\b(?:gotokal|gatokal|kal|kaal|innale)\b/gi, " yesterday "],
+  [/\bparson\b/gi, " the day before yesterday "]
+];
+var FUZZY_TARGETS = ["period", "started", "today", "yesterday", "heavy", "medium", "cramps", "headache", "bleeding", "spotting", "began"];
+function osaDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_2, j) => i === 0 ? j : j === 0 ? i : 0));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[a.length][b.length];
+}
+function normalizeOfflineText(text) {
+  let t = " " + text + " ";
+  for (const [re, rep] of OFFLINE_PHRASES) t = t.replace(re, rep);
+  t = t.replace(/[a-z]{4,}/gi, (w) => {
+    const lw = w.toLowerCase();
+    if (FUZZY_TARGETS.includes(lw)) return w;
+    let best = null, bestD = 99;
+    for (const target of FUZZY_TARGETS) {
+      const max = target.length >= 7 ? 2 : 1;
+      if (Math.abs(target.length - lw.length) > max) continue;
+      const dd = osaDistance(lw, target);
+      if (dd <= max && dd < bestD) {
+        best = target;
+        bestD = dd;
+      }
+    }
+    return best ?? w;
+  });
+  t = t.replace(/\s+/g, " ").trim();
+  const sov = t.match(/^(.*?)\bperiod\s+(today|yesterday|the day before yesterday)\s+started\b(.*)$/i);
+  if (sov) t = `${sov[1]}period started ${sov[2]}${sov[3]}`.replace(/\s+/g, " ").trim();
+  return t;
+}
+function caughtNothing(r) {
+  return !r.entry && !(r.entries && r.entries.length) && !(r.plannedEvents && r.plannedEvents.length) && !(r.planOverlaps && r.planOverlaps.length) && typeof r.message === "string" && /^I didn't catch (?:anything I can log|a change)/.test(r.message);
+}
 function parseLocally(text, today, context) {
+  const first = parseLocallyCore(text, today, context);
+  if (!caughtNothing(first)) return first;
+  const normalized = normalizeOfflineText(text);
+  if (!normalized || normalized.toLowerCase() === text.trim().toLowerCase()) return first;
+  const second = parseLocallyCore(normalized, today, context);
+  if (caughtNothing(second)) return first;
+  second.activityTrail = [{ step: "Offline Normalisation", detail: `Read as: "${normalized}"`, status: "done" }, ...second.activityTrail || []];
+  if (second.entry && second.entry.notes === normalized) second.entry = { ...second.entry, notes: text };
+  return second;
+}
+function parseLocallyCore(text, today, context) {
   const startTime = Date.now();
   const lower = text.toLowerCase();
   const currentYear = parseInt(today.slice(0, 4), 10);
@@ -3522,7 +3958,7 @@ function parseLocally(text, today, context) {
   let medicalTail = null;
   if (!severeWinsLocal && checkMedicalAdviceGuardrail(text).isRefusal) {
     if (!hasClearLogStatement(text)) {
-      return withIntent({ message: getGuardrailResponseMessage(text), needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }], toolCalls: [], ...offline }, text);
+      return withIntent({ message: getGuardrailResponseMessage(text), ...severeLocal.isSevere && severeLocal.message ? { careSignpost: severeLocal.message } : {}, needsClarification: false, activityTrail: [{ step: "Safety Guardrail", detail: "Medical advice refusal", status: "done" }, ...severeLocal.isSevere ? [{ step: "Safety Escalation", detail: "Red-flag symptom: care signpost shown with the refusal", status: "done" }] : []], toolCalls: [], ...offline }, text);
     }
     medicalTail = " I can" + String.fromCharCode(39) + "t say whether that" + String.fromCharCode(39) + "s normal; please talk to a doctor.";
   }
@@ -3533,7 +3969,22 @@ function parseLocally(text, today, context) {
   if (/\bremind(?:er)?\b/i.test(text) && /\bperiod\b/i.test(text) && (/\bbefore\b/i.test(text) || /\bnext\b/i.test(text))) {
     return { message: "I can" + String.fromCharCode(39) + "t set reminders yet; you can export the calendar (.ics) from Settings.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
-  const ownData = buildOwnDataAnswer(text, context);
+  const multi = splitLogAndQuestion(text);
+  if (multi) {
+    const logRes = parseLocally(multi.logPart, today, context);
+    const focus = Array.from(/* @__PURE__ */ new Set([...logRes.entry?.symptoms || [], ...extractWithLexicon(multi.logPart).symptoms]));
+    const qBody = multi.questionPart.replace(/^(?:tell|let|show)\s+me\s+(?:know\s+)?/i, "");
+    const ans = buildOwnDataAnswer(qBody, { ...context, currentDate: today, focusSymptoms: focus });
+    const handledLog = !!(logRes.entry || logRes.entries && logRes.entries.length || logRes.plannedEvents && logRes.plannedEvents.length);
+    activityTrail.push({ step: "Multi-intent", detail: `log part: ${handledLog ? "slip prepared" : "not handled"}; question part: ${ans ? "answered" : "not handled"}`, status: "done" });
+    const answerText = ans ? ans.message : "I couldn't answer the question part \u2014 ask me again on its own.";
+    if (handledLog) {
+      return { ...logRes, message: `${logRes.message} Also: ${answerText}`, activityTrail: [...activityTrail, ...logRes.activityTrail || []], multiIntent: true };
+    }
+    const msg = `${answerText} I couldn't prepare the log part ("${multi.logPart}") \u2014 tell me it again on its own and I'll prepare a slip.`;
+    return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, multiIntent: true, ...offline };
+  }
+  const ownData = buildOwnDataAnswer(text, { ...context, currentDate: today });
   if (ownData) {
     activityTrail.push({ step: "Your Logged Data", detail: "Answered from your own logs, no model call", status: "done" });
     return { message: ownData.message, kind: ownData.kind, usedLiveModel: false, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
@@ -3562,15 +4013,75 @@ function parseLocally(text, today, context) {
       return resumed;
     }
   }
-  if (!hasAnyLoggingOrPlanningCue(text)) {
+  const hasPendingSlip = !!context.pendingEntry || (context.pendingEntries || []).length > 0;
+  if (!hasPendingSlip && !hasAnyLoggingOrPlanningCue(text)) {
     const q = "I didn't catch anything I can log from that \u2014 try something like 'period started yesterday, medium flow'.";
     return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
+  }
+  const contra = detectFlowContradiction(text);
+  if (contra) {
+    activityTrail.push({ step: "Contradiction", detail: `Both "${contra.positive}" and "${contra.negative}" stated; asked which to record`, status: "clarify" });
+    return { message: contra.question, entry: null, needsClarification: true, clarificationQuestion: contra.question, contradiction: true, activityTrail, toolCalls, ...offline };
+  }
+  const savedRef = text.match(/\b(today'?s|yesterday'?s|tonight'?s|(?:that|this|my\s+last|the\s+last|my\s+latest|the\s+latest)|(?:the\s+)?(?:entry|log|note)\s+(?:for|from|on)\s+(today|yesterday))\s*(?:entry|log|note)?\b/i);
+  const namesSavedEntry = !!savedRef && /\b(entry|log|note)\b/i.test(text) && /\b(remove|delete|drop|take|add|change|make|set|fix|correct|update|edit|actually|not|no)\b/i.test(text) && !/\bdelete\s+(?:my\s+)?last\s+entry\b/i.test(text);
+  if (namesSavedEntry) {
+    const which = (savedRef[2] || savedRef[1]).toLowerCase();
+    const pool = [...context.recentEntries || [], ...context.recentEntry ? [context.recentEntry] : []];
+    const wantDate = /^yesterday/.test(which) ? addDaysToKey(today, -1) : /^(today|tonight)/.test(which) ? today : null;
+    const saved = wantDate ? pool.find((e) => e.date === wantDate) : [...pool].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!saved) {
+      const msg = wantDate ? `I couldn't find a saved entry for ${shortDateLabel(wantDate)}, so there's nothing to change.` : "I couldn't find a saved entry to change.";
+      return { message: msg, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+    }
+    const scrubbed = text.replace(/\b(?:from|in|on|for)\s+(?:today'?s|yesterday'?s|that|this|my\s+last|the\s+last)\s+(?:entry|log|note)\b/gi, " ").replace(/\b(?:today'?s|yesterday'?s)\s+(?:entry|log|note)\b/gi, " ");
+    const edit = applySlipCorrections({ ...saved }, scrubbed, today);
+    if (edit.changes.length === 0) {
+      const named = extractWithLexicon(scrubbed).symptoms.filter((x) => !(saved.symptoms || []).includes(x));
+      if (/\b(remove|delete|drop|take|no)\b/i.test(scrubbed) && named.length > 0) {
+        const msg2 = `Your saved entry for ${shortDateLabel(saved.date)} doesn't have ${named.map((x) => String(x).replace("_", " ")).join(" or ")}, so there's nothing to remove.`;
+        return { message: msg2, entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
+      }
+      const msg = `I found your saved entry for ${shortDateLabel(saved.date)}, but I couldn't tell what to change. Try "remove the headache from ${wantDate === today ? "today's" : "that"} entry" or "change it to heavy flow".`;
+      return { message: msg, entry: null, needsClarification: true, clarificationQuestion: msg, activityTrail, toolCalls, ...offline };
+    }
+    const updated = { ...edit.updated, date: saved.date, editsSavedEntry: true, slipId: "edit-" + saved.date };
+    activityTrail.push({ step: "Saved Entry Edit", detail: `Loaded ${saved.date}: ${edit.changes.join("; ")}`, status: "done" });
+    toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { savedDate: saved.date, correction: text }, result: { updated, changes: edit.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return withIntent({ message: `I loaded your saved entry for ${shortDateLabel(saved.date)} with that change (${describeSlipChanges(edit.changes)}). Confirm below to update it \u2014 nothing changes until you do.`, entry: updated, replacesExisting: true, needsClarification: false, activityTrail, toolCalls, ...offline }, text);
+  }
+  const cancelEvent = text.match(/\b(?:cancel|delete|remove|drop|call\s+off|scrap|take\s+off)\s+(?:the\s+|my\s+|our\s+)?(.+?)(?:\s+(?:event|plan|from\s+(?:my\s+)?(?:calendar|plans)))?\s*[.!?]?\s*$/i);
+  const mentionsLogContent = extractWithLexicon(text).symptoms.length > 0 || /\b(flow|period|spotting|bleeding|slip|entry|log|note)\b/i.test(text);
+  if (cancelEvent && !mentionsLogContent && !CANCEL_SLIP_RE.test(text)) {
+    const phrase = cancelEvent[1].replace(/\b(event|plan|plans|on\s+.+)$/i, "").trim();
+    const stopW = /* @__PURE__ */ new Set(["the", "my", "our", "a", "an", "event", "plan", "on", "for", "please"]);
+    const toks = phrase.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 1 && !stopW.has(w));
+    const pool = (context.events || []).filter((e) => e && e.title && e.date && e.id);
+    const hits = toks.length === 0 ? [] : pool.filter((e) => {
+      const et = e.title.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/);
+      return toks.every((w) => et.some((x) => x === w || x.startsWith(w) || w.startsWith(x)));
+    });
+    const looksLikeEvent = hits.length > 0 || /\b(wedding|exam|trip|interview|party|flight|vacation|conference|presentation|dinner|meeting|birthday|anniversary|marathon|race|appointment|shaadi|sangeet|holiday|event)\b/i.test(phrase);
+    if (looksLikeEvent) {
+      if (hits.length === 0) {
+        const msg2 = `I couldn't find a saved event matching "${phrase}" in your calendar, so nothing was removed.`;
+        return { message: msg2, entry: null, needsClarification: false, eventDeletionCandidates: [], activityTrail, toolCalls, ...offline };
+      }
+      if (hits.length === 1) {
+        const h = hits[0];
+        activityTrail.push({ step: "Event Cancel", detail: `Matched "${h.title}" on ${h.date}; waiting for confirmation`, status: "done" });
+        return { message: `Remove "${h.title}" on ${shortDateLabel(h.date)} from your calendar? Tap Remove to confirm \u2014 nothing is deleted until you do.`, entry: null, needsClarification: false, eventDeletion: { id: String(h.id), title: h.title, date: h.date }, activityTrail, toolCalls, ...offline };
+      }
+      const list = hits.map((h) => `"${h.title}" on ${shortDateLabel(h.date)}`).join(", ");
+      const msg = `You have more than one matching event: ${list}. Which event should I cancel?`;
+      return { message: msg, entry: null, needsClarification: true, clarificationQuestion: msg, eventDeletionCandidates: hits.map((h) => ({ id: String(h.id), title: h.title, date: h.date })), activityTrail, toolCalls, ...offline };
+    }
   }
   if (/\bdelete\s+(?:my\s+)?last\s+entry\b/i.test(text)) {
     return { message: "Open Chronicle or Calendar to delete entries.", entry: null, needsClarification: false, activityTrail, toolCalls, ...offline };
   }
-  if (/\b(?:undo\s+that|cancel\s+that|don't\s+log\s+that|discard\s+(?:that|the)\s+slip)\b/i.test(text)) {
-    if (context.pendingEntry || (context.pendingEntries || []).length > 0) {
+  if (CANCEL_SLIP_RE.test(text)) {
+    if (hasPendingSlip) {
       activityTrail.push({ step: "Slip Discarded", detail: "Pending slip cancelled by user", status: "done" });
       return { message: "Okay, I discarded that slip. Nothing was saved.", entry: null, discardedSlip: true, needsClarification: false, activityTrail, toolCalls, ...offline };
     }
@@ -3617,12 +4128,23 @@ function parseLocally(text, today, context) {
     }
   }
   if (targetSlip && (context.pendingEntry || isExplicitCorrection || lastEntryMentioned || namedDateMatched)) {
-    const correctionRes = applySlipCorrections(targetSlip, text);
+    const correctionRes = applySlipCorrections(targetSlip, text, today);
+    if (correctionRes.changes.length > 0 && targetSlip !== context.pendingEntry) correctionRes.updated.editsSavedEntry = true;
     if (correctionRes.changes.length > 0) {
       toolCalls.push({ id: "call_update_" + Date.now(), toolName: "update_entry", args: { correction: text }, result: { updated: correctionRes.updated, changes: correctionRes.changes }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
       activityTrail.push({ step: "Accession Slip Correction", detail: correctionRes.changes.join("; "), status: "done" });
-      return withIntent({ message: "I've updated your Accession Slip with your corrections. Please review below." + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline }, text);
+      const what = describeSlipChanges(correctionRes.changes);
+      return withIntent({ message: `I've updated your Accession Slip (${what}). Please review below.` + (medicalTail || ""), entry: correctionRes.updated, needsClarification: false, replacesExisting: true, activityTrail, toolCalls, ...offline }, text);
     }
+    if (context.pendingEntry && targetSlip === context.pendingEntry && (isExplicitCorrection || !hasAnyLoggingOrPlanningCue(text))) {
+      const q = "Your pending slip is unchanged \u2014 it already has that, or I couldn't find a change in your message. Try 'make the flow heavy', 'it started yesterday', 'add cramps' or 'remove the headache'.";
+      activityTrail.push({ step: "Accession Slip Correction", detail: "No change found; pending slip kept as is", status: "done" });
+      return { message: q, entry: null, needsClarification: false, slipUnchanged: true, activityTrail, toolCalls, ...offline };
+    }
+  }
+  if (hasPendingSlip && !hasAnyLoggingOrPlanningCue(text)) {
+    const q = "I didn't catch a change for your pending slip, so it's still there unchanged. You can say things like 'make the flow heavy' or 'it started yesterday', or tap Discard.";
+    return { message: q, entry: null, needsClarification: false, slipUnchanged: true, activityTrail, toolCalls, ...offline };
   }
   const isCorrectionAttempt = /\b(actually|make it\s+(?:light|heavy|medium|spotting|none)|change\s+(?:the\s+)?(?:date|flow)|(?:light|medium|heavy|spotting)\s*,?\s*not\s+(?:light|medium|heavy|spotting)|not\s+(?:light|medium|heavy|spotting)\s*,?\s*(?:but|actually)?\s*(?:light|medium|heavy|spotting)|move\s+(?:it\s+)?to|i\s+meant|(?:a\s+)?day\s+later|no\s+wait)\b/i.test(text);
   const namesExplicitDay = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(text) || /\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(text);
@@ -3743,6 +4265,7 @@ function parseLocally(text, today, context) {
         if (end < start) continue;
         const sStart = Math.max(text.lastIndexOf(".", rm.index - 1) + 1, text.lastIndexOf("!", rm.index - 1) + 1, text.lastIndexOf("?", rm.index - 1) + 1, text.lastIndexOf("\n", rm.index - 1) + 1, text.lastIndexOf(";", rm.index - 1) + 1, 0);
         const rangeSentence = text.slice(sStart, rm.index + rm[0].length);
+        if (/\b(?:bled|bleed|bleeding|period|periods|spotting|flow|menstruat\w*)\b/i.test(rangeSentence) && !/\b(?:exam|wedding|trip|interview|party|flight|vacation|marathon|race|conference|presentation|dinner|event|appointment|birthday|anniversary|meeting|holiday|travel)\b/i.test(rangeSentence)) continue;
         const rangeTitle = focusNounTitle(cleanTitle(text.slice(sStart, rm.index)) || "Event", rangeSentence);
         eventMatches.push({ name: rangeTitle, date: start, endDate: end });
         rangeSpans.push({ index: rm.index, length: rm[0].length });
@@ -3838,45 +4361,28 @@ function parseLocally(text, today, context) {
   const usedPersonalAnchor = !!matchedEvent && /\b(after|before|around|week of)\b/.test(lower) && !!matchedEvent;
   const earlyLandmark = resolveLandmarkExpression(text, today, context.landmarkPacks);
   const isLandmarkPlan = /\b(plan|planning)\b/i.test(lower) && !hasLogContent && eventMatches.length === 0 && earlyLandmark.found && !!earlyLandmark.resolvedDate;
+  const nextLandmark = earlyLandmark.found ? resolveNextLandmarkOccurrence(text, today, context.landmarkPacks) : null;
   if (isLandmarkPlan && earlyLandmark.resolvedDate) {
-    if (earlyLandmark.resolvedDate >= today) {
-      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: earlyLandmark.resolvedDate });
+    if (nextLandmark) {
+      eventMatches.push({ name: earlyLandmark.landmarkName || "Event", date: nextLandmark.resolvedDate });
       unplacedEvents.length = 0;
       activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
       planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
       toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-    } else {
-      const nextLm = resolveLandmarkExpression(`${earlyLandmark.landmarkName} next year`, today, context.landmarkPacks);
-      if (nextLm.found && nextLm.resolvedDate && nextLm.resolvedDate > today) {
-        passedPlanCandidates.push({ name: earlyLandmark.landmarkName || "Event", thisYear: earlyLandmark.resolvedDate, nextYear: nextLm.resolvedDate });
-        unplacedEvents.length = 0;
-      }
     }
   }
   const EVENT_NOUN_RE = /\b(exam|party|trip|appointment|wedding|interview|birthday|dentist|flight|conference|presentation|holiday|vacation|marathon|race|dinner|event|meeting)\b/i;
   if (!hasLogContent && eventMatches.length === 0 && earlyLandmark.found && earlyLandmark.resolvedDate && (intent === "plan_event" || EVENT_NOUN_RE.test(lower))) {
-    let evDate = earlyLandmark.resolvedDate;
-    if (evDate && evDate < today) {
-      const lmName = earlyLandmark.landmarkName || "Event";
-      const nextLm = resolveLandmarkExpression(`${lmName} next year`, today, context.landmarkPacks);
-      if (nextLm.found && nextLm.baseDate) {
-        const off = earlyLandmark.baseDate ? Math.round((Date.parse(earlyLandmark.resolvedDate) - Date.parse(earlyLandmark.baseDate)) / 864e5) : 0;
-        evDate = applyDayOffset(nextLm.baseDate, off);
-      } else {
-        evDate = null;
-      }
+    const title = landmarkEventTitle(text, earlyLandmark.landmarkName);
+    if (!nextLandmark) {
+      const q = `Which date is your ${title === "Event" ? "event" : title}? I don't have a verified upcoming date for ${earlyLandmark.landmarkName}.`;
+      return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, ...offline };
     }
-    if (evDate && evDate >= today) {
-      let title = text.replace(/\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?\s+(?:before|after)\b/gi, " ");
-      if (earlyLandmark.landmarkName) title = title.replace(new RegExp(earlyLandmark.landmarkName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), " ");
-      title = title.replace(/\b(on|is|starts?|at|coming up)\b/gi, " ").replace(/[^a-zA-Z' ]+/g, " ").replace(/\s+/g, " ").trim().replace(/^(my|the|a|an)\s+/i, "");
-      if (!title) title = "Event";
-      eventMatches.push({ name: title, date: evDate });
-      planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
-      activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
-      toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
-      return withIntent({ message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
-    }
+    eventMatches.push({ name: title, date: nextLandmark.resolvedDate });
+    planOverlaps = evaluateContextOverlaps(eventMatches, context, today);
+    activityTrail.push({ step: "Plan Around It", detail: `Found ${eventMatches.length} events`, status: "done" });
+    toolCalls.push({ id: "call_overlap_" + Date.now(), toolName: "check_overlap", args: { events: eventMatches }, result: { overlaps: planOverlaps }, latencyMs: Math.max(1, Date.now() - startTime), model: "offline-rule-engine", executedBy: "offline-rule-engine" });
+    return withIntent({ message: eventMatches.map((e) => `${e.name} on ${e.date}`).join("; "), entry: null, needsClarification: false, activityTrail, toolCalls, planOverlaps, plannedEvents: eventMatches.map((e) => ({ title: e.name, date: e.date })), usedPersonalAnchor, ...offline }, text);
   }
   const backfill = extractBackfillDates(text, today);
   if (backfill) {
@@ -3939,7 +4445,7 @@ function parseLocally(text, today, context) {
       const startedFromLogs = (context.logs || []).filter((g) => g && g.kind === "period_started" && g.logDate).map((g) => g.logDate);
       const lastStart = [...(context.periods || []).map((x) => x.startDate).filter(Boolean), ...context.cycleStats?.lastPeriodStart ? [context.cycleStats.lastPeriodStart] : [], ...startedFromEntries, ...startedFromLogs].filter(Boolean).sort().pop() || null;
       if (!isDatedVisitNote && !isLogDateRequest) {
-        const q = late ? lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
+        const q = late ? lastStart ? `Your last logged period started ${shortDateLabel(lastStart)}. Has a new one started since, or is that the one you mean?` : "I can't tell if your period is late without a logged start \u2014 did it start? Tell me when, or say 'period started today' to log it." : hasPendingSlip ? "I didn't catch a change for your pending slip, so it's still there unchanged. You can say things like 'make the flow heavy' or 'it started yesterday', or tap Discard." : "I didn't catch anything I can log from that - try something like 'period started yesterday, medium flow'.";
         return { message: q, entry: null, needsClarification: true, clarificationQuestion: q, activityTrail, toolCalls, planOverlaps, ...offline };
       }
     }
@@ -4209,6 +4715,15 @@ function corsAllowOrigin(req) {
 function checkStatelessProtection(req, options) {
   const headers = req.headers || {};
   const origin = headers["origin"] || headers["referer"];
+  const method = String(req.method || req.httpMethod || "POST").toUpperCase();
+  if (!origin && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      error: "Cross-origin request forbidden. Missing origin.",
+      code: "ORIGIN_REQUIRED"
+    };
+  }
   if (!isOriginAllowed(origin, req)) {
     return {
       allowed: false,
