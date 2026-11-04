@@ -4,7 +4,7 @@
 - Earliest commit in this repository: `c09d38f` — 2026-10-28 16:53 +0530 ("Feather: voice-first cycle companion for the Meta Global AI Developer Hackathon").
 - Hackathon kickoff was Oct 26 12:00 ET; the building period is Oct 27 – Nov 4, 2026.
 - Because the repository history begins on 2026-10-28, no file in this repo has a first commit that predates the kickoff. All commits fall inside the building period. History has not been rewritten, squashed, or deleted for this submission.
-- i shuaib-mk onfirm that no code, data, or assets were copied from any pre-event project. This file records only what `git log` shows; it cannot prove how code was authored before its first commit.
+- i (shuaib-mk) confirm that no code, data, or assets were copied from any pre-event project. This file records only what `git log` shows; it cannot prove how code was authored before its first commit.
 
 ## Non-code assets
 | Asset | Source | License / status |
