@@ -356,7 +356,6 @@ api/
   vision.ts
 scripts/
   bundle-api.mjs
-  tmp_readme.py
   with-tz.mjs
 ```
 

@@ -24,9 +24,15 @@ export function getConfig(): AiConfig {
   const env: Record<string, string | undefined> =
     typeof process !== "undefined" && process?.env ? process.env : {};
 
+  // Placeholder values copied from .env.example ("your_..._here") are not real keys:
+  // treat them as missing so the app goes straight to the honest offline mode.
+  const realKey = (v: string | undefined): string => {
+    const t = (v || "").trim();
+    return !t || /^your_/i.test(t) || /_here$/i.test(t) ? "" : t;
+  };
   const useBaseten = env.USE_BASETEN === "true";
-  const metaApiKey = env.META_API_KEY || "";
-  const basetenApiKey = env.BASETEN_API_KEY || "";
+  const metaApiKey = realKey(env.META_API_KEY);
+  const basetenApiKey = realKey(env.BASETEN_API_KEY);
   return {
     metaApiKey,
     metaBaseUrl: env.META_BASE_URL || "https://api.meta.ai/v1",

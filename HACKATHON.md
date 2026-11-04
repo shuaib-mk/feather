@@ -108,7 +108,7 @@ Per git history, all commits fall inside the hackathon building period; see PROV
 - **Landmark Recall Benchmark (65 samples across English, Malayalam, Hindi, and Code-Mixed)**:
   - **resolved to the right date: 32/32** (verified past/present landmarks and explicit plan phrases in `ai/backend/landmarks.json`)
   - **correctly asked for clarification: 33/33** (14 unverified landmarks not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask for clarification with no date)
-- **Medical Guardrail F1**: **100%** (53/53 medical queries blocked, 52/52 valid logs permitted; author's own internal regression set, not an independent benchmark)
+- **Medical Guardrail F1**: **100%** (95/95 medical queries blocked, 82/82 valid logs permitted; author's own internal regression set, not an independent benchmark)
 - **False Positives / False Negatives**: **0 FP / 0 FN**
 - **Profiling Latency**: Median (p50) = 1ms | p95 = 2ms
 
@@ -118,7 +118,7 @@ Per git history, all commits fall inside the hackathon building period; see PROV
 
 
 ## Build timeline (from git log)
-Work dated 2026-10-30 in git log was built during this hackathon working session; code committed on or before 2026-10-28 is pre-existing and is labelled as such. See `git log --date=short` for exact commit dates.
+All commits are dated 2026-10-28 through 2026-11-04, inside the hackathon building period (Oct 27 – Nov 4, 2026); the first commit is `c09d38f` on 2026-10-28. No pre-existing code is included; see PROVENANCE.md. Run `git log --date=short` for exact commit dates.
 
 ## Judge quickstart
 Tap **Try Demo** on the first screen. Demo Mode is isolated in `feather_demo_v1`; exiting returns to the real vault untouched.

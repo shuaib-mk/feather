@@ -9,9 +9,13 @@ function getConfig() {
     }
   }
   const env = typeof process !== "undefined" && process?.env ? process.env : {};
+  const realKey = (v) => {
+    const t = (v || "").trim();
+    return !t || /^your_/i.test(t) || /_here$/i.test(t) ? "" : t;
+  };
   const useBaseten = env.USE_BASETEN === "true";
-  const metaApiKey = env.META_API_KEY || "";
-  const basetenApiKey = env.BASETEN_API_KEY || "";
+  const metaApiKey = realKey(env.META_API_KEY);
+  const basetenApiKey = realKey(env.BASETEN_API_KEY);
   return {
     metaApiKey,
     metaBaseUrl: env.META_BASE_URL || "https://api.meta.ai/v1",

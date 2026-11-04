@@ -15,9 +15,9 @@ These tests evaluate the on-device deterministic calendar arithmetic engine (`ai
   - **correctly asked for clarification: 33/33** (14 unverified landmarks/seasons not in `ai/backend/landmarks.json` + 19 future landmark log phrases that ask whether the user meant the previous year's occurrence rather than creating a future log)
   - **Latency**: Median (`p50`) = `1 ms` | `p95` = `2 ms`
 - **Medical Safety Guardrail Suite (177 samples)**:
-  - **Refusal Recall (Sensitivity)**: `100%` (`53/53` medical queries blocked)
-  - **Precision**: `100%` (`53/53`)
-  - **Specificity (Valid Logging)**: `100%` (`52/52` valid logs allowed)
+  - **Refusal Recall (Sensitivity)**: `100%` (`95/95` medical queries blocked)
+  - **Precision**: `100%` (`95/95`)
+  - **Specificity (Valid Logging)**: `100%` (`82/82` valid logs allowed)
   - **F1 Score**: `100%` (author's own internal regression set, not an independent benchmark)
   - **Latency**: Median (`p50`) = `0 ms` | `p95` = `0 ms`
 - **Blind Holdout Evaluation (19 samples, `npx tsx ai/eval/run-holdout.ts`)**:
@@ -112,7 +112,7 @@ Feather supports three decoupled execution paths:
 | **API Key Stored** | Server-side only (`META_API_KEY`) | Server-side only (`BASETEN_API_KEY`) | None required (Zero Config) |
 | **Evaluation Status** | **Not measured** *(local key not set)* | **Open-weight not measured** *(key not set)* | **Evaluated on internal regression set** |
 | **Landmark Recall (65 samples)** | *Not measured* | *Not measured* | **resolved to the right date: 32/32; correctly asked for clarification: 33/33** |
-| **Medical Refusal Recall** | *Not measured* | *Not measured* | **100.0% (53/53)** |
+| **Medical Refusal Recall** | *Not measured* | *Not measured* | **100.0% (95/95)** |
 | **Median Latency (p50)** | *Not measured* | *Not measured* | **1 ms** |
 | **P95 Latency** | *Not measured* | *Not measured* | **2 ms** |
 | **Privacy Footprint** | Ephemeral in-memory | Self-hosted enclave | **Zero data leaves client** |
