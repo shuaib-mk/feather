@@ -4,11 +4,15 @@
 **Hackathon Window:** October 27 – November 4, 2026  
 **Primary Models:** Meta Muse Voice Transcribe (`muse-voice-transcribe-1.0`) & Meta Muse Spark (`muse-spark-1.3`)  
 **Open-Weight Swappable:** Meta Muse Spark Open 1026 (`meta-models/muse-spark-open-1026` via Baseten)  
-**Live demo:** https://feather-w.vercel.app
+**Live demo:** https://feather-w.vercel.app  
+**Demo video (3 min):** https://youtu.be/t6tEgm6OkPQ
 
 ---
 
-## 1. Demo Video Opening Statement
+## 1. Demo Video
+Watch: https://youtu.be/t6tEgm6OkPQ
+
+One-line summary:
 > *"Feather is a private, voice-first menstrual cycle companion that turns fuzzy recollections like 'two days before New Year's' into structured cycle logs and honest event overlap forecasts using Meta Muse Voice & Spark — cycle data is stored only on your device."*
 
 ---

@@ -1,7 +1,7 @@
 # Feather — Voice-First Menstrual Cycle Companion
 
-**Live demo:** https://feather-w.vercel.app
-<!-- DEMO VIDEO LINK: add here -->
+**Live demo:** https://feather-w.vercel.app  
+**Demo video (3 min):** https://youtu.be/t6tEgm6OkPQ  
 Meta Global AI Developer Hackathon · Indie Developer · Build for Your World
 
 > **One-Sentence Pitch:** Feather is a private, voice-first menstrual companion that turns fuzzy recollections like *"two days before New Year's"* into structured cycle logs and honest event overlap estimates using Meta Muse Voice & Spark. Cycle data is stored only on your device; voice and text are sent to Meta's API for processing when you use those features.
@@ -16,7 +16,12 @@ Meta Global AI Developer Hackathon · Indie Developer · Build for Your World
 - Isolated Demo Mode with fictional data in its own namespace; exiting demo leaves the real vault untouched.
 - Optional Diary Scanner (secondary; needs a model API key).
 - Honest offline mode: without a key the app runs the offline parser and visibly labels that no live model was used.
-<!-- SCREENSHOT / GIF: add here -->
+
+| Dashboard (Demo Mode) | Voice log: landmark resolved, waiting for confirmation |
+| :---: | :---: |
+| ![Feather dashboard in Demo Mode](docs/screenshot-dashboard.jpg) | ![Voice log slip resolving New Year's Day to 30 Dec 2025](docs/screenshot-voice-slip.jpg) |
+
+*Screenshots from the live app in Demo Mode (fictional data).*
 
 ## Try it in 60 seconds
 - Live URL: https://feather-w.vercel.app
