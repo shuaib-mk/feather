@@ -2973,6 +2973,9 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
   let replyWasTruncated = false;
   const MODEL_CALL_TIMEOUT_MS = 4e4;
   const OVERALL_MODEL_BUDGET_MS = 5e4;
+  const MAX_REPLY_TOKENS = 4096;
+  let lastFinishReason = null;
+  let lastUsage = null;
   const modelDeadline = startTime + OVERALL_MODEL_BUDGET_MS;
   let modelCallMsTotal = 0;
   const modelTimedOut = () => {
@@ -3013,7 +3016,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
             tools: TOOLS,
             tool_choice: "auto",
             temperature: 0.2,
-            max_tokens: 600
+            max_tokens: MAX_REPLY_TOKENS
           })
         });
       } catch (callErr) {
@@ -3044,6 +3047,13 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
       clearTimeout(callTimer);
       const choice = data.choices?.[0];
       const message = choice?.message;
+      lastFinishReason = choice?.finish_reason ?? null;
+      lastUsage = data.usage ? `prompt ${data.usage.prompt_tokens ?? "?"}, completion ${data.usage.completion_tokens ?? "?"}` + (data.usage.completion_tokens_details?.reasoning_tokens != null ? `, reasoning ${data.usage.completion_tokens_details.reasoning_tokens}` : "") : null;
+      activityTrail.push({
+        step: "Model Reply " + stepCount,
+        detail: "finish_reason " + (lastFinishReason ?? "none") + (lastUsage ? "; tokens: " + lastUsage : "") + "; tool calls " + (message?.tool_calls?.length ?? 0),
+        status: "done"
+      });
       if (!message) break;
       messages.push(message);
       const toolCalls = message.tool_calls;
@@ -3242,7 +3252,7 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
             tools: TOOLS,
             tool_choice: { type: "function", function: { name: "log_entry" } },
             temperature: 0.2,
-            max_tokens: 600
+            max_tokens: MAX_REPLY_TOKENS
           })
         });
         clearTimeout(ct);
@@ -3351,7 +3361,8 @@ The user opened voice from the calendar on ${context.defaultDate}. If they do no
         if (caughtNothing(fallbackResult)) {
           return { message: "The live AI's reply was cut off, and I couldn't read your message on this device either. Please try again, or rephrase it in English.", entry: null, needsClarification: false, activityTrail, toolCalls: toolCallsRecorded, mode: "offline", modeReason: "Meta model reply was cut off" };
         }
-        return { ...fallbackResult, mode: "offline", modeReason: "Meta model reply was cut off, offline parser used" };
+        const why = lastFinishReason === "length" ? "token limit reached" + (lastUsage ? " (" + lastUsage + ")" : "") : "reply looked truncated";
+        return { ...fallbackResult, activityTrail: [...activityTrail, ...fallbackResult.activityTrail || []], mode: "offline", modeReason: "Meta model reply was cut off (" + why + "), offline parser used" };
       }
       activityTrail.push({ step: "Empty Live Reply", detail: "Meta model returned no usable reply, offline parser used", status: "done" });
       return { ...fallbackResult, mode: "offline", modeReason: "Meta model returned no usable reply, offline parser used" };

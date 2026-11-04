@@ -155,7 +155,17 @@ async function main() {
       const r: any = await runLavenderAgent("period started October 29", { currentDate: "2026-11-01" });
       check("A2: normal result identical", !!r.entry && r.entry.date === "2026-10-29" && r.entry.flow === "medium" && r.entry.kind === "period_started" && r.mode === "live", r.entry);
     });
-    check("A2: max_tokens 600 sent", (seen[0] as any)?.max_tokens === 600, (seen[0] as any)?.max_tokens);
+    check("A2: max_tokens 4096 sent (600 cut off every live reply)", (seen[0] as any)?.max_tokens === 4096, (seen[0] as any)?.max_tokens);
+  }
+  // --- cut-off reply: reason and live trail are kept for "Under the hood" ---
+  {
+    const cut = { choices: [{ message: { role: "assistant", content: "" }, finish_reason: "length" }], usage: { prompt_tokens: 900, completion_tokens: 4096 } };
+    await withLive([cut], async () => {
+      const r: any = await runLavenderAgent("period started October 29", { currentDate: "2026-11-01" });
+      check("cut-off: offline parser still produces the slip", r.mode === "offline" && !!r.entry && r.entry.date === "2026-10-29", r.modeReason);
+      check("cut-off: reason names the token limit", typeof r.modeReason === "string" && r.modeReason.indexOf("token limit reached") !== -1 && r.modeReason.indexOf("completion 4096") !== -1, r.modeReason);
+      check("cut-off: live model trail kept", Array.isArray(r.activityTrail) && r.activityTrail.some((a: any) => a.step === "Model Reply 1" && /finish_reason length/.test(a.detail)), r.activityTrail);
+    });
   }
   // --- honest reply: model claims logged with no valid entry ---
   await withLive([textMsg("All logged for today!")], async () => {
